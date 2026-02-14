@@ -1,0 +1,23 @@
+services:
+  webhooks:
+    build: .
+    container_name: webhooks
+    ports:
+      - "9000:9000"
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_KEY_PATH=/google_keys/google_boosters_finance_key.json
+    volumes:
+      - ./google_keys:/google_keys:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  default:
+    name: fastdashboards_fastdashboards-network
+    external: true

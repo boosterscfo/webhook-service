@@ -1,0 +1,7 @@
+# sidehook.boosters-labs.com - 웹훅 서비스 (사이드 프로젝트)
+# 웹훅 컨테이너(webhooks:9000)가 coo-network에 연결되어 있어야 합니다.
+# 적용: ~/caddy/Caddyfile에 아래 블록 추가 후 docker compose restart caddy
+
+sidehook.boosters-labs.com {
+	reverse_proxy webhooks:9000
+}

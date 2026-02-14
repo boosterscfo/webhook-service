@@ -1,0 +1,18 @@
+[project]
+name = "webhooks"
+version = "0.1.0"
+description = "FastAPI webhook service for Google Sheet & MySQL sync"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic-settings",
+    "python-dotenv",
+    "pandas",
+    "numpy",
+    "pymysql",
+    "gspread",
+    "google-auth",
+    "slack-sdk",
+]

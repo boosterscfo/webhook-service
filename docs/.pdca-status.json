@@ -1,0 +1,175 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-02-14T00:00:00.000Z",
+  "activeFeatures": [
+    "webhook-service",
+    "webhooks",
+    "jobs"
+  ],
+  "primaryFeature": "webhook-service",
+  "features": {
+    "webhook-service": {
+      "phase": "completed",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-02-13T14:20:00.000Z",
+      "completedAt": "2026-02-14T00:00:00.000Z",
+      "planPath": "docs/01-plan/features/webhook-service.plan.md",
+      "designPath": "docs/02-design/features/webhook-service.design.md",
+      "analysisPath": "docs/03-analysis/webhook-service.analysis.md",
+      "reportPath": "docs/04-report/webhook-service.report.md"
+    },
+    "webhooks": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T14:40:43.033Z",
+        "lastUpdated": "2026-02-13T14:42:23.742Z"
+      },
+      "lastFile": "/home/yonkim/dev/webhooks/main.py"
+    },
+    "jobs": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-13T14:40:45.188Z",
+        "lastUpdated": "2026-02-13T14:44:50.176Z"
+      },
+      "lastFile": "/home/yonkim/dev/webhooks/jobs/meta_ads_manager.py"
+    }
+  },
+  "pipeline": {
+    "currentPhase": 4,
+    "level": "Dynamic",
+    "phaseHistory": [
+      "plan",
+      "design",
+      "do",
+      "check"
+    ]
+  },
+  "session": {
+    "startedAt": "2026-02-13T14:13:40.633Z",
+    "onboardingCompleted": true,
+    "lastActivity": "2026-02-14T00:00:00.000Z"
+  },
+  "history": [
+    {
+      "action": "plan_created",
+      "feature": "webhook-service",
+      "timestamp": "2026-02-13T14:20:00.000Z"
+    },
+    {
+      "action": "design_created",
+      "feature": "webhook-service",
+      "timestamp": "2026-02-13T14:35:00.000Z"
+    },
+    {
+      "timestamp": "2026-02-13T14:40:43.033Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:40:44.111Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:40:45.188Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:40:49.490Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:41:08.937Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:41:39.818Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:41:54.021Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:42:06.192Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:42:15.839Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:42:23.742Z",
+      "feature": "webhooks",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:42:52.629Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:43:15.847Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:43:32.965Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-13T14:44:50.176Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-14T00:00:00.000Z",
+      "feature": "webhook-service",
+      "phase": "check",
+      "action": "gap_analysis_completed",
+      "matchRate": 98
+    },
+    {
+      "timestamp": "2026-02-14T00:00:00.000Z",
+      "feature": "webhook-service",
+      "phase": "completed",
+      "action": "report_generated",
+      "matchRate": 98,
+      "reportPath": "docs/04-report/webhook-service.report.md"
+    }
+  ]
+}

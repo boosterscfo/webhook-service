@@ -1,0 +1,13 @@
+# 프로덕션 전용: 상위 Caddy(~/caddy)와 coo-network로 연동
+# 사용: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# sidehook.boosters-labs.com → webhooks:9000
+
+services:
+  webhooks:
+    networks:
+      - default  # fastdashboards_fastdashboards-network (base)
+      - coo-network
+
+networks:
+  coo-network:
+    external: true
