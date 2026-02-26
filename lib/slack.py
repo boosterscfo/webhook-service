@@ -23,15 +23,19 @@ class SlackNotifier:
     ) -> dict:
         client = WebClient(token=SlackNotifier._get_token(bot_name))
 
-        if user_id is not None:
-            response = client.conversations_open(users=user_id)
-            channel_id = response["channel"]["id"]
+        try:
+            if user_id is not None:
+                response = client.conversations_open(users=user_id)
+                channel_id = response["channel"]["id"]
 
-        if channel_id is not None:
-            result = client.chat_postMessage(
-                text=text, blocks=blocks, channel=channel_id
-            )
-            return result
+            if channel_id is not None:
+                result = client.chat_postMessage(
+                    text=text, blocks=blocks, channel=channel_id
+                )
+                return result
+        except Exception:
+            logger.exception("Slack API error (bot=%s, channel=%s, user=%s)", bot_name, channel_id, user_id)
+            raise
 
         return {"text": "No channel or user specified"}
 
@@ -46,6 +50,10 @@ class SlackNotifier:
         url_button: Optional[dict] = None,
         bot_name: str = "BOOSTA",
     ) -> dict:
+        """Send a structured Slack notification with header, body, footer, and optional URL button.
+
+        When both user_id and channel_id are provided, user_id takes priority (DM first policy).
+        """
         blocks = [
             {"type": "section", "text": {"type": "mrkdwn", "text": header}},
         ]
@@ -95,14 +103,19 @@ class SlackNotifier:
     def find_slackid(email: str) -> Optional[str]:
         from lib.mysql_connector import MysqlConnector
 
-        with MysqlConnector("BOOSTA") as conn:
-            query = (
-                "SELECT slack_id FROM admin.flex_users "
-                "WHERE slack_id IS NOT NULL AND slack_id != '' "
-                f"AND email = '{email}'"
-            )
-            df = conn.read_query_table(query)
+        try:
+            with MysqlConnector("BOOSTA") as conn:
+                query = (
+                    "SELECT slack_id FROM admin.flex_users "
+                    "WHERE slack_id IS NOT NULL AND slack_id != '' "
+                    "AND email = %s"
+                )
+                df = conn.read_query_table(query, (email,))
+        except Exception:
+            logger.exception("Failed to look up Slack ID for email=%s", email)
+            return None
 
         if df.empty:
+            logger.debug("No Slack ID found for email=%s", email)
             return None
         return df["slack_id"].iloc[0]
