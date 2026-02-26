@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "webhook-service",
-  "pdcaPhase": "check",
+  "feature": "meta-ads-webhook",
+  "pdcaPhase": "design",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-02-14T00:04:06.732Z",
-  "lastUpdated": "2026-02-14T00:05:32.305Z",
+  "startedAt": "2026-02-26T00:32:08.860Z",
+  "lastUpdated": "2026-02-26T00:33:41.853Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "70e5506a-47b1-4bf6-8b65-9e4483f83ff4"
+  "sessionId": "f500c269-e9f2-40da-8e47-e6300f6658b7"
 }

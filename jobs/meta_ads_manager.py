@@ -3,6 +3,7 @@ import re
 import numpy as np
 import pandas as pd
 
+from app.config import settings
 from lib.google_sheet import GoogleSheetApi
 from lib.mysql_connector import MysqlConnector
 from lib.slack import SlackNotifier
@@ -17,6 +18,12 @@ regis_url = "https://docs.google.com/spreadsheets/d/1zxUeBvU5k8Szvmmp_gBAqV9vCDG
 unregis_url = "https://docs.google.com/spreadsheets/d/1zxUeBvU5k8Szvmmp_gBAqV9vCDGf2SGb_xPgxtlYOpg/edit#gid=600293708"
 default_email = "default@email.com"
 channel_id = "C06NZHCD17F"
+
+
+def _get_channel_id(payload: dict) -> str:
+    if payload.get("test") and settings.SLACK_CHANNEL_ID_TEST:
+        return settings.SLACK_CHANNEL_ID_TEST
+    return channel_id
 
 
 def slack_send(df, colname, channel_id, target, header, footer, url, user_id=None):
@@ -53,6 +60,7 @@ def update_ads(payload: dict) -> str:
     result = ""
     email = payload.get("user_email")
     trigger = payload.get("trigger")
+    ch_id = _get_channel_id(payload)
     user_id = SlackNotifier.find_slackid(email) if email else None
 
     with MysqlConnector("BOOSTA") as conn:
@@ -160,14 +168,14 @@ def update_ads(payload: dict) -> str:
 
     if not trigger:
         if user_id:
-            slack_send(sheet_only_df, "ad_name", channel_id, "업데이트", change_header, change_footer, regis_url, user_id)
-            slack_send(wanna_regis, "old_name", channel_id, "업데이트", regis_header, regis_footer, unregis_url, user_id)
+            slack_send(sheet_only_df, "ad_name", ch_id, "업데이트", change_header, change_footer, regis_url, user_id)
+            slack_send(wanna_regis, "old_name", ch_id, "업데이트", regis_header, regis_footer, unregis_url, user_id)
         else:
-            slack_send(sheet_only_df, "ad_name", channel_id, "업데이트", change_header, change_footer, regis_url)
-            slack_send(wanna_regis, "old_name", channel_id, "업데이트", regis_header, regis_footer, unregis_url)
+            slack_send(sheet_only_df, "ad_name", ch_id, "업데이트", change_header, change_footer, regis_url)
+            slack_send(wanna_regis, "old_name", ch_id, "업데이트", regis_header, regis_footer, unregis_url)
     else:
-        slack_send(sheet_only_df, "ad_name", channel_id, "업데이트", change_header, change_footer, regis_url)
-        slack_send(wanna_regis, "old_name", channel_id, "업데이트", regis_header, regis_footer, unregis_url)
+        slack_send(sheet_only_df, "ad_name", ch_id, "업데이트", change_header, change_footer, regis_url)
+        slack_send(wanna_regis, "old_name", ch_id, "업데이트", regis_header, regis_footer, unregis_url)
 
     return result
 
@@ -224,6 +232,7 @@ def add_ad(payload: dict) -> str:
     )
 
     # Slack
+    ch_id = _get_channel_id(payload)
     header = "광고 및 키워드 등록이 완료되었습니다. 등록된 광고는 다음과 같습니다."
     footer = "등록된 광고를 광고관리자에 등록해주세요. `2_변경대상광고` 시트에서 광고관리자에서 이름을 변경할 광고들을 확인해주세요."
     email = payload.get("user_email", default_email)
@@ -231,9 +240,9 @@ def add_ad(payload: dict) -> str:
 
     if email != default_email and not target_regis.empty:
         if user_id:
-            slack_send(target_regis, "old_name", channel_id, "광고 업데이트", header, footer, regis_url, user_id)
+            slack_send(target_regis, "old_name", ch_id, "광고 업데이트", header, footer, regis_url, user_id)
         else:
-            slack_send(target_regis, "old_name", channel_id, "광고 업데이트", header, footer, regis_url)
+            slack_send(target_regis, "old_name", ch_id, "광고 업데이트", header, footer, regis_url)
 
     update_ads({"user_email": default_email})
     return result
@@ -241,9 +250,10 @@ def add_ad(payload: dict) -> str:
 
 def regis_slack_send(payload: dict = None) -> str:
     gsapi = GoogleSheetApi()
+    ch_id = _get_channel_id(payload or {})
     regis_df = gsapi.get_dataframe(spreadsheet_url, regis_sheetname, header_row=1)
     return slack_send(
-        regis_df, "new_name", "C04FQ47F231", "변경대상광고",
+        regis_df, "new_name", ch_id, "변경대상광고",
         "Meta 광고 중 시트에 등록되었으나 어드민에서 변경되지 않아 어드민 변경대상인 광고 알려드립니다.",
         "해당 시트의 ID 를 검색하여 등록된 광고명으로 변경해주세요.",
         regis_url,
@@ -252,9 +262,10 @@ def regis_slack_send(payload: dict = None) -> str:
 
 def unregis_slack_send(payload: dict = None) -> str:
     gsapi = GoogleSheetApi()
+    ch_id = _get_channel_id(payload or {})
     unregis_df = gsapi.get_dataframe(spreadsheet_url, unregis_sheetname, header_row=1)
     return slack_send(
-        unregis_df, "old_name", "C04FQ47F231", "등록대상광고",
+        unregis_df, "old_name", ch_id, "등록대상광고",
         "Meta 광고 중 표준 광고명칭으로 바뀌지 않아 우선 시트에 등록하여 광고명이 생성되어야 하는 광고 알려드립니다.",
         "시트에 정보를 기입하고 Key 컬럼에 값이 생성되면, 구글 시트의 입력 메뉴에 `2.광고등록` 버튼을 누르면 자동으로 등록됩니다!",
         unregis_url,
@@ -264,6 +275,7 @@ def unregis_slack_send(payload: dict = None) -> str:
 def unregis_user_slack_send(payload: dict) -> str:
     gsapi = GoogleSheetApi()
     result = ""
+    ch_id = _get_channel_id(payload)
 
     unregis_df = gsapi.get_dataframe(spreadsheet_url, unregis_sheetname, header_row=1)
     unregis_df = unregis_df.query("email != ''")
@@ -278,13 +290,14 @@ def unregis_user_slack_send(payload: dict) -> str:
             name = temp_df["ad_creator"].iloc[0]
             header = f"{name} 크루님, Meta 광고 중 표준 광고명칭으로 바뀌지 않아 우선 시트에 등록하여 광고명이 생성되어야 하는 광고 알려드립니다!"
             footer = f"시트에서 {name} 크루님 이름으로 되어 있는 항목에 정보 입력한 후, Key 컬럼에 값이 생성되면, 구글 시트의 입력 메뉴에 `2.광고등록` 버튼을 누르면 자동으로 등록됩니다!"
-            result = slack_send(temp_df, "old_name", channel_id, "등록대상광고", header, footer, unregis_url, user_id)
+            result = slack_send(temp_df, "old_name", ch_id, "등록대상광고", header, footer, unregis_url, user_id)
     return result
 
 
 def regis_user_slack_send(payload: dict) -> str:
     gsapi = GoogleSheetApi()
     result = ""
+    ch_id = _get_channel_id(payload)
 
     regis_df = gsapi.get_dataframe(spreadsheet_url, regis_sheetname, header_row=1)
     regis_df["creator"] = regis_df["ad_name"].str.extract(r"(?:.*?\s#){4}([^#]+)")
@@ -307,5 +320,5 @@ def regis_user_slack_send(payload: dict) -> str:
             name = temp_df["creator"].iloc[0]
             header = f"{name} 크루님, 시트에 등록된 광고 중 변경이 되지 않은 광고가 있어서 알림드립니다"
             footer = f"`2_변경대상광고` 시트에서 {name} 크루님 이름으로 되어 있는 광고를 등록해주세요. 이미 등록하신 경우 최대 1일 이내에 시트에서 해당 광고가 사라집니다."
-            result = slack_send(temp_df, "ad_name", channel_id, "변경대상광고", header, footer, regis_url, user_id)
+            result = slack_send(temp_df, "ad_name", ch_id, "변경대상광고", header, footer, regis_url, user_id)
     return result

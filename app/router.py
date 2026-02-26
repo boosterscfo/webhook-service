@@ -4,7 +4,7 @@ import traceback
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import verify_webhook_token
+from app.dependencies import verify_webhook
 from lib.slack import SlackNotifier
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def execute_job(job_name: str, function_name: str, payload: dict):
 @router.post("/webhook")
 async def handle_webhook(
     payload: dict,
-    _: None = Depends(verify_webhook_token),
+    _: None = Depends(verify_webhook),
 ):
     job = payload.get("job")
     function = payload.get("function")

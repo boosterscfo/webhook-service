@@ -1,15 +1,18 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-14T00:00:00.000Z",
+  "lastUpdated": "2026-02-26T00:36:19.426Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
-    "jobs"
+    "jobs",
+    "meta-ads-webhook",
+    "mysql-connector-refactor",
+    "tests"
   ],
-  "primaryFeature": "webhook-service",
+  "primaryFeature": "meta-ads-webhook",
   "features": {
     "webhook-service": {
-      "phase": "completed",
+      "phase": "do",
       "matchRate": 98,
       "iterationCount": 0,
       "startedAt": "2026-02-13T14:20:00.000Z",
@@ -17,7 +20,12 @@
       "planPath": "docs/01-plan/features/webhook-service.plan.md",
       "designPath": "docs/02-design/features/webhook-service.design.md",
       "analysisPath": "docs/03-analysis/webhook-service.analysis.md",
-      "reportPath": "docs/04-report/webhook-service.report.md"
+      "reportPath": "docs/04-report/webhook-service.report.md",
+      "phaseNumber": 3,
+      "lastFile": "/home/ubuntu/webhook-service/app/router.py",
+      "timestamps": {
+        "lastUpdated": "2026-02-26T00:34:08.782Z"
+      }
     },
     "webhooks": {
       "phase": "do",
@@ -41,9 +49,44 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-13T14:40:45.188Z",
-        "lastUpdated": "2026-02-13T14:44:50.176Z"
+        "lastUpdated": "2026-02-26T00:35:32.872Z"
       },
-      "lastFile": "/home/yonkim/dev/webhooks/jobs/meta_ads_manager.py"
+      "lastFile": "/home/ubuntu/webhook-service/jobs/meta_ads_manager.py"
+    },
+    "meta-ads-webhook": {
+      "phase": "design",
+      "matchRate": null,
+      "iterationCount": 0,
+      "startedAt": "2026-02-26T00:00:00.000Z",
+      "planPath": "docs/01-plan/features/meta-ads-webhook.plan.md",
+      "designPath": "docs/02-design/features/meta-ads-webhook.design.md"
+    },
+    "mysql-connector-refactor": {
+      "phase": "completed",
+      "matchRate": 97,
+      "iterationCount": 0,
+      "startedAt": "2026-02-26T00:00:00.000Z",
+      "completedAt": "2026-02-26T00:33:22.241Z",
+      "analysisPath": "docs/03-analysis/mysql-connector-refactor.analysis.md",
+      "reportPath": "docs/04-report/mysql-connector-refactor.report.md",
+      "phaseNumber": 5,
+      "lastFile": "/home/ubuntu/webhook-service/lib/mysql_connector.py",
+      "timestamps": {
+        "lastUpdated": "2026-02-26T00:33:22.241Z"
+      }
+    },
+    "tests": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-26T00:36:19.425Z",
+        "lastUpdated": "2026-02-26T00:36:19.425Z"
+      },
+      "lastFile": "/home/ubuntu/webhook-service/tests/test_webhook.py"
     }
   },
   "pipeline": {
@@ -59,7 +102,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-02-14T00:00:00.000Z"
+    "lastActivity": "2026-02-26T00:36:19.426Z"
   },
   "history": [
     {
@@ -170,6 +213,115 @@
       "action": "report_generated",
       "matchRate": 98,
       "reportPath": "docs/04-report/webhook-service.report.md"
+    },
+    {
+      "action": "plan_created",
+      "feature": "meta-ads-webhook",
+      "timestamp": "2026-02-26T00:00:00.000Z"
+    },
+    {
+      "action": "design_created",
+      "feature": "meta-ads-webhook",
+      "timestamp": "2026-02-26T00:00:00.000Z"
+    },
+    {
+      "timestamp": "2026-02-26T00:22:47.928Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:00:00.000Z",
+      "feature": "mysql-connector-refactor",
+      "phase": "check",
+      "action": "gap_analysis_completed",
+      "matchRate": 97
+    },
+    {
+      "timestamp": "2026-02-26T00:33:17.693Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:33:22.241Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:33:22.241Z",
+      "feature": "mysql-connector-refactor",
+      "phase": "completed",
+      "action": "report_generated",
+      "matchRate": 97,
+      "reportPath": "docs/04-report/mysql-connector-refactor.report.md"
+    },
+    {
+      "timestamp": "2026-02-26T00:33:42.837Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:02.919Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:08.782Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:25.181Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:32.419Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:39.012Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:47.263Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:34:56.395Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:35:10.117Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:35:32.872Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T00:36:19.426Z",
+      "feature": "tests",
+      "phase": "do",
+      "action": "updated"
     }
   ]
 }

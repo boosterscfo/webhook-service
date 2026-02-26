@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Webhook
     WEBHOOK_TOKEN: str
+    WEBHOOK_SECRET: str = ""
 
     # CFO DB
     CFO_HOST: str
@@ -60,6 +61,7 @@ class Settings(BaseSettings):
     # Slack
     BOOSTA_BOT_TOKEN: str
     META_BOT_TOKEN: str
+    SLACK_CHANNEL_ID_TEST: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
