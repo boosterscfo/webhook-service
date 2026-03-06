@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     SLACK_CHANNEL_ID_TEST: str = ""
 
     # Amazon Researcher
-    AMZ_BROWSE_AI_API_KEY: str = ""
+    BROWSE_AI_API_KEY: str = ""
     AMZ_GEMINI_API_KEY: str = ""
     AMZ_BOT_TOKEN: str = ""
     AMZ_SEARCH_ROBOT_ID: str = ""

@@ -184,13 +184,13 @@ class BrowseAiService:
             texts = result.get("capturedTexts", {})
             return ProductDetail(
                 asin=asin,
-                title=result.get("capturedTexts", {}).get("title", ""),
-                top_highlights=texts.get("top_highlights", ""),
-                features=texts.get("features", ""),
-                measurements=texts.get("measurements", ""),
-                bsr=texts.get("bsr", ""),
-                volume_raw=texts.get("volumn", ""),
-                volume=parse_volume(texts.get("volumn", "")),
+                title=texts.get("title") or "",
+                top_highlights=texts.get("top_highlights") or "",
+                features=texts.get("features") or "",
+                measurements=texts.get("measurements") or "",
+                bsr=texts.get("bsr") or "",
+                volume_raw=texts.get("volumn") or "",
+                volume=parse_volume(texts.get("volumn") or ""),
                 product_url=f"https://www.amazon.com/dp/{asin}",
             )
         except Exception:

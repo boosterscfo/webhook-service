@@ -40,7 +40,7 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
 class GeminiService:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.model = "gemini-2.0-flash"
+        self.model = "gemini-2.5-flash"
         self.url = (
             f"https://generativelanguage.googleapis.com/v1beta"
             f"/models/{self.model}:generateContent"
