@@ -55,6 +55,7 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
             await slack.send_message(
                 response_url,
                 f"♻️ 검색 캐시 사용: {len(search_products)}개 제품. 상세 크롤링 시작...",
+                ephemeral=True,
             )
         else:
             search_products = await browse.run_search(keyword)
@@ -62,6 +63,7 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
             await slack.send_message(
                 response_url,
                 f"✅ 검색 완료: {len(search_products)}개 제품 확인. 상세 크롤링 시작...",
+                ephemeral=True,
             )
 
         # Step 2: Detail crawl (parallel, max 5 concurrent)
@@ -78,7 +80,7 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
         if gemini_results:
             logger.info("Resumed ingredients from checkpoint (%d products)", len(gemini_results))
         else:
-            await slack.send_message(response_url, "🧪 성분 추출 중... (Gemini Flash)")
+            await slack.send_message(response_url, "🧪 성분 추출 중... (Gemini Flash)", ephemeral=True)
             products_for_gemini = [
                 {
                     "asin": d.asin,

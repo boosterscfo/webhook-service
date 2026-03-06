@@ -10,13 +10,15 @@ class SlackSender:
         self.bot_token = bot_token
         self.client = httpx.AsyncClient(timeout=30.0)
 
-    async def send_message(self, response_url: str, text: str):
+    async def send_message(
+        self, response_url: str, text: str, ephemeral: bool = False,
+    ):
         if not response_url:
             logger.warning("No response_url, skipping message: %s", text[:80])
             return
         try:
             resp = await self.client.post(response_url, json={
-                "response_type": "in_channel",
+                "response_type": "ephemeral" if ephemeral else "in_channel",
                 "text": text,
             })
             resp.raise_for_status()
