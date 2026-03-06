@@ -13,7 +13,7 @@ class ResearchRequest(BaseModel):
     keyword: str
     response_url: str = ""
     channel_id: str = ""
-    max_products: int = 30
+    max_products: int = 100
 
 
 @router.post("/slack/amz")
@@ -24,29 +24,17 @@ async def slack_amz(
     channel_id: str = Form(""),
     user_id: str = Form(""),
 ):
-    parts = text.strip().rsplit(maxsplit=1)
-    max_products = 30
-    if len(parts) == 2 and parts[1].isdigit():
-        keyword = parts[0]
-        max_products = min(int(parts[1]), 100)
-    else:
-        keyword = text.strip()
-
+    keyword = text.strip()
     if not keyword:
         return {
             "response_type": "ephemeral",
-            "text": "사용법: /amz {키워드} [개수] (예: /amz hair serum 50)",
+            "text": "사용법: /amz {키워드} (예: /amz hair serum)",
         }
 
-    background_tasks.add_task(
-        run_research, keyword, response_url, channel_id, max_products,
-    )
+    background_tasks.add_task(run_research, keyword, response_url, channel_id)
     return {
         "response_type": "in_channel",
-        "text": (
-            f"🔍 *{keyword}* 검색 시작합니다 (상위 {max_products}개). "
-            f"약 10~15분 소요됩니다."
-        ),
+        "text": f"🔍 *{keyword}* 검색 시작합니다 (상위 100개). 약 10~15분 소요됩니다.",
     }
 
 
@@ -60,6 +48,6 @@ async def research_test(
         return {"error": "keyword is required"}
 
     background_tasks.add_task(
-        run_research, keyword, req.response_url, req.channel_id, req.max_products,
+        run_research, keyword, req.response_url, req.channel_id,
     )
-    return {"status": "started", "keyword": keyword, "max_products": req.max_products}
+    return {"status": "started", "keyword": keyword}

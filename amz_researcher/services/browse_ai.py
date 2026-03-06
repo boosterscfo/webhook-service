@@ -149,9 +149,7 @@ class BrowseAiService:
 
         raise TimeoutError(f"Polling timeout after {max_attempts * interval}s")
 
-    async def run_search(
-        self, keyword: str, max_products: int = 30,
-    ) -> list[SearchProduct]:
+    async def run_search(self, keyword: str) -> list[SearchProduct]:
         encoded = quote_plus(keyword)
         amazon_url = f"https://www.amazon.com/s?k={encoded}"
         task_id = await self._create_task(
@@ -172,8 +170,8 @@ class BrowseAiService:
                 else:
                     raw_items = []
 
-        products = parse_search_results(raw_items)[:max_products]
-        logger.info("Search completed: %d products parsed (max %d)", len(products), max_products)
+        products = parse_search_results(raw_items)
+        logger.info("Search completed: %d products parsed", len(products))
         return products
 
     async def run_detail(self, asin: str) -> ProductDetail | None:
