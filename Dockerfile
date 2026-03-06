@@ -13,6 +13,7 @@ COPY main.py ./
 COPY app/ ./app/
 COPY lib/ ./lib/
 COPY jobs/ ./jobs/
+COPY amz_researcher/ ./amz_researcher/
 
 EXPOSE 9000
 CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9000"]
