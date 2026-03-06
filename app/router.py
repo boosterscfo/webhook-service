@@ -23,6 +23,7 @@ ALLOWED_JOBS = {
         "unregis_user_slack_send",
         "regis_user_slack_send",
     ],
+    "ad_migration": ["run_extract"],
 }
 
 

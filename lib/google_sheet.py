@@ -1,121 +1,176 @@
+import logging
+import re
+from functools import lru_cache
+
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class GoogleSheetApi:
     def __init__(self) -> None:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive",
-        ]
         creds = Credentials.from_service_account_file(
-            settings.GOOGLE_KEY_PATH, scopes=scope
+            settings.GOOGLE_KEY_PATH,
+            scopes=[
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/drive",
+            ],
         )
-        self.gc = gspread.Client(auth=creds)
+        self.gc = gspread.authorize(creds)
 
-    def get_doc(self, spreadsheet_url: str):
+    @lru_cache(maxsize=16)
+    def get_doc(self, spreadsheet_url: str) -> gspread.Spreadsheet:
+        logger.debug("Opening spreadsheet: %s", spreadsheet_url)
         return self.gc.open_by_url(spreadsheet_url)
 
-    def get_dataframe(
-        self, spreadsheet_url, sheetname=None, header_row=1, range=None
-    ) -> pd.DataFrame:
+    def _get_worksheet(
+        self, spreadsheet_url: str, sheetname: str | None = None
+    ) -> gspread.Worksheet:
         doc = self.get_doc(spreadsheet_url)
-        worksheet = doc.worksheet(sheetname) if sheetname else doc.sheet1
+        return doc.worksheet(sheetname) if sheetname else doc.sheet1
 
-        if range:
-            cells = worksheet.get(range)
-            if cells:
-                header = self._make_unique_headers(cells[0])
-                df = pd.DataFrame(cells[1:], columns=header)
-            else:
-                header = self._make_unique_headers(worksheet.row_values(header_row))
-                df = pd.DataFrame(columns=header)
+    def get_dataframe(
+        self,
+        spreadsheet_url: str,
+        sheetname: str | None = None,
+        header_row: int = 1,
+        cell_range: str | None = None,
+    ) -> pd.DataFrame:
+        logger.debug(
+            "Reading dataframe: sheet=%s, header_row=%d, cell_range=%s",
+            sheetname,
+            header_row,
+            cell_range,
+        )
+        worksheet = self._get_worksheet(spreadsheet_url, sheetname)
+
+        if cell_range:
+            df = self._read_range(worksheet, cell_range, header_row)
         else:
-            try:
-                records = worksheet.get_all_records(head=header_row)
-                if records:
-                    df = pd.DataFrame(records)
-                else:
-                    header = self._make_unique_headers(worksheet.row_values(header_row))
-                    df = pd.DataFrame(columns=header)
-            except Exception:
-                all_values = worksheet.get_all_values()
-                if all_values:
-                    header_idx = header_row - 1 if len(all_values) >= header_row else 0
-                    header = self._make_unique_headers(all_values[header_idx])
-                    data_rows = all_values[header_row:] if len(all_values) > header_row else []
-                    df = pd.DataFrame(data_rows, columns=header)
-                else:
-                    header = self._make_unique_headers(worksheet.row_values(header_row))
-                    df = pd.DataFrame(columns=header)
+            df = self._read_full_sheet(worksheet, header_row)
 
         df.dropna(how="all", axis=0, inplace=True)
         return df
 
+    def _read_range(
+        self, worksheet: gspread.Worksheet, cell_range: str, header_row: int
+    ) -> pd.DataFrame:
+        cells = worksheet.get(cell_range)
+        if cells:
+            header = self._make_unique_headers(cells[0])
+            return pd.DataFrame(cells[1:], columns=header)
+        header = self._make_unique_headers(worksheet.row_values(header_row))
+        return pd.DataFrame(columns=header)
+
+    def _read_full_sheet(
+        self, worksheet: gspread.Worksheet, header_row: int
+    ) -> pd.DataFrame:
+        try:
+            records = worksheet.get_all_records(head=header_row)
+            if records:
+                return pd.DataFrame(records)
+            header = self._make_unique_headers(worksheet.row_values(header_row))
+            return pd.DataFrame(columns=header)
+        except Exception:
+            logger.warning(
+                "get_all_records failed for sheet '%s', falling back to get_all_values",
+                worksheet.title,
+                exc_info=True,
+            )
+            return self._read_full_sheet_fallback(worksheet, header_row)
+
+    def _read_full_sheet_fallback(
+        self, worksheet: gspread.Worksheet, header_row: int
+    ) -> pd.DataFrame:
+        all_values = worksheet.get_all_values()
+        if all_values:
+            header_idx = header_row - 1 if len(all_values) >= header_row else 0
+            header = self._make_unique_headers(all_values[header_idx])
+            data_rows = all_values[header_row:] if len(all_values) > header_row else []
+            return pd.DataFrame(data_rows, columns=header)
+        header = self._make_unique_headers(worksheet.row_values(header_row))
+        return pd.DataFrame(columns=header)
+
     def paste_values_to_googlesheet(
-        self, df, spreadsheet_url, input_sheet_name, start_cell, append=False
+        self,
+        df: pd.DataFrame,
+        spreadsheet_url: str,
+        input_sheet_name: str,
+        start_cell: str,
+        append: bool = False,
     ) -> str:
         if df.empty:
             return "No data to paste"
 
-        doc = self.get_doc(spreadsheet_url)
-        worksheet = doc.worksheet(input_sheet_name)
+        worksheet = self._get_worksheet(spreadsheet_url, input_sheet_name)
 
         if append:
-            col_letter = start_cell[0]
-            values_list = worksheet.col_values(self.column_to_number(col_letter))
+            col_str, _ = self._parse_cell(start_cell)
+            col_num = self.column_to_number(col_str)
+            values_list = worksheet.col_values(col_num)
             last_row = len(values_list) + 1
-            start_cell = f"{col_letter}{last_row}"
+            start_cell = f"{col_str}{last_row}"
 
         values = df.values.tolist()
-        return self.update_sheet_range(
-            spreadsheet_url, start_cell, values, input_sheet_name
+        return self._update_worksheet_range(
+            worksheet, start_cell, values, input_sheet_name
         )
 
     def update_sheet_range(
-        self, spreadsheet_url, start_cell, data_array, sheetname=None
+        self,
+        spreadsheet_url: str,
+        start_cell: str,
+        data_array: list[list],
+        sheetname: str | None = None,
     ) -> str:
-        doc = self.get_doc(spreadsheet_url)
-        worksheet = doc.worksheet(sheetname) if sheetname else doc.sheet1
+        worksheet = self._get_worksheet(spreadsheet_url, sheetname)
+        return self._update_worksheet_range(worksheet, start_cell, data_array, sheetname)
 
-        if data_array and len(data_array) > 0:
-            num_rows = len(data_array)
-            num_cols = len(data_array[0])
+    def _update_worksheet_range(
+        self,
+        worksheet: gspread.Worksheet,
+        start_cell: str,
+        data_array: list[list],
+        sheetname: str | None = None,
+    ) -> str:
+        if not data_array:
+            return "No data to update.\n"
 
-            start_col_str = ""
-            start_row_str = ""
-            for ch in start_cell:
-                if ch.isalpha():
-                    start_col_str += ch
-                else:
-                    start_row_str += ch
+        num_rows = len(data_array)
+        num_cols = len(data_array[0])
 
-            end_col_num = self.column_to_number(start_col_str) + num_cols - 1
-            end_col = self.number_to_column(end_col_num)
-            end_row = int(start_row_str) + num_rows - 1
-            end_cell = f"{end_col}{end_row}"
-            cell_range = f"{start_cell}:{end_cell}"
+        start_col_str, start_row_str = self._parse_cell(start_cell)
 
-            worksheet.update(cell_range, data_array, value_input_option="USER_ENTERED")
+        end_col_num = self.column_to_number(start_col_str) + num_cols - 1
+        end_col = self.number_to_column(end_col_num)
+        end_row = int(start_row_str) + num_rows - 1
+        end_cell = f"{end_col}{end_row}"
+        range_notation = f"{start_cell}:{end_cell}"
 
-            return f"{start_cell}:{end_cell} of {sheetname} is updated.\n"
-        return "No data to update.\n"
+        worksheet.update(range_notation, data_array, value_input_option="USER_ENTERED")
+        logger.debug("Updated %s on sheet '%s'", range_notation, sheetname)
+        return f"{start_cell}:{end_cell} of {sheetname} is updated.\n"
 
-    def clear_contents(self, spreadsheet_url, range=None, sheetname=None) -> str:
-        doc = self.get_doc(spreadsheet_url)
-        worksheet = doc.worksheet(sheetname) if sheetname else doc.sheet1
+    def clear_contents(
+        self,
+        spreadsheet_url: str,
+        cell_range: str | None = None,
+        sheetname: str | None = None,
+    ) -> str:
+        worksheet = self._get_worksheet(spreadsheet_url, sheetname)
 
         data = worksheet.get_all_values()
-        if not data or not any(row for row in data if any(cell for cell in row)):
+        if not data or not any(cell for row in data for cell in row):
             return "No data found to clear."
         max_row = len(data)
 
         start_row_index = 1
-        if range:
-            parts = range.split(":")[0]
+        if cell_range:
+            parts = cell_range.split(":")[0]
             row_part = "".join(c for c in parts if c.isdigit())
             if row_part:
                 start_row_index = int(row_part)
@@ -123,14 +178,22 @@ class GoogleSheetApi:
         if start_row_index > max_row:
             return f"Start row {start_row_index} is beyond the last row. No data to clear."
 
-        if range and ":" in range:
-            end_part = range.split(":")[1]
+        if cell_range and ":" in cell_range:
+            end_part = cell_range.split(":")[1]
             if not any(c.isdigit() for c in end_part):
-                start_range = range.split(":")[0]
-                range = f"{start_range}:{end_part}{max_row}"
+                start_range = cell_range.split(":")[0]
+                cell_range = f"{start_range}:{end_part}{max_row}"
 
-        worksheet.batch_clear([range])
-        return f"Range {range} has been cleared."
+        worksheet.batch_clear([cell_range])
+        logger.debug("Cleared range %s on sheet '%s'", cell_range, sheetname)
+        return f"Range {cell_range} has been cleared."
+
+    @staticmethod
+    def _parse_cell(cell: str) -> tuple[str, str]:
+        match = re.match(r"^([A-Za-z]+)(\d+)$", cell)
+        if not match:
+            raise ValueError(f"Invalid cell reference: {cell}")
+        return match.group(1).upper(), match.group(2)
 
     @staticmethod
     def column_to_number(col_str: str) -> int:
@@ -147,9 +210,10 @@ class GoogleSheetApi:
             col_str = chr(65 + remainder) + col_str
         return col_str
 
-    def _make_unique_headers(self, headers: list) -> list:
-        seen = {}
-        unique_headers = []
+    @staticmethod
+    def _make_unique_headers(headers: list[str]) -> list[str]:
+        seen: dict[str, int] = {}
+        unique_headers: list[str] = []
         for header in headers:
             if header in seen:
                 seen[header] += 1

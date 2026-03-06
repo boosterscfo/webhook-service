@@ -111,7 +111,7 @@ def update_ads(payload: dict) -> str:
         .query("_merge != 'both'")[["brand", "ad_name", "ad_id", "old_name"]]
     )
 
-    result += gsapi.clear_contents(spreadsheet_url, range="A2:D", sheetname=regis_sheetname)
+    result += gsapi.clear_contents(spreadsheet_url, cell_range="A2:D", sheetname=regis_sheetname)
     if not sheet_only_df.empty:
         sheet_only_df = sheet_only_df.astype(str)
         sheet_only_df["ad_id"] = "'" + sheet_only_df["ad_id"]
@@ -152,7 +152,7 @@ def update_ads(payload: dict) -> str:
     ]
     wanna_regis = wanna_regis[[c for c in using_col if c in wanna_regis.columns]]
 
-    result += gsapi.clear_contents(spreadsheet_url, range="A2:M", sheetname=unregis_sheetname)
+    result += gsapi.clear_contents(spreadsheet_url, cell_range="A2:M", sheetname=unregis_sheetname)
     if not wanna_regis.empty:
         wanna_regis.fillna("", inplace=True)
         wanna_regis["ad_id"] = "'" + wanna_regis["ad_id"]
@@ -226,7 +226,7 @@ def add_ad(payload: dict) -> str:
         add_id_df, spreadsheet_url, sheet_name, startcell
     )
 
-    result += gsapi.clear_contents(spreadsheet_url, range="A2:L", sheetname=unregis_sheetname)
+    result += gsapi.clear_contents(spreadsheet_url, cell_range="A2:L", sheetname=unregis_sheetname)
     result += gsapi.paste_values_to_googlesheet(
         reserve_regis, spreadsheet_url, unregis_sheetname, "A2"
     )
@@ -303,7 +303,7 @@ def regis_user_slack_send(payload: dict) -> str:
     regis_df["creator"] = regis_df["ad_name"].str.extract(r"(?:.*?\s#){4}([^#]+)")
 
     email_df = gsapi.get_dataframe(
-        spreadsheet_url, "기타코드", header_row=1, range="S1:T100"
+        spreadsheet_url, "기타코드", header_row=1, cell_range="S1:T100"
     ).query("email != ''")
 
     regis_df["creator"] = regis_df["creator"].str.strip()

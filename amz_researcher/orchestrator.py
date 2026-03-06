@@ -35,7 +35,7 @@ def _build_summary(
 
 async def run_research(keyword: str, response_url: str, channel_id: str):
     browse = BrowseAiService(
-        api_key=settings.AMZ_BROWSE_AI_API_KEY,
+        api_key=settings.BROWSE_AI_API_KEY,
         search_robot_id=settings.AMZ_SEARCH_ROBOT_ID,
         detail_robot_id=settings.AMZ_DETAIL_ROBOT_ID,
     )

@@ -17,6 +17,10 @@
 ### Completed Analyses
 - `mysql-connector-refactor`: 97% match rate (2026-02-26). All R1-R6 requirements met.
   - Analysis at: `docs/03-analysis/mysql-connector-refactor.analysis.md`
+- `amazon-researcher`: 98% match rate (2026-03-06). 0 Critical/Major gaps, 5 Minor.
+  - Analysis at: `docs/03-analysis/amazon-researcher.analysis.md`
+  - Key findings: impl improves on design (DI pattern, guard clauses, URL encoding)
+  - Module at: `amz_researcher/` (Browse.ai + Gemini + Excel pipeline)
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)

@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "meta-ads-webhook",
-  "pdcaPhase": "design",
+  "feature": "amazon-researcher",
+  "pdcaPhase": "check",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-02-26T00:32:08.860Z",
-  "lastUpdated": "2026-02-26T01:02:34.746Z",
+  "startedAt": "2026-03-06T08:40:26.516Z",
+  "lastUpdated": "2026-03-06T08:43:02.631Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "f500c269-e9f2-40da-8e47-e6300f6658b7"
+  "sessionId": "4a75fd9f-ea54-4427-ac9c-117fcbfe0031"
 }
