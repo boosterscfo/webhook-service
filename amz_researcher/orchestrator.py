@@ -36,7 +36,9 @@ def _build_summary(
     )
 
 
-async def run_research(keyword: str, response_url: str, channel_id: str):
+async def run_research(
+    keyword: str, response_url: str, channel_id: str, max_products: int = 30,
+):
     browse = BrowseAiService(
         api_key=settings.BROWSE_AI_API_KEY,
         search_robot_id=settings.AMZ_SEARCH_ROBOT_ID,
@@ -57,7 +59,7 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
                 f"♻️ 검색 캐시 사용: {len(search_products)}개 제품. 상세 크롤링 시작...",
             )
         else:
-            search_products = await browse.run_search(keyword)
+            search_products = await browse.run_search(keyword, max_products)
             ckpt.save("01_search", search_products)
             await slack.send_message(
                 response_url,
