@@ -30,20 +30,42 @@ class SlackSender:
         if not channel_id or not self.bot_token:
             logger.warning("No channel_id or bot_token, skipping file upload")
             return
+        headers = {"Authorization": f"Bearer {self.bot_token}"}
         try:
+            # Step 1: Get upload URL
             resp = await self.client.post(
-                "https://slack.com/api/files.upload",
-                headers={"Authorization": f"Bearer {self.bot_token}"},
-                data={
-                    "channels": channel_id,
-                    "initial_comment": comment,
-                },
-                files={"file": (filename, file_bytes)},
+                "https://slack.com/api/files.getUploadURLExternal",
+                headers=headers,
+                data={"filename": filename, "length": str(len(file_bytes))},
             )
             resp.raise_for_status()
             data = resp.json()
             if not data.get("ok"):
-                logger.error("Slack file upload failed: %s", data.get("error"))
+                logger.error("Slack getUploadURL failed: %s", data.get("error"))
+                return
+            upload_url = data["upload_url"]
+            file_id = data["file_id"]
+
+            # Step 2: Upload file content
+            await self.client.post(
+                upload_url,
+                files={"file": (filename, file_bytes)},
+            )
+
+            # Step 3: Complete upload and share to channel
+            resp = await self.client.post(
+                "https://slack.com/api/files.completeUploadExternal",
+                headers={**headers, "Content-Type": "application/json"},
+                json={
+                    "files": [{"id": file_id, "title": filename}],
+                    "channel_id": channel_id,
+                    "initial_comment": comment,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("ok"):
+                logger.error("Slack completeUpload failed: %s", data.get("error"))
         except Exception:
             logger.exception("Failed to upload file to Slack")
 

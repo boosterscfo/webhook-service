@@ -1,8 +1,11 @@
 import logging
 
 from app.config import settings
-from amz_researcher.models import IngredientRanking
+from amz_researcher.models import (
+    IngredientRanking, ProductDetail, ProductIngredients, SearchProduct,
+)
 from amz_researcher.services.browse_ai import BrowseAiService
+from amz_researcher.services.checkpoint import Checkpoint
 from amz_researcher.services.gemini import GeminiService
 from amz_researcher.services.analyzer import calculate_weights
 from amz_researcher.services.excel_builder import build_excel
@@ -42,29 +45,50 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
     gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
 
+    ckpt = Checkpoint(keyword)
+
     try:
         # Step 1: Search
-        search_products = await browse.run_search(keyword)
-        await slack.send_message(
-            response_url,
-            f"✅ 검색 완료: {len(search_products)}개 제품 확인. 상세 크롤링 시작...",
-        )
+        search_products = ckpt.load("01_search", SearchProduct)
+        if search_products:
+            logger.info("Resumed search from checkpoint (%d products)", len(search_products))
+            await slack.send_message(
+                response_url,
+                f"♻️ 검색 캐시 사용: {len(search_products)}개 제품. 상세 크롤링 시작...",
+            )
+        else:
+            search_products = await browse.run_search(keyword)
+            ckpt.save("01_search", search_products)
+            await slack.send_message(
+                response_url,
+                f"✅ 검색 완료: {len(search_products)}개 제품 확인. 상세 크롤링 시작...",
+            )
 
         # Step 2: Detail crawl (parallel, max 5 concurrent)
-        asins = [p.asin for p in search_products]
-        details = await browse.run_details_batch(asins)
+        details = ckpt.load("02_details", ProductDetail)
+        if details:
+            logger.info("Resumed details from checkpoint (%d products)", len(details))
+        else:
+            asins = [p.asin for p in search_products]
+            details = await browse.run_details_batch(asins)
+            ckpt.save("02_details", details)
 
         # Step 3: Gemini ingredient extraction
-        await slack.send_message(response_url, "🧪 성분 추출 중... (Gemini Flash)")
-        products_for_gemini = [
-            {
-                "asin": d.asin,
-                "title": d.title,
-                "text": (d.top_highlights + " " + d.features)[:800],
-            }
-            for d in details
-        ]
-        gemini_results = await gemini.extract_ingredients(products_for_gemini)
+        gemini_results = ckpt.load("03_ingredients", ProductIngredients)
+        if gemini_results:
+            logger.info("Resumed ingredients from checkpoint (%d products)", len(gemini_results))
+        else:
+            await slack.send_message(response_url, "🧪 성분 추출 중... (Gemini Flash)")
+            products_for_gemini = [
+                {
+                    "asin": d.asin,
+                    "title": d.title,
+                    "text": (d.top_highlights + " " + d.features)[:800],
+                }
+                for d in details
+            ]
+            gemini_results = await gemini.extract_ingredients(products_for_gemini)
+            ckpt.save("03_ingredients", gemini_results)
 
         # Step 4: Weight calculation + aggregation
         weighted_products, rankings, categories = calculate_weights(
@@ -88,6 +112,8 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
             comment="📊 상세 분석 엑셀 파일",
         )
 
+        # Cleanup checkpoint on success
+        ckpt.clear()
         logger.info("Research completed for keyword=%s", keyword)
 
     except Exception as e:
