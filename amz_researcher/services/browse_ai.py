@@ -197,17 +197,129 @@ class BrowseAiService:
             logger.exception("Detail crawl failed for ASIN=%s", asin)
             return None
 
+    async def _create_bulk_run(
+        self, robot_id: str, input_params_list: list[dict], title: str = "",
+    ) -> str:
+        resp = await self.client.post(
+            f"/robots/{robot_id}/bulk-runs",
+            json={
+                "title": title,
+                "inputParameters": input_params_list,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        bulk_run_id = (
+            data.get("result", {}).get("bulkRun", {}).get("id")
+        )
+        if not bulk_run_id:
+            raise RuntimeError(f"No bulk run ID in response: {data}")
+        return bulk_run_id
+
+    async def _poll_bulk_run(
+        self, robot_id: str, bulk_run_id: str,
+        max_attempts: int = 40, interval: int = 30,
+    ) -> dict:
+        for attempt in range(max_attempts):
+            await asyncio.sleep(interval)
+            resp = await self.client.get(
+                f"/robots/{robot_id}/bulk-runs/{bulk_run_id}",
+            )
+            resp.raise_for_status()
+            result = resp.json().get("result", {})
+            status = result.get("status", "")
+            total = result.get("totalTaskCount", 0)
+            success = result.get("successfulTaskCount", 0)
+            failed = result.get("failedTaskCount", 0)
+            logger.info(
+                "Bulk run %s: status=%s, %d/%d done (%d failed)",
+                bulk_run_id, status, success + failed, total, failed,
+            )
+            if status in ("completed", "finished"):
+                return result
+            if success + failed >= total and total > 0:
+                return result
+        raise TimeoutError(
+            f"Bulk run polling timeout after {max_attempts * interval}s"
+        )
+
+    async def _fetch_bulk_tasks(
+        self, robot_id: str, bulk_run_id: str,
+    ) -> list[dict]:
+        tasks = []
+        page = 1
+        while True:
+            resp = await self.client.get(
+                f"/robots/{robot_id}/tasks",
+                params={
+                    "robotBulkRunId": bulk_run_id,
+                    "status": "successful",
+                    "page": page,
+                    "pageSize": 10,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get("result", {}).get("robotTasks", {}).get("items", [])
+            if not items:
+                break
+            tasks.extend(items)
+            total = data.get("result", {}).get("robotTasks", {}).get("totalCount", 0)
+            if len(tasks) >= total:
+                break
+            page += 1
+        return tasks
+
     async def run_details_batch(
-        self, asins: list[str], max_concurrent: int = 5,
+        self, asins: list[str],
     ) -> list[ProductDetail]:
-        semaphore = asyncio.Semaphore(max_concurrent)
+        if not asins:
+            return []
 
-        async def _limited(asin: str) -> ProductDetail | None:
-            async with semaphore:
-                return await self.run_detail(asin)
+        input_params_list = [
+            {"originUrl": f"https://www.amazon.com/dp/{asin}"}
+            for asin in asins
+        ]
+        bulk_run_id = await self._create_bulk_run(
+            self.detail_robot_id,
+            input_params_list,
+            title=f"detail-batch-{len(asins)}",
+        )
+        logger.info(
+            "Bulk run created: %s for %d ASINs", bulk_run_id, len(asins),
+        )
 
-        results = await asyncio.gather(*[_limited(a) for a in asins])
-        details = [r for r in results if r is not None]
+        await self._poll_bulk_run(self.detail_robot_id, bulk_run_id)
+
+        raw_tasks = await self._fetch_bulk_tasks(
+            self.detail_robot_id, bulk_run_id,
+        )
+        logger.info("Bulk run tasks fetched: %d successful", len(raw_tasks))
+
+        details = []
+        for task in raw_tasks:
+            try:
+                texts = task.get("capturedTexts", {})
+                input_url = (
+                    task.get("inputParameters", {}).get("originUrl", "")
+                )
+                asin = extract_asin(input_url)
+                if not asin:
+                    continue
+                details.append(ProductDetail(
+                    asin=asin,
+                    title=texts.get("title") or "",
+                    top_highlights=texts.get("top_highlights") or "",
+                    features=texts.get("features") or "",
+                    measurements=texts.get("measurements") or "",
+                    bsr=texts.get("bsr") or "",
+                    volume_raw=texts.get("volumn") or "",
+                    volume=parse_volume(texts.get("volumn") or ""),
+                    product_url=f"https://www.amazon.com/dp/{asin}",
+                ))
+            except Exception:
+                logger.exception("Failed to parse bulk task: %s", task.get("id"))
+
         logger.info("Detail batch: %d/%d succeeded", len(details), len(asins))
         return details
 
