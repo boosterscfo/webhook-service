@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-02-26T01:05:13.391Z",
+  "lastUpdated": "2026-03-06T08:26:23.860Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
@@ -8,9 +8,16 @@
     "meta-ads-webhook",
     "mysql-connector-refactor",
     "tests",
-    "slack-notifier-refactor"
+    "slack-notifier-refactor",
+    "amazon-researcher",
+    "amz_researcher",
+    "__init__.py",
+    "browse_ai.py",
+    "gemini.py",
+    "analyzer.py",
+    "slack_sender.py"
   ],
-  "primaryFeature": "slack-notifier-refactor",
+  "primaryFeature": "amazon-researcher",
   "features": {
     "webhook-service": {
       "phase": "do",
@@ -23,9 +30,9 @@
       "analysisPath": "docs/03-analysis/webhook-service.analysis.md",
       "reportPath": "docs/04-report/webhook-service.report.md",
       "phaseNumber": 3,
-      "lastFile": "/home/ubuntu/webhook-service/lib/slack.py",
+      "lastFile": "/home/yonkim/webhook-service/main.py",
       "timestamps": {
-        "lastUpdated": "2026-02-26T01:05:13.391Z"
+        "lastUpdated": "2026-03-06T08:26:23.860Z"
       }
     },
     "webhooks": {
@@ -50,9 +57,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-13T14:40:45.188Z",
-        "lastUpdated": "2026-02-26T00:35:32.872Z"
+        "lastUpdated": "2026-02-26T09:24:12.030Z"
       },
-      "lastFile": "/home/ubuntu/webhook-service/jobs/meta_ads_manager.py"
+      "lastFile": "/home/yonkim/webhook-service/jobs/ad_migration.py"
     },
     "meta-ads-webhook": {
       "phase": "design",
@@ -89,6 +96,22 @@
       },
       "lastFile": "/home/ubuntu/webhook-service/tests/test_webhook.py"
     },
+    "amazon-researcher": {
+      "phase": "completed",
+      "matchRate": 98,
+      "iterationCount": 0,
+      "startedAt": "2026-03-06T00:00:00.000Z",
+      "completedAt": "2026-03-06T00:00:00.000Z",
+      "planPath": "docs/01-plan/features/amazon-researcher.plan.md",
+      "designPath": "docs/02-design/features/amazon-researcher.design.md",
+      "analysisPath": "docs/03-analysis/amazon-researcher.analysis.md",
+      "reportPath": "docs/04-report/amazon-researcher.report.md",
+      "phaseNumber": 5,
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/orchestrator.py",
+      "timestamps": {
+        "lastUpdated": "2026-03-06T00:00:00.000Z"
+      }
+    },
     "slack-notifier-refactor": {
       "phase": "do",
       "matchRate": null,
@@ -100,6 +123,84 @@
       "timestamps": {
         "lastUpdated": "2026-02-26T00:00:00.000Z"
       }
+    },
+    "amz_researcher": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-06T08:23:35.355Z",
+        "lastUpdated": "2026-03-06T08:26:15.248Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/router.py"
+    },
+    "__init__.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-06T08:23:35.658Z",
+        "lastUpdated": "2026-03-06T08:23:35.658Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/__init__.py"
+    },
+    "browse_ai.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-06T08:24:11.999Z",
+        "lastUpdated": "2026-03-06T08:24:11.999Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/browse_ai.py"
+    },
+    "gemini.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-06T08:24:30.887Z",
+        "lastUpdated": "2026-03-06T08:24:30.887Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/gemini.py"
+    },
+    "analyzer.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-06T08:24:54.626Z",
+        "lastUpdated": "2026-03-06T08:24:54.626Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/analyzer.py"
+    },
+    "slack_sender.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-06T08:25:46.727Z",
+        "lastUpdated": "2026-03-06T08:25:46.727Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/slack_sender.py"
     }
   },
   "pipeline": {
@@ -115,7 +216,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-02-26T01:05:13.391Z"
+    "lastActivity": "2026-03-06T08:26:23.860Z"
   },
   "history": [
     {
@@ -361,6 +462,174 @@
     },
     {
       "timestamp": "2026-02-26T01:05:13.391Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:43:44.913Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:44:24.508Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:44:25.643Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:44:26.749Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:44:27.961Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:51:02.750Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:51:08.146Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:53:56.368Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T01:54:02.409Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:15:09.979Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:16:36.973Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:16:45.458Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:19:50.856Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:20:56.865Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:25:08.031Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T08:25:15.566Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-26T09:24:12.030Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:23:26.722Z",
+      "feature": "webhook-service",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:23:35.355Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:23:35.658Z",
+      "feature": "__init__.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:23:43.641Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:24:11.999Z",
+      "feature": "browse_ai.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:24:30.887Z",
+      "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:24:54.626Z",
+      "feature": "analyzer.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:25:46.727Z",
+      "feature": "slack_sender.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:26:06.750Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:26:15.248Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-06T08:26:23.860Z",
       "feature": "webhook-service",
       "phase": "do",
       "action": "updated"
