@@ -219,56 +219,56 @@ class BrowseAiService:
     async def _poll_bulk_run(
         self, robot_id: str, bulk_run_id: str,
         max_attempts: int = 40, interval: int = 30,
-    ) -> dict:
-        for attempt in range(max_attempts):
+    ) -> list[dict]:
+        """Poll bulk run until finished. Returns list of successful task dicts."""
+        all_tasks: list[dict] = []
+
+        for _ in range(max_attempts):
             await asyncio.sleep(interval)
             resp = await self.client.get(
                 f"/robots/{robot_id}/bulk-runs/{bulk_run_id}",
             )
             resp.raise_for_status()
             result = resp.json().get("result", {})
-            status = result.get("status", "")
-            total = result.get("totalTaskCount", 0)
-            success = result.get("successfulTaskCount", 0)
-            failed = result.get("failedTaskCount", 0)
+            bulk_run = result.get("bulkRun", {})
+            status = bulk_run.get("status", "")
+            total = bulk_run.get("tasksCount", 0)
+            success = bulk_run.get("successfulTasks", 0)
+            failed = bulk_run.get("failedTasks", 0)
             logger.info(
                 "Bulk run %s: status=%s, %d/%d done (%d failed)",
                 bulk_run_id, status, success + failed, total, failed,
             )
+
             if status in ("completed", "finished"):
-                return result
-            if success + failed >= total and total > 0:
-                return result
+                # Collect tasks from this page
+                robot_tasks = result.get("robotTasks", {})
+                items = robot_tasks.get("items", [])
+                all_tasks.extend(items)
+
+                # Fetch remaining pages if hasMore
+                has_more = robot_tasks.get("hasMore", False)
+                page = 2
+                while has_more:
+                    resp = await self.client.get(
+                        f"/robots/{robot_id}/bulk-runs/{bulk_run_id}",
+                        params={"page": page},
+                    )
+                    resp.raise_for_status()
+                    page_result = resp.json().get("result", {})
+                    page_tasks = page_result.get("robotTasks", {})
+                    page_items = page_tasks.get("items", [])
+                    if not page_items:
+                        break
+                    all_tasks.extend(page_items)
+                    has_more = page_tasks.get("hasMore", False)
+                    page += 1
+
+                return all_tasks
+
         raise TimeoutError(
             f"Bulk run polling timeout after {max_attempts * interval}s"
         )
-
-    async def _fetch_bulk_tasks(
-        self, robot_id: str, bulk_run_id: str,
-    ) -> list[dict]:
-        tasks = []
-        page = 1
-        while True:
-            resp = await self.client.get(
-                f"/robots/{robot_id}/tasks",
-                params={
-                    "robotBulkRunId": bulk_run_id,
-                    "status": "successful",
-                    "page": page,
-                    "pageSize": 10,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            items = data.get("result", {}).get("robotTasks", {}).get("items", [])
-            if not items:
-                break
-            tasks.extend(items)
-            total = data.get("result", {}).get("robotTasks", {}).get("totalCount", 0)
-            if len(tasks) >= total:
-                break
-            page += 1
-        return tasks
 
     async def run_details_batch(
         self, asins: list[str],
@@ -289,15 +289,12 @@ class BrowseAiService:
             "Bulk run created: %s for %d ASINs", bulk_run_id, len(asins),
         )
 
-        await self._poll_bulk_run(self.detail_robot_id, bulk_run_id)
-
-        raw_tasks = await self._fetch_bulk_tasks(
-            self.detail_robot_id, bulk_run_id,
-        )
-        logger.info("Bulk run tasks fetched: %d successful", len(raw_tasks))
+        raw_tasks = await self._poll_bulk_run(self.detail_robot_id, bulk_run_id)
 
         details = []
         for task in raw_tasks:
+            if task.get("status") != "successful":
+                continue
             try:
                 texts = task.get("capturedTexts", {})
                 input_url = (
