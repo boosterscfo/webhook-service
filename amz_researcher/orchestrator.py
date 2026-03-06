@@ -122,7 +122,16 @@ async def run_research(keyword: str, response_url: str, channel_id: str):
         logger.exception("Research failed for keyword=%s", keyword)
         await slack.send_message(
             response_url, f"❌ *{keyword}* 분석 실패: {e!s}",
+            ephemeral=True,
         )
+        admin_id = settings.AMZ_ADMIN_SLACK_ID
+        if admin_id:
+            await slack.send_dm(
+                admin_id,
+                f"🚨 AMZ Research 에러 발생\n"
+                f"키워드: {keyword}\n"
+                f"에러: {e!s}",
+            )
     finally:
         await browse.close()
         await gemini.close()

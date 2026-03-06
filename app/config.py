@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     AMZ_BOT_TOKEN: str = ""
     AMZ_SEARCH_ROBOT_ID: str = ""
     AMZ_DETAIL_ROBOT_ID: str = ""
+    AMZ_ADMIN_SLACK_ID: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

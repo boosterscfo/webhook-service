@@ -71,5 +71,31 @@ class SlackSender:
         except Exception:
             logger.exception("Failed to upload file to Slack")
 
+    async def send_dm(self, user_id: str, text: str):
+        if not user_id or not self.bot_token:
+            return
+        headers = {"Authorization": f"Bearer {self.bot_token}"}
+        try:
+            resp = await self.client.post(
+                "https://slack.com/api/conversations.open",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"users": user_id},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("ok"):
+                logger.error("Slack conversations.open failed: %s", data.get("error"))
+                return
+            dm_channel = data["channel"]["id"]
+
+            resp = await self.client.post(
+                "https://slack.com/api/chat.postMessage",
+                headers={**headers, "Content-Type": "application/json"},
+                json={"channel": dm_channel, "text": text},
+            )
+            resp.raise_for_status()
+        except Exception:
+            logger.exception("Failed to send DM to %s", user_id)
+
     async def close(self):
         await self.client.aclose()
