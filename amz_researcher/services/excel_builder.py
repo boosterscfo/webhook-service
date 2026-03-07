@@ -29,6 +29,7 @@ TAB_COLORS = {
     "Product Detail": "4CAF50",
     "Raw - Search Results": "FF6B35",
     "Raw - Product Detail": "9B59B6",
+    "Market Insight": "E91E63",
 }
 
 
@@ -285,6 +286,41 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
     })
 
 
+def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
+    """AI 시장 분석 리포트를 Market Insight 시트에 기록."""
+    ws = wb.create_sheet("Market Insight")
+    ws.sheet_properties.tabColor = TAB_COLORS["Market Insight"]
+
+    col_count = 1
+    _write_title(
+        ws,
+        f"{keyword.title()} Market Insight — AI Analysis Report",
+        "Powered by Gemini | Data-driven product planning insights",
+        col_count,
+    )
+
+    report_font = Font(name="Arial", size=10)
+    wrap = Alignment(wrap_text=True, vertical="top")
+
+    for i, line in enumerate(report_md.split("\n")):
+        row = 4 + i
+        cell = ws.cell(row=row, column=1, value=line)
+        cell.alignment = wrap
+        if line.startswith("# "):
+            cell.font = Font(name="Arial", size=14, bold=True, color="1B2A4A")
+        elif line.startswith("## "):
+            cell.font = Font(name="Arial", size=12, bold=True, color="2E86AB")
+        elif line.startswith("### "):
+            cell.font = Font(name="Arial", size=11, bold=True, color="4CAF50")
+        elif line.startswith("- **") or line.startswith("**"):
+            cell.font = Font(name="Arial", size=10, bold=True)
+        else:
+            cell.font = report_font
+
+    ws.column_dimensions["A"].width = 120
+    ws.freeze_panes = "A4"
+
+
 def build_excel(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -292,6 +328,7 @@ def build_excel(
     categories: list[CategorySummary],
     search_products: list[SearchProduct],
     details: list[ProductDetail],
+    market_report: str = "",
 ) -> bytes:
     wb = Workbook()
 
@@ -300,6 +337,8 @@ def build_excel(
     _build_product_detail(wb, weighted_products)
     _build_raw_search(wb, keyword, search_products)
     _build_raw_detail(wb, details)
+    if market_report:
+        _build_market_insight(wb, keyword, market_report)
 
     buf = BytesIO()
     wb.save(buf)

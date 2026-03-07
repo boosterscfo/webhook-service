@@ -59,6 +59,54 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
 {products_json}"""
 
 
+MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장 분석 데이터이다.
+총 {total_products}개 제품을 분석한 결과이다.
+
+## 분석 데이터
+
+### 1. 가격대별 성분 전략
+{price_tier_json}
+
+### 2. BSR 상위 vs 하위 제품 성분 비교
+{bsr_json}
+
+### 3. 주요 브랜드 프로파일
+{brand_json}
+
+### 4. 성분 조합 분석 (Co-occurrence)
+{cooccurrence_json}
+
+---
+
+위 데이터를 바탕으로, **제품 기획팀**을 위한 시장 분석 리포트를 작성하라.
+
+반드시 아래 5개 섹션을 포함:
+
+1. **시장 요약 (Market Overview)**
+   - 가격대 분포와 성분 트렌드 한줄 요약
+   - 시장의 성숙도 판단
+
+2. **가격대별 성분 전략 (Pricing & Ingredient Strategy)**
+   - 각 가격대에서 필수 성분 vs 차별화 성분
+   - 가격 프리미엄을 정당화하는 성분은 무엇인가
+
+3. **승리 공식 (Winning Formula)**
+   - BSR 상위 제품에만 있는 성분과 그 의미
+   - 높은 평점 제품의 성분 조합 패턴
+   - 추천 포뮬레이션 방향 (구체적 성분 조합 제시)
+
+4. **경쟁 환경 & 화이트 스페이스 (Competitive Landscape)**
+   - 주요 브랜드의 포지셔닝 분석
+   - 아직 비어있는 시장 기회 (가격대 × 성분 조합)
+
+5. **제품 기획 액션 아이템 (Action Items)**
+   - 바로 실행할 수 있는 3-5개 구체적 제안
+   - 각 제안에 근거 데이터 명시
+
+형식: 마크다운. 각 섹션에 구체적 수치와 성분명을 반드시 포함.
+JSON이 아닌 마크다운 텍스트로 출력하라."""
+
+
 class GeminiService:
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -67,7 +115,7 @@ class GeminiService:
             f"https://generativelanguage.googleapis.com/v1beta"
             f"/models/{self.model}:generateContent"
         )
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self.client = httpx.AsyncClient(timeout=120.0)
 
     async def extract_ingredients(
         self, products: list[dict], batch_size: int = 25,
@@ -142,6 +190,50 @@ class GeminiService:
                 return []
 
         return []
+
+    async def generate_market_report(self, analysis_data: dict) -> str:
+        """시장 분석 데이터를 기반으로 AI 인사이트 리포트 생성."""
+        prompt = MARKET_REPORT_PROMPT.format(
+            keyword=analysis_data["keyword"],
+            total_products=analysis_data["total_products"],
+            price_tier_json=json.dumps(
+                analysis_data["price_tier_analysis"], ensure_ascii=False, indent=2,
+            ),
+            bsr_json=json.dumps(
+                analysis_data["bsr_analysis"], ensure_ascii=False, indent=2,
+            ),
+            brand_json=json.dumps(
+                analysis_data["brand_analysis"], ensure_ascii=False, indent=2,
+            ),
+            cooccurrence_json=json.dumps(
+                analysis_data["cooccurrence_analysis"], ensure_ascii=False, indent=2,
+            ),
+        )
+
+        try:
+            resp = await self.client.post(
+                self.url,
+                params={"key": self.api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.3,
+                        "maxOutputTokens": 8192,
+                    },
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            text = (
+                data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+            )
+            return text
+        except Exception:
+            logger.exception("Market report generation failed")
+            return ""
 
     async def close(self):
         await self.client.aclose()
