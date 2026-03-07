@@ -18,6 +18,7 @@ dependencies = [
     "httpx",
     "openpyxl",
     "beautifulsoup4",
+    "python-multipart",
 ]
 
 [dependency-groups]
