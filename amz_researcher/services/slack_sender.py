@@ -12,18 +12,37 @@ class SlackSender:
 
     async def send_message(
         self, response_url: str, text: str, ephemeral: bool = False,
+        channel_id: str = "",
     ):
-        if not response_url:
-            logger.warning("No response_url, skipping message: %s", text[:80])
-            return
-        try:
-            resp = await self.client.post(response_url, json={
-                "response_type": "ephemeral" if ephemeral else "in_channel",
-                "text": text,
-            })
-            resp.raise_for_status()
-        except Exception:
-            logger.exception("Failed to send Slack message via response_url")
+        if response_url:
+            try:
+                resp = await self.client.post(response_url, json={
+                    "response_type": "ephemeral" if ephemeral else "in_channel",
+                    "text": text,
+                })
+                resp.raise_for_status()
+                return
+            except Exception:
+                logger.exception("Failed to send Slack message via response_url")
+                return
+
+        if channel_id and self.bot_token:
+            try:
+                resp = await self.client.post(
+                    "https://slack.com/api/chat.postMessage",
+                    headers={
+                        "Authorization": f"Bearer {self.bot_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"channel": channel_id, "text": text},
+                )
+                resp.raise_for_status()
+                return
+            except Exception:
+                logger.exception("Failed to send Slack message via chat.postMessage")
+                return
+
+        logger.warning("No response_url or channel_id, skipping message: %s", text[:80])
 
     async def upload_file(
         self, channel_id: str, file_bytes: bytes,

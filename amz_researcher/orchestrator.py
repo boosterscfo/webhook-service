@@ -48,6 +48,9 @@ async def run_research(
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
     cache = AmzCacheService("CFO")
 
+    async def _msg(text: str, ephemeral: bool = False):
+        await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
+
     try:
         # Step 1: Search (캐시 우선)
         search_products = None
@@ -55,16 +58,14 @@ async def run_research(
             search_products = cache.get_search_cache(keyword)
         if search_products:
             logger.info("Search cache hit: %d products", len(search_products))
-            await slack.send_message(
-                response_url,
+            await _msg(
                 f"♻️ 캐시 사용: {len(search_products)}개 제품. 상세 정보 확인 중...",
                 ephemeral=True,
             )
         else:
             search_products = await browse.run_search(keyword)
             cache.save_search_cache(keyword, search_products)
-            await slack.send_message(
-                response_url,
+            await _msg(
                 f"✅ 검색 완료: {len(search_products)}개 제품. 상세 크롤링 시작...",
                 ephemeral=True,
             )
@@ -101,16 +102,14 @@ async def run_research(
                 new_details = []
                 cache.save_failed_asins(uncached_asins, keyword)
             all_details = list(cached_details.values()) + new_details
-            await slack.send_message(
-                response_url,
+            await _msg(
                 f"📦 상세 정보: 캐시 {len(cached_details)}개 + 신규 {len(new_details)}개"
                 f" (스킵 {skipped_count + len(uncached_asins) - len(new_details)}개)",
                 ephemeral=True,
             )
         else:
             all_details = list(cached_details.values())
-            await slack.send_message(
-                response_url,
+            await _msg(
                 f"♻️ 상세 정보 전체 캐시 사용: {len(all_details)}개"
                 + (f" (실패 {skipped_count}개 스킵)" if skipped_count else ""),
                 ephemeral=True,
@@ -124,8 +123,7 @@ async def run_research(
         uncached_detail_asins = [a for a in detail_asins if a not in cached_ingredients]
 
         if uncached_detail_asins:
-            await slack.send_message(
-                response_url,
+            await _msg(
                 f"🧪 성분 추출 중... (캐시 {len(cached_ingredients)}개, "
                 f"신규 {len(uncached_detail_asins)}개 → Gemini Flash)",
                 ephemeral=True,
@@ -148,8 +146,7 @@ async def run_research(
                 for asin, ings in cached_ingredients.items()
             ]
         else:
-            await slack.send_message(
-                response_url,
+            await _msg(
                 f"♻️ 성분 추출 전체 캐시 사용: {len(cached_ingredients)}개",
                 ephemeral=True,
             )
@@ -169,9 +166,9 @@ async def run_research(
             market_report = cache.get_market_report_cache(keyword, len(weighted_products)) or ""
         if market_report:
             logger.info("Market report cache hit for keyword=%s", keyword)
-            await slack.send_message(response_url, "♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
+            await _msg("♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
         else:
-            await slack.send_message(response_url, "📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
+            await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
             analysis_data = build_market_analysis(keyword, weighted_products, all_details)
             market_report = await gemini.generate_market_report(analysis_data)
             cache.save_market_report_cache(keyword, market_report, len(weighted_products))
@@ -195,7 +192,7 @@ async def run_research(
                 summary += f"\n\n📊 *AI Market Insight (요약)*\n{action_section.strip()}"
             else:
                 summary += "\n\n📊 AI Market Insight → Excel 'Market Insight' 시트 참조"
-        await slack.send_message(response_url, summary)
+        await _msg(summary)
 
         # Step 8: File upload
         filename = f"{keyword.replace(' ', '_')}_analysis.xlsx"
@@ -207,10 +204,7 @@ async def run_research(
 
     except Exception as e:
         logger.exception("Research failed for keyword=%s", keyword)
-        await slack.send_message(
-            response_url, f"❌ *{keyword}* 분석 실패: {e!s}",
-            ephemeral=True,
-        )
+        await _msg(f"❌ *{keyword}* 분석 실패: {e!s}", ephemeral=True)
         admin_id = settings.AMZ_ADMIN_SLACK_ID
         if admin_id:
             await slack.send_dm(
