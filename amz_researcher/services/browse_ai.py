@@ -6,6 +6,11 @@ from urllib.parse import quote_plus, unquote
 import httpx
 
 from amz_researcher.models import ProductDetail, SearchProduct
+from amz_researcher.services.html_parser import (
+    parse_bsr,
+    parse_customer_reviews,
+    parse_product_table,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +41,6 @@ def parse_reviews(s: str) -> int:
         return int(float(s))
     except ValueError:
         return 0
-
-
-def parse_volume(s: str) -> int:
-    if not s:
-        return 0
-    m = re.search(r"([\d.]+)\s*K\+", s, re.IGNORECASE)
-    if m:
-        return int(float(m.group(1)) * 1000)
-    m = re.search(r"(\d+)\+", s)
-    if m:
-        return int(m.group(1))
-    return 0
 
 
 def parse_price(s: str) -> float | None:
@@ -96,6 +89,53 @@ def parse_search_results(raw_items: list[dict]) -> list[SearchProduct]:
 
     products.sort(key=lambda p: p.position)
     return products
+
+
+def parse_detail_from_captured_texts(asin: str, texts: dict) -> ProductDetail:
+    """capturedTexts dict → ProductDetail 변환.
+
+    _STATUS, _PREV_* 필드는 무시.
+    """
+    ingredients_raw = texts.get("ingredients") or ""
+
+    features = parse_product_table(texts.get("features") or "")
+    measurements = parse_product_table(texts.get("measurements") or "")
+    additional_details = parse_product_table(texts.get("details") or "")
+
+    item_details_html = texts.get("item_details") or ""
+    item_details = parse_product_table(item_details_html)
+    bsr_list = parse_bsr(item_details_html)
+    rating, review_count = parse_customer_reviews(item_details_html)
+
+    bsr_category = bsr_list[0]["rank"] if len(bsr_list) > 0 else None
+    bsr_category_name = bsr_list[0]["category"] if len(bsr_list) > 0 else ""
+    bsr_subcategory = bsr_list[1]["rank"] if len(bsr_list) > 1 else None
+    bsr_subcategory_name = bsr_list[1]["category"] if len(bsr_list) > 1 else ""
+
+    if bsr_list:
+        item_details["bsr"] = bsr_list
+    if rating is not None:
+        item_details["rating"] = rating
+    if review_count is not None:
+        item_details["review_count"] = review_count
+
+    return ProductDetail(
+        asin=asin,
+        ingredients_raw=ingredients_raw,
+        features=features,
+        measurements=measurements,
+        item_details=item_details,
+        additional_details=additional_details,
+        bsr_category=bsr_category,
+        bsr_subcategory=bsr_subcategory,
+        bsr_category_name=bsr_category_name,
+        bsr_subcategory_name=bsr_subcategory_name,
+        rating=rating,
+        review_count=review_count,
+        brand=item_details.get("Brand Name", ""),
+        manufacturer=item_details.get("Manufacturer", ""),
+        product_url=f"https://www.amazon.com/dp/{asin}",
+    )
 
 
 class BrowseAiService:
@@ -182,17 +222,7 @@ class BrowseAiService:
             )
             result = await self._poll_task(self.detail_robot_id, task_id)
             texts = result.get("capturedTexts", {})
-            return ProductDetail(
-                asin=asin,
-                title=texts.get("title") or "",
-                top_highlights=texts.get("top_highlights") or "",
-                features=texts.get("features") or "",
-                measurements=texts.get("measurements") or "",
-                bsr=texts.get("bsr") or "",
-                volume_raw=texts.get("volumn") or "",
-                volume=parse_volume(texts.get("volumn") or ""),
-                product_url=f"https://www.amazon.com/dp/{asin}",
-            )
+            return parse_detail_from_captured_texts(asin, texts)
         except Exception:
             logger.exception("Detail crawl failed for ASIN=%s", asin)
             return None
@@ -220,7 +250,6 @@ class BrowseAiService:
         self, robot_id: str, bulk_run_id: str,
         max_attempts: int = 40, interval: int = 30,
     ) -> list[dict]:
-        """Poll bulk run until finished. Returns list of successful task dicts."""
         all_tasks: list[dict] = []
 
         for _ in range(max_attempts):
@@ -241,12 +270,10 @@ class BrowseAiService:
             )
 
             if status in ("completed", "finished"):
-                # Collect tasks from this page
                 robot_tasks = result.get("robotTasks", {})
                 items = robot_tasks.get("items", [])
                 all_tasks.extend(items)
 
-                # Fetch remaining pages if hasMore
                 has_more = robot_tasks.get("hasMore", False)
                 page = 2
                 while has_more:
@@ -303,17 +330,7 @@ class BrowseAiService:
                 asin = extract_asin(input_url)
                 if not asin:
                     continue
-                details.append(ProductDetail(
-                    asin=asin,
-                    title=texts.get("title") or "",
-                    top_highlights=texts.get("top_highlights") or "",
-                    features=texts.get("features") or "",
-                    measurements=texts.get("measurements") or "",
-                    bsr=texts.get("bsr") or "",
-                    volume_raw=texts.get("volumn") or "",
-                    volume=parse_volume(texts.get("volumn") or ""),
-                    product_url=f"https://www.amazon.com/dp/{asin}",
-                ))
+                details.append(parse_detail_from_captured_texts(asin, texts))
             except Exception:
                 logger.exception("Failed to parse bulk task: %s", task.get("id"))
 

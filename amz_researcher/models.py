@@ -15,14 +15,21 @@ class SearchProduct(BaseModel):
 
 
 class ProductDetail(BaseModel):
+    """Browse.ai 상세 크롤링 결과 (V2 — capturedTexts 신규 필드)."""
     asin: str
-    title: str = ""
-    top_highlights: str = ""
-    features: str = ""
-    measurements: str = ""
-    bsr: str = ""
-    volume_raw: str = ""
-    volume: int = 0
+    ingredients_raw: str = ""
+    features: dict = {}
+    measurements: dict = {}
+    item_details: dict = {}
+    additional_details: dict = {}
+    bsr_category: int | None = None
+    bsr_subcategory: int | None = None
+    bsr_category_name: str = ""
+    bsr_subcategory_name: str = ""
+    rating: float | None = None
+    review_count: int | None = None
+    brand: str = ""
+    manufacturer: str = ""
     product_url: str = ""
 
 
@@ -47,7 +54,8 @@ class WeightedProduct(BaseModel):
     price: float | None = None
     reviews: int = 0
     rating: float = 0.0
-    volume: int = 0
+    bsr_category: int | None = None
+    bsr_subcategory: int | None = None
     composite_weight: float = 0.0
     ingredients: list[Ingredient] = []
 
