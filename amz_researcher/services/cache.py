@@ -1,10 +1,11 @@
 import json
 import logging
+import math
 from datetime import datetime, timedelta
 
 import pandas as pd
 
-from amz_researcher.models import ProductDetail, SearchProduct
+from amz_researcher.models import Ingredient, ProductDetail, ProductIngredients, SearchProduct
 from lib.mysql_connector import MysqlConnector
 
 logger = logging.getLogger(__name__)
@@ -103,21 +104,41 @@ class AmzCacheService:
             return {}
         result = {}
         for _, row in df.iterrows():
+            def _int_or_none(v):
+                if v is None or (isinstance(v, float) and math.isnan(v)):
+                    return None
+                return int(v)
+
+            def _float_or_none(v):
+                if v is None or (isinstance(v, float) and math.isnan(v)):
+                    return None
+                return float(v)
+
+            def _str_or_empty(v):
+                if v is None or (isinstance(v, float) and math.isnan(v)):
+                    return ""
+                return str(v)
+
+            def _json_or_empty(v):
+                if not v or (isinstance(v, float) and math.isnan(v)):
+                    return {}
+                return json.loads(v)
+
             result[row["asin"]] = ProductDetail(
                 asin=row["asin"],
-                ingredients_raw=row["ingredients_raw"] or "",
-                features=json.loads(row["features"]) if row["features"] else {},
-                measurements=json.loads(row["measurements"]) if row["measurements"] else {},
-                item_details=json.loads(row["item_details"]) if row["item_details"] else {},
-                additional_details=json.loads(row["additional_details"]) if row["additional_details"] else {},
-                bsr_category=int(row["bsr_category"]) if row["bsr_category"] is not None else None,
-                bsr_subcategory=int(row["bsr_subcategory"]) if row["bsr_subcategory"] is not None else None,
-                bsr_category_name=row["bsr_category_name"] or "",
-                bsr_subcategory_name=row["bsr_subcategory_name"] or "",
-                rating=float(row["rating"]) if row["rating"] is not None else None,
-                review_count=int(row["review_count"]) if row["review_count"] is not None else None,
-                brand=row["brand"] or "",
-                manufacturer=row["manufacturer"] or "",
+                ingredients_raw=_str_or_empty(row["ingredients_raw"]),
+                features=_json_or_empty(row["features"]),
+                measurements=_json_or_empty(row["measurements"]),
+                item_details=_json_or_empty(row["item_details"]),
+                additional_details=_json_or_empty(row["additional_details"]),
+                bsr_category=_int_or_none(row["bsr_category"]),
+                bsr_subcategory=_int_or_none(row["bsr_subcategory"]),
+                bsr_category_name=_str_or_empty(row["bsr_category_name"]),
+                bsr_subcategory_name=_str_or_empty(row["bsr_subcategory_name"]),
+                rating=_float_or_none(row["rating"]),
+                review_count=_int_or_none(row["review_count"]),
+                brand=_str_or_empty(row["brand"]),
+                manufacturer=_str_or_empty(row["manufacturer"]),
             )
         return result
 
@@ -153,3 +174,132 @@ class AmzCacheService:
             logger.info("Detail cache saved: %d products", len(details))
         except Exception:
             logger.exception("Failed to save detail cache")
+
+    # ── Failed ASIN Management ──────────────────────
+
+    def get_failed_asins(self) -> set[str]:
+        """실패 ASIN 목록 조회. 한번 실패한 ASIN은 재수집하지 않는다."""
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table("SELECT asin FROM amz_failed_asins")
+            return set(df["asin"].tolist()) if not df.empty else set()
+        except Exception:
+            logger.exception("Failed to read failed ASINs")
+            return set()
+
+    def save_failed_asins(self, asins: list[str], keyword: str = "") -> None:
+        """실패 ASIN 기록."""
+        if not asins:
+            return
+        now = datetime.now()
+        rows = [
+            {"asin": a, "keyword": keyword, "failed_at": now, "reason": "browse_ai_failure"}
+            for a in asins
+        ]
+        try:
+            df = pd.DataFrame(rows)
+            with MysqlConnector(self._env) as conn:
+                conn.upsert_data(df, "amz_failed_asins")
+            logger.info("Failed ASINs saved: %d", len(asins))
+        except Exception:
+            logger.exception("Failed to save failed ASINs")
+
+    # ── Ingredient Cache (Gemini) ────────────────────
+
+    def get_ingredient_cache(self, asins: list[str]) -> dict[str, list[Ingredient]]:
+        """Gemini 추출 성분 캐시 조회. {asin: [Ingredient]} 반환."""
+        if not asins:
+            return {}
+        placeholders = ",".join(["%s"] * len(asins))
+        query = (
+            f"SELECT asin, ingredient_name, category "
+            f"FROM amz_ingredient_cache WHERE asin IN ({placeholders})"
+        )
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, tuple(asins))
+        except Exception:
+            logger.exception("Failed to read ingredient cache")
+            return {}
+        if df.empty:
+            return {}
+        result: dict[str, list[Ingredient]] = {}
+        for _, row in df.iterrows():
+            asin = row["asin"]
+            if asin not in result:
+                result[asin] = []
+            if row["ingredient_name"] != "_NONE_":
+                result[asin].append(Ingredient(name=row["ingredient_name"], category=row["category"]))
+        return result
+
+    def save_ingredient_cache(self, gemini_results: list[ProductIngredients]) -> None:
+        """Gemini 추출 성분을 캐시에 저장. 성분 0개인 제품도 마커 저장."""
+        rows = []
+        now = datetime.now()
+        for pi in gemini_results:
+            if pi.ingredients:
+                for ing in pi.ingredients:
+                    rows.append({
+                        "asin": pi.asin,
+                        "ingredient_name": ing.name,
+                        "category": ing.category,
+                        "extracted_at": now,
+                    })
+            else:
+                # 성분 없음 마커 — 재분석 방지
+                rows.append({
+                    "asin": pi.asin,
+                    "ingredient_name": "_NONE_",
+                    "category": "",
+                    "extracted_at": now,
+                })
+        if not rows:
+            return
+        try:
+            df = pd.DataFrame(rows)
+            with MysqlConnector(self._env) as conn:
+                conn.upsert_data(df, "amz_ingredient_cache")
+            logger.info("Ingredient cache saved: %d ingredients from %d products",
+                       len(rows), len(gemini_results))
+        except Exception:
+            logger.exception("Failed to save ingredient cache")
+
+    # ── Market Report Cache ──────────────────────────
+
+    def get_market_report_cache(self, keyword: str, product_count: int) -> str | None:
+        """시장 리포트 캐시 조회. 제품 수가 같을 때만 반환."""
+        cutoff = datetime.now() - timedelta(days=CACHE_TTL_DAYS)
+        query = (
+            "SELECT report_md FROM amz_market_report_cache "
+            "WHERE keyword = %s AND product_count = %s AND generated_at >= %s"
+        )
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (keyword, product_count, cutoff))
+            if df.empty:
+                return None
+            return df.iloc[0]["report_md"]
+        except Exception:
+            logger.exception("Failed to read market report cache")
+            return None
+
+    def save_market_report_cache(
+        self, keyword: str, report_md: str, product_count: int,
+    ) -> None:
+        """시장 리포트 캐시 저장."""
+        if not report_md:
+            return
+        now = datetime.now()
+        rows = [{
+            "keyword": keyword,
+            "report_md": report_md,
+            "product_count": product_count,
+            "generated_at": now,
+        }]
+        try:
+            df = pd.DataFrame(rows)
+            with MysqlConnector(self._env) as conn:
+                conn.upsert_data(df, "amz_market_report_cache")
+            logger.info("Market report cache saved: keyword=%s", keyword)
+        except Exception:
+            logger.exception("Failed to save market report cache")

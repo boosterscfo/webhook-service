@@ -3,12 +3,25 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+import math
+
 import pandas as pd
 import pymysql
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_val(v):
+    """NaN/NaT → None 변환. pymysql은 NaN을 처리하지 못함."""
+    if v is None:
+        return None
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    if isinstance(v, pd.Timestamp) and pd.isna(v):
+        return None
+    return v
 
 
 @dataclass(frozen=True)
@@ -98,7 +111,6 @@ class MysqlConnector:
         if df.empty:
             return f"No data to upsert into {table_name}"
 
-        df = df.where(df.notna(), None)
         columns = [c for c in df.columns if c not in exclude_columns]
         placeholders = ", ".join(["%s"] * len(columns))
         col_list = ", ".join(f"`{c}`" for c in columns)
@@ -108,7 +120,10 @@ class MysqlConnector:
             f"INSERT INTO `{table_name}` ({col_list}) VALUES ({placeholders}) "
             f"ON DUPLICATE KEY UPDATE {update_set}"
         )
-        values = [tuple(row[c] for c in columns) for _, row in df.iterrows()]
+        values = [
+            tuple(_safe_val(row[c]) for c in columns)
+            for _, row in df.iterrows()
+        ]
         self.cursor.executemany(query, values)
         self.connection.commit()
         return f"{len(df)} records upserted into {table_name}"
@@ -135,7 +150,6 @@ class MysqlConnector:
         if df.empty:
             return f"No data to insert into {table_name}"
 
-        df = df.where(df.notna(), None)
         columns = [c for c in df.columns if c not in exclude_columns]
         placeholders = ", ".join(["%s"] * len(columns))
         col_list = ", ".join(f"`{c}`" for c in columns)
@@ -143,7 +157,10 @@ class MysqlConnector:
         delete_query = f"DELETE FROM `{table_name}` WHERE {where}"
         insert_query = f"INSERT INTO `{table_name}` ({col_list}) VALUES ({placeholders})"
 
-        values = [tuple(row[c] for c in columns) for _, row in df.iterrows()]
+        values = [
+            tuple(_safe_val(row[c]) for c in columns)
+            for _, row in df.iterrows()
+        ]
 
         self.cursor.execute(delete_query, where_params)
         deleted = self.cursor.rowcount

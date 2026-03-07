@@ -1,12 +1,13 @@
 import logging
 
 from app.config import settings
-from amz_researcher.models import IngredientRanking
+from amz_researcher.models import IngredientRanking, ProductIngredients
 from amz_researcher.services.browse_ai import BrowseAiService
 from amz_researcher.services.cache import AmzCacheService
 from amz_researcher.services.gemini import GeminiService
 from amz_researcher.services.analyzer import calculate_weights
 from amz_researcher.services.excel_builder import build_excel
+from amz_researcher.services.market_analyzer import build_market_analysis
 from amz_researcher.services.slack_sender import SlackSender
 
 logger = logging.getLogger(__name__)
@@ -68,59 +69,135 @@ async def run_research(
                 ephemeral=True,
             )
 
-        # Step 2: Detail (캐시 우선, 미캐시 ASIN만 크롤링)
+        # Step 2: Detail (캐시 우선, 실패 ASIN 제외, 미캐시만 크롤링)
         asins = [p.asin for p in search_products]
         cached_details = {}
+        failed_asins = set()
         if not refresh:
             cached_details = cache.get_detail_cache(asins)
-        uncached_asins = [a for a in asins if a not in cached_details]
+            failed_asins = cache.get_failed_asins()
+        uncached_asins = [
+            a for a in asins
+            if a not in cached_details and a not in failed_asins
+        ]
+        skipped_count = len([a for a in asins if a in failed_asins])
+        if skipped_count:
+            logger.info("Skipping %d previously failed ASINs", skipped_count)
 
         if uncached_asins:
-            new_details = await browse.run_details_batch(uncached_asins)
-            cache.save_detail_cache(new_details)
+            try:
+                new_details = await browse.run_details_batch(uncached_asins)
+                cache.save_detail_cache(new_details)
+                # 실패한 ASIN 기록
+                succeeded_asins = {d.asin for d in new_details}
+                newly_failed = [a for a in uncached_asins if a not in succeeded_asins]
+                if newly_failed:
+                    cache.save_failed_asins(newly_failed, keyword)
+            except Exception:
+                logger.warning(
+                    "Browse.ai batch failed for %d ASINs, proceeding with %d cached",
+                    len(uncached_asins), len(cached_details),
+                )
+                new_details = []
+                cache.save_failed_asins(uncached_asins, keyword)
             all_details = list(cached_details.values()) + new_details
             await slack.send_message(
                 response_url,
-                f"📦 상세 정보: 캐시 {len(cached_details)}개 + 신규 {len(new_details)}개",
+                f"📦 상세 정보: 캐시 {len(cached_details)}개 + 신규 {len(new_details)}개"
+                f" (스킵 {skipped_count + len(uncached_asins) - len(new_details)}개)",
                 ephemeral=True,
             )
         else:
             all_details = list(cached_details.values())
             await slack.send_message(
                 response_url,
-                f"♻️ 상세 정보 전체 캐시 사용: {len(all_details)}개",
+                f"♻️ 상세 정보 전체 캐시 사용: {len(all_details)}개"
+                + (f" (실패 {skipped_count}개 스킵)" if skipped_count else ""),
                 ephemeral=True,
             )
 
-        # Step 3: Gemini 성분 추출
-        await slack.send_message(response_url, "🧪 성분 추출 중... (Gemini Flash)", ephemeral=True)
-        products_for_gemini = [
-            {
-                "asin": d.asin,
-                "ingredients_raw": d.ingredients_raw,
-                "features": d.features,
-                "additional_details": d.additional_details,
-            }
-            for d in all_details
-        ]
-        gemini_results = await gemini.extract_ingredients(products_for_gemini)
+        # Step 3: Gemini 성분 추출 (캐시 우선)
+        detail_asins = [d.asin for d in all_details]
+        cached_ingredients = {}
+        if not refresh:
+            cached_ingredients = cache.get_ingredient_cache(detail_asins)
+        uncached_detail_asins = [a for a in detail_asins if a not in cached_ingredients]
+
+        if uncached_detail_asins:
+            await slack.send_message(
+                response_url,
+                f"🧪 성분 추출 중... (캐시 {len(cached_ingredients)}개, "
+                f"신규 {len(uncached_detail_asins)}개 → Gemini Flash)",
+                ephemeral=True,
+            )
+            detail_map = {d.asin: d for d in all_details}
+            products_for_gemini = [
+                {
+                    "asin": asin,
+                    "ingredients_raw": detail_map[asin].ingredients_raw,
+                    "features": detail_map[asin].features,
+                    "additional_details": detail_map[asin].additional_details,
+                }
+                for asin in uncached_detail_asins
+            ]
+            new_gemini_results = await gemini.extract_ingredients(products_for_gemini)
+            cache.save_ingredient_cache(new_gemini_results)
+            # 캐시 + 신규 병합
+            gemini_results = new_gemini_results + [
+                ProductIngredients(asin=asin, ingredients=ings)
+                for asin, ings in cached_ingredients.items()
+            ]
+        else:
+            await slack.send_message(
+                response_url,
+                f"♻️ 성분 추출 전체 캐시 사용: {len(cached_ingredients)}개",
+                ephemeral=True,
+            )
+            gemini_results = [
+                ProductIngredients(asin=asin, ingredients=ings)
+                for asin, ings in cached_ingredients.items()
+            ]
 
         # Step 4: Weight calculation
         weighted_products, rankings, categories = calculate_weights(
             search_products, all_details, gemini_results,
         )
 
-        # Step 5: Excel generation
+        # Step 5: AI 시장 분석 리포트 (캐시 우선)
+        market_report = ""
+        if not refresh:
+            market_report = cache.get_market_report_cache(keyword, len(weighted_products)) or ""
+        if market_report:
+            logger.info("Market report cache hit for keyword=%s", keyword)
+            await slack.send_message(response_url, "♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
+        else:
+            await slack.send_message(response_url, "📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
+            analysis_data = build_market_analysis(keyword, weighted_products, all_details)
+            market_report = await gemini.generate_market_report(analysis_data)
+            cache.save_market_report_cache(keyword, market_report, len(weighted_products))
+
+        # Step 6: Excel generation
         excel_bytes = build_excel(
             keyword, weighted_products, rankings, categories,
             search_products, all_details,
+            market_report=market_report,
         )
 
-        # Step 6: Summary message
+        # Step 7: Summary message
         summary = _build_summary(keyword, len(weighted_products), rankings[:10])
+        if market_report:
+            # 리포트에서 액션 아이템 섹션 추출하여 Slack 요약에 추가
+            action_start = market_report.find("## 5.")
+            if action_start == -1:
+                action_start = market_report.find("# 5.")
+            if action_start != -1:
+                action_section = market_report[action_start:action_start + 500]
+                summary += f"\n\n📊 *AI Market Insight (요약)*\n{action_section.strip()}"
+            else:
+                summary += "\n\n📊 AI Market Insight → Excel 'Market Insight' 시트 참조"
         await slack.send_message(response_url, summary)
 
-        # Step 7: File upload
+        # Step 8: File upload
         filename = f"{keyword.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(
             channel_id, excel_bytes, filename,
