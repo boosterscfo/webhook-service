@@ -17,21 +17,21 @@ def _build_summary(
     keyword: str, product_count: int, top_rankings: list[IngredientRanking],
 ) -> str:
     lines = []
-    for r in top_rankings:
-        avg_price_str = f"${r.avg_price:.0f}" if r.avg_price else "N/A"
+    for r in top_rankings[:5]:
+        avg_price_str = f"${r.avg_price:.0f}" if r.avg_price else "-"
         lines.append(
-            f" {r.rank}. *{r.ingredient}* [{r.category}]\n"
-            f"     Score: {r.weighted_score:.2f} | "
-            f"{r.product_count}개 제품 | 평균가 {avg_price_str}"
+            f"  {r.rank}. *{r.ingredient}*  |  "
+            f"Score {r.weighted_score:.2f}  |  "
+            f"{r.product_count}개 제품  |  {avg_price_str}"
         )
     rankings_text = "\n".join(lines)
 
     return (
-        f'🧪 Amazon "{keyword}" 성분 분석 완료\n'
-        f"분석 대상: {product_count}개 제품 | Powered by Gemini Flash\n\n"
-        f"{rankings_text}\n\n"
-        f"Score = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)\n"
-        f"성분 추출: 마케팅 소구 기준 (INCI 전성분 아님)"
+        f"*Amazon \"{keyword}\" 성분 분석 완료*\n"
+        f"{product_count}개 제품 분석 | Gemini Flash\n\n"
+        f"*Top 5 성분*\n{rankings_text}\n\n"
+        f"_Score = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)_\n"
+        f"_자세한 내용은 첨부 Excel 파일의 Market Insight 시트를 참조하세요._"
     )
 
 
@@ -189,16 +189,6 @@ async def run_research(
 
         # Step 7: Summary message
         summary = _build_summary(keyword, len(weighted_products), rankings[:10])
-        if market_report:
-            # 리포트에서 액션 아이템 섹션 추출하여 Slack 요약에 추가
-            action_start = market_report.find("## 7.")
-            if action_start == -1:
-                action_start = market_report.find("# 7.")
-            if action_start != -1:
-                action_section = market_report[action_start:action_start + 500]
-                summary += f"\n\n📊 *AI Market Insight (요약)*\n{action_section.strip()}"
-            else:
-                summary += "\n\n📊 AI Market Insight → Excel 'Market Insight' 시트 참조"
         await _msg(summary)
 
         # Step 8: File upload

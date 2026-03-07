@@ -94,16 +94,25 @@ def _build_ingredient_ranking(
     )
     _write_title(ws, title, subtitle, col_count)
 
+    desc = (
+        "Weighted Score: 해당 성분을 포함하는 모든 제품의 Composite Weight 합산. "
+        "높을수록 시장 성과가 좋은 제품에 많이 사용됨. "
+        "Avg Weight: 제품당 평균 가중치. # Products가 적어도 Avg Weight가 높으면 Top 제품에 집중된 성분."
+    )
+    desc_cell = ws.cell(row=3, column=1, value=desc)
+    desc_cell.font = Font(name="Arial", size=9, italic=True, color="666666")
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
+
     headers = [
         "Rank", "Ingredient", "Weighted Score", "# Products",
         "Avg Weight", "Category", "Avg Price", "Price Range", "Key Insight",
     ]
     for c, h in enumerate(headers, 1):
-        ws.cell(row=4, column=c, value=h)
-    _style_header_row(ws, 4, col_count)
+        ws.cell(row=5, column=c, value=h)
+    _style_header_row(ws, 5, col_count)
 
     for i, r in enumerate(rankings):
-        row = 5 + i
+        row = 6 + i
         ws.cell(row=row, column=1, value=r.rank)
         ws.cell(row=row, column=2, value=r.ingredient)
         ws.cell(row=row, column=3, value=r.weighted_score).number_format = "0.000"
@@ -115,9 +124,9 @@ def _build_ingredient_ranking(
         ws.cell(row=row, column=8, value=r.price_range)
         ws.cell(row=row, column=9, value=r.key_insight)
 
-    end_row = 4 + len(rankings)
-    _style_data_rows(ws, 5, end_row, col_count)
-    ws.freeze_panes = "A5"
+    end_row = 5 + len(rankings)
+    _style_data_rows(ws, 6, end_row, col_count)
+    ws.freeze_panes = "A6"
     _set_column_widths(ws, {
         "A": 7, "B": 28, "C": 15, "D": 12, "E": 13,
         "F": 20, "G": 12, "H": 18, "I": 42,
@@ -129,18 +138,31 @@ def _build_category_summary(wb: Workbook, categories: list[CategorySummary]):
     ws.sheet_properties.tabColor = TAB_COLORS["Category Summary"]
 
     col_count = 7
-    _write_title(ws, "Ingredient Category Summary", "", col_count)
+    _write_title(
+        ws,
+        "Ingredient Category Summary",
+        "성분을 기능별 카테고리(Natural Oil, Vitamin, Botanical 등)로 그룹핑한 요약",
+        col_count,
+    )
+
+    desc = (
+        "Total Weighted Score: 카테고리 내 모든 성분의 가중치 합산 — 시장에서 해당 카테고리의 영향력. "
+        "# Types: 고유 성분 수. # Mentions: 전체 제품에서 등장한 횟수 합계."
+    )
+    desc_cell = ws.cell(row=3, column=1, value=desc)
+    desc_cell.font = Font(name="Arial", size=9, italic=True, color="666666")
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
 
     headers = [
         "Category", "Total Weighted Score", "# Types",
         "# Mentions", "Avg Price", "Price Range", "Top Ingredients",
     ]
     for c, h in enumerate(headers, 1):
-        ws.cell(row=3, column=c, value=h)
-    _style_header_row(ws, 3, col_count)
+        ws.cell(row=4, column=c, value=h)
+    _style_header_row(ws, 4, col_count)
 
     for i, cat in enumerate(categories):
-        row = 4 + i
+        row = 5 + i
         ws.cell(row=row, column=1, value=cat.category)
         ws.cell(row=row, column=2, value=cat.total_weighted_score).number_format = "0.000"
         ws.cell(row=row, column=3, value=cat.type_count)
@@ -150,9 +172,9 @@ def _build_category_summary(wb: Workbook, categories: list[CategorySummary]):
         ws.cell(row=row, column=6, value=cat.price_range)
         ws.cell(row=row, column=7, value=cat.top_ingredients)
 
-    end_row = 3 + len(categories)
-    _style_data_rows(ws, 4, end_row, col_count)
-    ws.freeze_panes = "A4"
+    end_row = 4 + len(categories)
+    _style_data_rows(ws, 5, end_row, col_count)
+    ws.freeze_panes = "A5"
     _set_column_widths(ws, {
         "A": 22, "B": 20, "C": 10, "D": 12, "E": 12, "F": 18, "G": 45,
     })
@@ -163,18 +185,32 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws.sheet_properties.tabColor = TAB_COLORS["Product Detail"]
 
     col_count = 10
-    _write_title(ws, "Product-Level Data with Weight Breakdown", "", col_count)
+    _write_title(
+        ws,
+        "Product-Level Data with Weight Breakdown",
+        "각 제품의 시장 성과 지표와 Gemini가 추출한 핵심 성분 목록",
+        col_count,
+    )
+
+    desc = (
+        "Composite Weight: Position(20%)+Reviews(25%)+Rating(15%)+BSR(40%) 종합 점수. "
+        "BSR(Category): Amazon 전체 카테고리 베스트셀러 순위 (낮을수록 잘 팔림). "
+        "BSR(Sub): 서브카테고리 순위."
+    )
+    desc_cell = ws.cell(row=3, column=1, value=desc)
+    desc_cell.font = Font(name="Arial", size=9, italic=True, color="666666")
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
 
     headers = [
         "ASIN", "Title", "Position", "Price", "Reviews",
         "Rating", "BSR (Category)", "BSR (Sub)", "Composite Weight", "Ingredients Found",
     ]
     for c, h in enumerate(headers, 1):
-        ws.cell(row=3, column=c, value=h)
-    _style_header_row(ws, 3, col_count)
+        ws.cell(row=4, column=c, value=h)
+    _style_header_row(ws, 4, col_count)
 
     for i, p in enumerate(products):
-        row = 4 + i
+        row = 5 + i
         ingredients_str = ", ".join(ing.name for ing in p.ingredients)
         ws.cell(row=row, column=1, value=p.asin)
         ws.cell(row=row, column=2, value=p.title)
@@ -190,9 +226,9 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         ws.cell(row=row, column=9, value=p.composite_weight).number_format = "0.000"
         ws.cell(row=row, column=10, value=ingredients_str)
 
-    end_row = 3 + len(products)
-    _style_data_rows(ws, 4, end_row, col_count)
-    ws.freeze_panes = "A4"
+    end_row = 4 + len(products)
+    _style_data_rows(ws, 5, end_row, col_count)
+    ws.freeze_panes = "A5"
     _set_column_widths(ws, {
         "A": 14, "B": 50, "C": 10, "D": 10, "E": 10,
         "F": 8, "G": 14, "H": 10, "I": 16, "J": 50,
@@ -205,7 +241,11 @@ def _build_raw_search(wb: Workbook, keyword: str, products: list[SearchProduct])
 
     col_count = 8
     title = f'Amazon Search Results — "{keyword}" (Raw Data, {len(products)} products)'
-    _write_title(ws, title, "", col_count)
+    _write_title(
+        ws, title,
+        "Browse.ai가 수집한 Amazon 검색 결과 원본. Position은 검색 페이지 노출 순서.",
+        col_count,
+    )
 
     headers = [
         "Position", "Title", "ASIN", "Price",
@@ -242,7 +282,7 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
     _write_title(
         ws,
         "Amazon Product Detail — Parsed Data (Raw)",
-        "",
+        "각 ASIN의 상세 페이지에서 파싱한 원본 데이터. Ingredients(raw)는 INCI 전성분 텍스트.",
         col_count,
     )
 
@@ -298,7 +338,7 @@ def _build_rising_products(wb: Workbook, rising: list[dict]):
     _write_title(
         ws,
         "Rising Products — Low Reviews, High BSR",
-        "Products with fewer reviews but strong sales rank (potential breakouts)",
+        "리뷰 수가 중앙값 미만이면서 BSR 10,000 이내인 제품. 신규 진입자 또는 급성장 중인 제품 후보.",
         col_count,
     )
 
@@ -339,7 +379,11 @@ def _build_form_price(wb: Workbook, form_data: dict):
     # Part 1: Form Summary
     form_summary = form_data.get("form_summary", [])
     col_count = 6
-    _write_title(ws, "Product Form Analysis", "Item Form breakdown with performance metrics", col_count)
+    _write_title(
+        ws, "Product Form Analysis",
+        "제형(Oil, Serum, Cream 등)별 평균 가격/평점/BSR 비교. 매트릭스에서 빈 칸 = 미개척 시장 기회.",
+        col_count,
+    )
 
     headers = ["Form", "Count", "Avg Price", "Avg Rating", "Avg Reviews", "Avg BSR"]
     for c, h in enumerate(headers, 1):
@@ -391,7 +435,7 @@ def _build_form_price(wb: Workbook, form_data: dict):
 def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     """AI 시장 분석 리포트를 Market Insight 시트에 기록.
 
-    A4 셀 하나에 전체 리포트를 넣어 Notion 복사-붙여넣기 지원.
+    A5 셀 하나에 전체 리포트를 넣어 Notion 복사-붙여넣기 지원.
     """
     ws = wb.create_sheet("Market Insight")
     ws.sheet_properties.tabColor = TAB_COLORS["Market Insight"]
@@ -404,14 +448,21 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
         col_count,
     )
 
-    cell = ws.cell(row=4, column=1, value=report_md)
+    note = (
+        "Notion 붙여넣기: A5 셀 선택 후 상단 수식입력줄의 텍스트를 전체 선택(Ctrl+A) → 복사(Ctrl+C) → "
+        "Notion에 붙여넣기하면 마크다운으로 자동 렌더링됩니다."
+    )
+    note_cell = ws.cell(row=3, column=1, value=note)
+    note_cell.font = Font(name="Arial", size=9, italic=True, color="E91E63")
+
+    cell = ws.cell(row=5, column=1, value=report_md)
     cell.font = Font(name="Arial", size=10)
     cell.alignment = Alignment(wrap_text=True, vertical="top")
 
     line_count = report_md.count("\n") + 1
-    ws.row_dimensions[4].height = min(line_count * 15, 8000)
+    ws.row_dimensions[5].height = min(line_count * 15, 8000)
     ws.column_dimensions["A"].width = 120
-    ws.freeze_panes = "A4"
+    ws.freeze_panes = "A5"
 
 
 def _build_analysis_data(wb: Workbook, analysis_data: dict):
@@ -433,8 +484,9 @@ def _build_analysis_data(wb: Workbook, analysis_data: dict):
     _write_title(
         ws,
         "Analysis Data — Raw Input to AI Market Report",
+        f"Gemini에 전달한 분석 원본 JSON. 8개 섹션의 데이터를 직접 확인 가능. "
         f"Keyword: {analysis_data.get('keyword', '')} | "
-        f"{analysis_data.get('total_products', 0)} products analyzed",
+        f"{analysis_data.get('total_products', 0)} products",
         1,
     )
 
