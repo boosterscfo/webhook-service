@@ -11,14 +11,17 @@ from amz_researcher.models import (
 
 
 def _compute_composite_weight(
-    position: int, reviews: int, rating: float, volume: int,
-    max_position: int, max_reviews: int, max_volume: int,
+    position: int, reviews: int, rating: float, bsr_category: int | None,
+    max_position: int, max_reviews: int, max_bsr: int,
 ) -> float:
+    """Weight = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)"""
     pos_norm = 1 - (position - 1) / max_position if max_position > 0 else 0
     rev_norm = reviews / max_reviews if max_reviews > 0 else 0
     rat_norm = rating / 5.0
-    vol_norm = volume / max_volume if max_volume > 0 else 0
-    return pos_norm * 0.2 + rev_norm * 0.3 + rat_norm * 0.2 + vol_norm * 0.3
+    bsr = bsr_category if bsr_category is not None else (max_bsr + 1)
+    bsr_norm = 1 - (bsr - 1) / max_bsr if max_bsr > 0 else 0
+    bsr_norm = max(bsr_norm, 0)
+    return pos_norm * 0.2 + rev_norm * 0.25 + rat_norm * 0.15 + bsr_norm * 0.4
 
 
 def _generate_key_insight(
@@ -150,17 +153,23 @@ def calculate_weights(
     max_position = max((p.position for p in search_products), default=1)
     max_reviews = max((p.reviews for p in search_products), default=1)
 
-    volumes = [detail_map[p.asin].volume for p in search_products if p.asin in detail_map]
-    max_volume = max(volumes) if volumes else 1
+    bsr_values = [
+        detail_map[p.asin].bsr_category
+        for p in search_products
+        if p.asin in detail_map and detail_map[p.asin].bsr_category is not None
+    ]
+    max_bsr = max(bsr_values) if bsr_values else 1
 
     weighted_products = []
     for sp in search_products:
         detail = detail_map.get(sp.asin)
-        volume = detail.volume if detail else 0
+        bsr_category = detail.bsr_category if detail else None
+        bsr_subcategory = detail.bsr_subcategory if detail else None
+        rating = (detail.rating if detail and detail.rating else sp.rating)
 
         weight = _compute_composite_weight(
-            sp.position, sp.reviews, sp.rating, volume,
-            max_position, max_reviews, max_volume,
+            sp.position, sp.reviews, rating, bsr_category,
+            max_position, max_reviews, max_bsr,
         )
 
         ingredients = ingredient_map.get(sp.asin, [])
@@ -171,8 +180,9 @@ def calculate_weights(
             position=sp.position,
             price=sp.price,
             reviews=sp.reviews,
-            rating=sp.rating,
-            volume=volume,
+            rating=rating,
+            bsr_category=bsr_category,
+            bsr_subcategory=bsr_subcategory,
             composite_weight=weight,
             ingredients=ingredients,
         ))

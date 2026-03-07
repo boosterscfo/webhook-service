@@ -8,7 +8,11 @@ from amz_researcher.models import GeminiResponse, ProductIngredients
 logger = logging.getLogger(__name__)
 
 PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
-각 제품의 설명 텍스트에서 마케팅적으로 강조하고 있는 성분(ingredient)을 추출하라.
+각 제품에는 INCI 전성분 리스트와 제품 특성 정보가 포함되어 있다.
+
+작업:
+1. INCI 전성분에서 마케팅적으로 강조할 만한 핵심 성분을 선별하라.
+2. 제품 특성(features, additional_details)도 참고하여 성분의 맥락을 파악하라.
 
 규칙:
 1. 성분명은 영문 표준명으로 통일 (예: 아르간오일 → Argan Oil)
@@ -18,7 +22,7 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
    Natural Oil / Essential Oil / Vitamin / Protein / Peptide /
    Active/Functional / Hair Growth Complex / Silicone / Botanical /
    Pharmaceutical / Humectant / Other
-4. 제품의 기능·효과(Moisturizing, Shine, Strengthening 등)는 성분이 아니므로 제외
+4. 용매(Water), 방부제(Phenoxyethanol, Ethylhexylglycerin), 향료(Fragrance/Parfum/Linalool 등) 등 기본 성분은 제외
 5. 화학적으로 식별 가능한 물질만 추출
 6. JSON만 출력:
 

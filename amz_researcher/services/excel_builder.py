@@ -67,6 +67,11 @@ def _set_column_widths(ws, widths: dict[str, float]):
         ws.column_dimensions[col_letter].width = width
 
 
+def _dict_to_text(d: dict) -> str:
+    """{"Hair Type": "All", ...} → "Hair Type: All\nItem Form: Oil" """
+    return "\n".join(f"{k}: {v}" for k, v in d.items() if not isinstance(v, (list, dict)))
+
+
 def _build_ingredient_ranking(
     wb: Workbook, keyword: str,
     rankings: list[IngredientRanking],
@@ -79,7 +84,7 @@ def _build_ingredient_ranking(
     col_count = 9
     title = f"{keyword.title()} Ingredient Analysis — Weighted by Market Performance"
     subtitle = (
-        f"Weight = Position(20%) + Reviews(30%) + Rating(20%) + Volume(30%) "
+        f"Weight = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%) "
         f"| {product_count} products, {len(rankings)} ingredients"
     )
     _write_title(ws, title, subtitle, col_count)
@@ -152,12 +157,12 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws = wb.create_sheet("Product Detail")
     ws.sheet_properties.tabColor = TAB_COLORS["Product Detail"]
 
-    col_count = 9
+    col_count = 10
     _write_title(ws, "Product-Level Data with Weight Breakdown", "", col_count)
 
     headers = [
         "ASIN", "Title", "Position", "Price", "Reviews",
-        "Rating", "Volume", "Composite Weight", "Ingredients Found",
+        "Rating", "BSR (Category)", "BSR (Sub)", "Composite Weight", "Ingredients Found",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=3, column=c, value=h)
@@ -173,16 +178,19 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
             ws.cell(row=row, column=4, value=p.price).number_format = "$#,##0.00"
         ws.cell(row=row, column=5, value=p.reviews).number_format = "#,##0"
         ws.cell(row=row, column=6, value=p.rating)
-        ws.cell(row=row, column=7, value=p.volume).number_format = "#,##0"
-        ws.cell(row=row, column=8, value=p.composite_weight).number_format = "0.000"
-        ws.cell(row=row, column=9, value=ingredients_str)
+        if p.bsr_category is not None:
+            ws.cell(row=row, column=7, value=p.bsr_category).number_format = "#,##0"
+        if p.bsr_subcategory is not None:
+            ws.cell(row=row, column=8, value=p.bsr_subcategory).number_format = "#,##0"
+        ws.cell(row=row, column=9, value=p.composite_weight).number_format = "0.000"
+        ws.cell(row=row, column=10, value=ingredients_str)
 
     end_row = 3 + len(products)
     _style_data_rows(ws, 4, end_row, col_count)
     ws.freeze_panes = "A4"
     _set_column_widths(ws, {
         "A": 14, "B": 50, "C": 10, "D": 10, "E": 10,
-        "F": 8, "G": 10, "H": 16, "I": 50,
+        "F": 8, "G": 14, "H": 10, "I": 16, "J": 50,
     })
 
 
@@ -225,17 +233,18 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
     ws = wb.create_sheet("Raw - Product Detail")
     ws.sheet_properties.tabColor = TAB_COLORS["Raw - Product Detail"]
 
-    col_count = 8
+    col_count = 10
     _write_title(
         ws,
-        "Amazon Product Detail — Top Highlights & Features (Raw Data)",
+        "Amazon Product Detail — Parsed Data (Raw)",
         "",
         col_count,
     )
 
     headers = [
-        "ASIN", "Title", "BSR", "Volume",
-        "Top Highlights", "Features", "Measurements", "Product URL",
+        "ASIN", "Brand", "BSR Category", "BSR Subcategory",
+        "Rating", "Reviews", "Ingredients (raw)",
+        "Features", "Measurements", "Additional Details",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=3, column=c, value=h)
@@ -244,17 +253,26 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
     for i, d in enumerate(details):
         row = 4 + i
         ws.cell(row=row, column=1, value=d.asin)
-        ws.cell(row=row, column=2, value=d.title)
-        ws.cell(row=row, column=3, value=d.bsr)
-        ws.cell(row=row, column=4, value=d.volume_raw)
+        ws.cell(row=row, column=2, value=d.brand)
+        if d.bsr_category is not None:
+            bsr_cat_str = f"#{d.bsr_category} in {d.bsr_category_name}"
+            ws.cell(row=row, column=3, value=bsr_cat_str)
+        if d.bsr_subcategory is not None:
+            bsr_sub_str = f"#{d.bsr_subcategory} in {d.bsr_subcategory_name}"
+            ws.cell(row=row, column=4, value=bsr_sub_str)
+        if d.rating is not None:
+            ws.cell(row=row, column=5, value=d.rating)
+        if d.review_count is not None:
+            ws.cell(row=row, column=6, value=d.review_count).number_format = "#,##0"
 
-        hl_cell = ws.cell(row=row, column=5, value=d.top_highlights)
-        hl_cell.alignment = WRAP_ALIGN
-        feat_cell = ws.cell(row=row, column=6, value=d.features)
+        ing_cell = ws.cell(row=row, column=7, value=d.ingredients_raw)
+        ing_cell.alignment = WRAP_ALIGN
+        feat_cell = ws.cell(row=row, column=8, value=_dict_to_text(d.features))
         feat_cell.alignment = WRAP_ALIGN
-
-        ws.cell(row=row, column=7, value=d.measurements)
-        ws.cell(row=row, column=8, value=d.product_url)
+        meas_cell = ws.cell(row=row, column=9, value=_dict_to_text(d.measurements))
+        meas_cell.alignment = WRAP_ALIGN
+        add_cell = ws.cell(row=row, column=10, value=_dict_to_text(d.additional_details))
+        add_cell.alignment = WRAP_ALIGN
 
         ws.row_dimensions[row].height = 80
 
@@ -262,7 +280,8 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
     _style_data_rows(ws, 4, end_row, col_count)
     ws.freeze_panes = "A4"
     _set_column_widths(ws, {
-        "A": 14, "B": 40, "C": 12, "D": 14, "E": 50, "F": 50, "G": 30, "H": 40,
+        "A": 14, "B": 16, "C": 30, "D": 30, "E": 8, "F": 10,
+        "G": 50, "H": 35, "I": 30, "J": 35,
     })
 
 
