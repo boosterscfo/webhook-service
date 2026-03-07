@@ -129,9 +129,11 @@ async def run_research(
                 ephemeral=True,
             )
             detail_map = {d.asin: d for d in all_details}
+            title_map = {p.asin: p.title for p in search_products}
             products_for_gemini = [
                 {
                     "asin": asin,
+                    "title": title_map.get(asin, ""),
                     "ingredients_raw": detail_map[asin].ingredients_raw,
                     "features": detail_map[asin].features,
                     "additional_details": detail_map[asin].additional_details,

@@ -31,7 +31,9 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
 
 작업:
 1. INCI 전성분에서 마케팅적으로 강조할 만한 핵심 성분을 선별하라.
-2. 제품 특성(features, additional_details)도 참고하여 성분의 맥락을 파악하라.
+2. 제품 title, features, additional_details도 참고하여 성분의 맥락을 파악하라.
+   - title에 명시된 핵심 성분(예: "with Biotin & Argan Oil")은 반드시 포함
+   - ingredients_raw가 비어있어도 title/features에서 성분을 추출할 수 있다
 
 규칙:
 1. name: INCI 전성분에 표기된 원본 성분명 그대로 기록
