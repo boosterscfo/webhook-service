@@ -37,16 +37,24 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
 1. name: INCI 전성분에 표기된 원본 성분명 그대로 기록
    (예: "Argania Spinosa Kernel Oil", "Rosmarinus Officinalis Leaf Extract")
 2. common_name: 소비자/마케팅에서 쓰는 핵심 일반명으로 통일
-   - 부위(Leaf, Seed, Fruit, Kernel, Root)는 제거
-   - 형태(Extract, Oil, Powder, Water)는 유지하되 간결하게
-   - 같은 성분은 반드시 동일한 common_name 사용
+   핵심 원칙:
+   - 같은 식물/성분 기원이면 부위(Leaf, Seed, Fruit, Kernel, Root)와 무관하게 동일한 common_name 사용
+   - 형태(Extract, Oil)만 구분. 단, 같은 식물의 Extract 계열은 하나로 통일
+   - INCI 학명, 일반명, 대소문자, 오타 등 표기가 달라도 같은 성분이면 반드시 동일한 common_name
+   - 라벨에 일반명만 적혀 있어도(예: "Rosemary") 적절한 common_name으로 분류
    예시:
      "Argania Spinosa Kernel Oil" → "Argan Oil"
      "Rosmarinus Officinalis Leaf Extract" → "Rosemary Extract"
+     "Rosmarinus Officinalis (Rosemary) Leaf Extract" → "Rosemary Extract"
+     "ROSMARINUS OFFICINALIS LEAF EXTRACT" → "Rosemary Extract"
+     "Rosemary" → "Rosemary Extract"
      "Rosmarinus Officinalis Leaf Oil" → "Rosemary Oil"
      "Tocopherol" → "Vitamin E"
+     "Tocopheryl Acetate" → "Vitamin E"
      "Biotin" → "Biotin"
      "Cocos Nucifera Oil" → "Coconut Oil"
+     "Helianthus Annuus Seed Oil" → "Sunflower Oil"
+     "Helianthus Annuus (Sunflower) Seed Oil" → "Sunflower Oil"
 3. 각 성분에 카테고리 부여:
    Natural Oil / Essential Oil / Vitamin / Protein / Peptide /
    Active/Functional / Hair Growth Complex / Silicone / Botanical /
