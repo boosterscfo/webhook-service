@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-06T09:42:10.186Z",
+  "lastUpdated": "2026-03-07T07:01:23.298Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
@@ -15,7 +15,10 @@
     "browse_ai.py",
     "gemini.py",
     "analyzer.py",
-    "slack_sender.py"
+    "slack_sender.py",
+    "html_parser.py",
+    "cache.py",
+    ".claude"
   ],
   "primaryFeature": "amazon-researcher",
   "features": {
@@ -133,9 +136,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:23:35.355Z",
-        "lastUpdated": "2026-03-06T09:29:51.366Z"
+        "lastUpdated": "2026-03-07T06:57:03.604Z"
       },
-      "lastFile": "/home/yonkim/webhook-service/amz_researcher/orchestrator.py"
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/router.py"
     },
     "__init__.py": {
       "phase": "do",
@@ -159,9 +162,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:24:11.999Z",
-        "lastUpdated": "2026-03-06T09:41:37.789Z"
+        "lastUpdated": "2026-03-07T06:51:39.456Z"
       },
-      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/browse_ai.py"
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/browse_ai.py"
     },
     "gemini.py": {
       "phase": "do",
@@ -172,9 +175,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:24:30.887Z",
-        "lastUpdated": "2026-03-06T09:42:10.186Z"
+        "lastUpdated": "2026-03-07T06:53:10.705Z"
       },
-      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/gemini.py"
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/gemini.py"
     },
     "analyzer.py": {
       "phase": "do",
@@ -185,9 +188,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:24:54.626Z",
-        "lastUpdated": "2026-03-06T08:24:54.626Z"
+        "lastUpdated": "2026-03-07T06:52:43.537Z"
       },
-      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/analyzer.py"
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/analyzer.py"
     },
     "slack_sender.py": {
       "phase": "do",
@@ -201,6 +204,45 @@
         "lastUpdated": "2026-03-06T08:25:46.727Z"
       },
       "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/slack_sender.py"
+    },
+    "html_parser.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-07T06:50:40.248Z",
+        "lastUpdated": "2026-03-07T06:50:40.248Z"
+      },
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/html_parser.py"
+    },
+    "cache.py": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-07T06:52:08.555Z",
+        "lastUpdated": "2026-03-07T06:52:08.555Z"
+      },
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/cache.py"
+    },
+    ".claude": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-07T07:01:23.298Z",
+        "lastUpdated": "2026-03-07T07:01:23.298Z"
+      },
+      "lastFile": "/home/yonkim/dev/webhooks/.claude/hooks/auto-commit.sh"
     }
   },
   "pipeline": {
@@ -216,7 +258,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-03-06T09:42:10.186Z"
+    "lastActivity": "2026-03-07T07:01:23.298Z"
   },
   "history": [
     {
@@ -655,6 +697,60 @@
     {
       "timestamp": "2026-03-06T09:42:10.186Z",
       "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:50:19.397Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:50:40.248Z",
+      "feature": "html_parser.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:51:39.456Z",
+      "feature": "browse_ai.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:52:08.555Z",
+      "feature": "cache.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:52:43.537Z",
+      "feature": "analyzer.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:53:10.705Z",
+      "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:56:47.215Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T06:57:03.604Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-07T07:01:23.298Z",
+      "feature": ".claude",
       "phase": "do",
       "action": "updated"
     }
