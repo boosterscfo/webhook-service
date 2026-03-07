@@ -287,7 +287,10 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
 
 
 def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
-    """AI 시장 분석 리포트를 Market Insight 시트에 기록."""
+    """AI 시장 분석 리포트를 Market Insight 시트에 기록.
+
+    A4 셀 하나에 전체 리포트를 넣어 Notion 복사-붙여넣기 지원.
+    """
     ws = wb.create_sheet("Market Insight")
     ws.sheet_properties.tabColor = TAB_COLORS["Market Insight"]
 
@@ -299,24 +302,12 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
         col_count,
     )
 
-    report_font = Font(name="Arial", size=10)
-    wrap = Alignment(wrap_text=True, vertical="top")
+    cell = ws.cell(row=4, column=1, value=report_md)
+    cell.font = Font(name="Arial", size=10)
+    cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-    for i, line in enumerate(report_md.split("\n")):
-        row = 4 + i
-        cell = ws.cell(row=row, column=1, value=line)
-        cell.alignment = wrap
-        if line.startswith("# "):
-            cell.font = Font(name="Arial", size=14, bold=True, color="1B2A4A")
-        elif line.startswith("## "):
-            cell.font = Font(name="Arial", size=12, bold=True, color="2E86AB")
-        elif line.startswith("### "):
-            cell.font = Font(name="Arial", size=11, bold=True, color="4CAF50")
-        elif line.startswith("- **") or line.startswith("**"):
-            cell.font = Font(name="Arial", size=10, bold=True)
-        else:
-            cell.font = report_font
-
+    line_count = report_md.count("\n") + 1
+    ws.row_dimensions[4].height = min(line_count * 15, 8000)
     ws.column_dimensions["A"].width = 120
     ws.freeze_panes = "A4"
 
