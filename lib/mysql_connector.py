@@ -98,7 +98,7 @@ class MysqlConnector:
         if df.empty:
             return f"No data to upsert into {table_name}"
 
-        df = df.fillna("")
+        df = df.where(df.notna(), None)
         columns = [c for c in df.columns if c not in exclude_columns]
         placeholders = ", ".join(["%s"] * len(columns))
         col_list = ", ".join(f"`{c}`" for c in columns)
@@ -135,7 +135,7 @@ class MysqlConnector:
         if df.empty:
             return f"No data to insert into {table_name}"
 
-        df = df.fillna("")
+        df = df.where(df.notna(), None)
         columns = [c for c in df.columns if c not in exclude_columns]
         placeholders = ", ".join(["%s"] * len(columns))
         col_list = ", ".join(f"`{c}`" for c in columns)
