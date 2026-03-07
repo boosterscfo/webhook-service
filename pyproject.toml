@@ -15,6 +15,9 @@ dependencies = [
     "gspread",
     "google-auth",
     "slack-sdk",
+    "httpx",
+    "openpyxl",
+    "beautifulsoup4",
 ]
 
 [dependency-groups]
