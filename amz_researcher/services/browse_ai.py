@@ -91,18 +91,61 @@ def parse_search_results(raw_items: list[dict]) -> list[SearchProduct]:
     return products
 
 
+def _classify_html_sections(texts: dict) -> dict[str, str]:
+    """Browse.ai capturedTexts를 <h1> 헤딩 기반으로 올바른 섹션에 재배치.
+
+    Browse.ai 로봇이 키를 뒤섞어 반환하는 경우(~26%) 대비,
+    키 이름 대신 HTML 내부 <h1> 태그의 섹션명으로 분류한다.
+    """
+    sections: dict[str, str] = {
+        "item_details": "",
+        "features": "",
+        "measurements": "",
+        "additional_details": "",
+        "ingredients": texts.get("ingredients") or "",
+    }
+
+    heading_map = {
+        "Item details": "item_details",
+        "Features": "features",
+        "Measurements": "measurements",
+        "Additional details": "additional_details",
+    }
+
+    html_keys = ("item_details", "features", "measurements", "details")
+    for key in html_keys:
+        html = texts.get(key) or ""
+        if not html:
+            continue
+        # <h1> 헤딩으로 섹션 판별
+        matched = False
+        for heading, section_key in heading_map.items():
+            if heading in html:
+                sections[section_key] = html
+                matched = True
+                break
+        if not matched:
+            # 헤딩이 없는 HTML은 원래 키 위치에 유지
+            fallback_key = "additional_details" if key == "details" else key
+            if not sections[fallback_key]:
+                sections[fallback_key] = html
+
+    return sections
+
+
 def parse_detail_from_captured_texts(asin: str, texts: dict) -> ProductDetail:
     """capturedTexts dict → ProductDetail 변환.
 
-    _STATUS, _PREV_* 필드는 무시.
+    <h1> 헤딩 기반으로 섹션을 재분류한 후 파싱한다.
     """
-    ingredients_raw = texts.get("ingredients") or ""
+    sections = _classify_html_sections(texts)
 
-    features = parse_product_table(texts.get("features") or "")
-    measurements = parse_product_table(texts.get("measurements") or "")
-    additional_details = parse_product_table(texts.get("details") or "")
+    ingredients_raw = sections["ingredients"]
+    features = parse_product_table(sections["features"])
+    measurements = parse_product_table(sections["measurements"])
+    additional_details = parse_product_table(sections["additional_details"])
 
-    item_details_html = texts.get("item_details") or ""
+    item_details_html = sections["item_details"]
     item_details = parse_product_table(item_details_html)
     bsr_list = parse_bsr(item_details_html)
     rating, review_count = parse_customer_reviews(item_details_html)
@@ -248,7 +291,7 @@ class BrowseAiService:
 
     async def _poll_bulk_run(
         self, robot_id: str, bulk_run_id: str,
-        max_attempts: int = 40, interval: int = 30,
+        max_attempts: int = 20, interval: int = 30,
     ) -> list[dict]:
         all_tasks: list[dict] = []
 
