@@ -164,6 +164,8 @@ async def run_research(
         )
 
         # Step 5: AI 시장 분석 리포트 (캐시 우선)
+        analysis_data = build_market_analysis(keyword, weighted_products, all_details)
+
         market_report = ""
         if not refresh:
             market_report = cache.get_market_report_cache(keyword, len(weighted_products)) or ""
@@ -172,7 +174,6 @@ async def run_research(
             await _msg("♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
         else:
             await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
-            analysis_data = build_market_analysis(keyword, weighted_products, all_details)
             market_report = await gemini.generate_market_report(analysis_data)
             cache.save_market_report_cache(keyword, market_report, len(weighted_products))
 
@@ -181,15 +182,18 @@ async def run_research(
             keyword, weighted_products, rankings, categories,
             search_products, all_details,
             market_report=market_report,
+            rising_products=analysis_data.get("rising_products"),
+            form_price_data=analysis_data.get("form_price_matrix"),
+            analysis_data=analysis_data,
         )
 
         # Step 7: Summary message
         summary = _build_summary(keyword, len(weighted_products), rankings[:10])
         if market_report:
             # 리포트에서 액션 아이템 섹션 추출하여 Slack 요약에 추가
-            action_start = market_report.find("## 5.")
+            action_start = market_report.find("## 7.")
             if action_start == -1:
-                action_start = market_report.find("# 5.")
+                action_start = market_report.find("# 7.")
             if action_start != -1:
                 action_section = market_report[action_start:action_start + 500]
                 summary += f"\n\n📊 *AI Market Insight (요약)*\n{action_section.strip()}"

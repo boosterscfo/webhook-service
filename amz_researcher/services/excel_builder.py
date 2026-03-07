@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -29,7 +30,10 @@ TAB_COLORS = {
     "Product Detail": "4CAF50",
     "Raw - Search Results": "FF6B35",
     "Raw - Product Detail": "9B59B6",
+    "Rising Products": "00BCD4",
+    "Form × Price": "FF9800",
     "Market Insight": "E91E63",
+    "Analysis Data": "795548",
 }
 
 
@@ -286,6 +290,104 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
     })
 
 
+def _build_rising_products(wb: Workbook, rising: list[dict]):
+    ws = wb.create_sheet("Rising Products")
+    ws.sheet_properties.tabColor = TAB_COLORS["Rising Products"]
+
+    col_count = 9
+    _write_title(
+        ws,
+        "Rising Products — Low Reviews, High BSR",
+        "Products with fewer reviews but strong sales rank (potential breakouts)",
+        col_count,
+    )
+
+    headers = [
+        "BSR", "Brand", "Title", "Price", "Reviews",
+        "Rating", "Form", "Top Ingredients", "ASIN",
+    ]
+    for c, h in enumerate(headers, 1):
+        ws.cell(row=4, column=c, value=h)
+    _style_header_row(ws, 4, col_count)
+
+    for i, p in enumerate(rising):
+        row = 5 + i
+        ws.cell(row=row, column=1, value=p["bsr"]).number_format = "#,##0"
+        ws.cell(row=row, column=2, value=p["brand"])
+        ws.cell(row=row, column=3, value=p["title"])
+        if p["price"] is not None:
+            ws.cell(row=row, column=4, value=p["price"]).number_format = "$#,##0.00"
+        ws.cell(row=row, column=5, value=p["reviews"]).number_format = "#,##0"
+        ws.cell(row=row, column=6, value=p["rating"])
+        ws.cell(row=row, column=7, value=p["form"])
+        ws.cell(row=row, column=8, value=p["top_ingredients"])
+        ws.cell(row=row, column=9, value=p["asin"])
+
+    end_row = 4 + len(rising)
+    _style_data_rows(ws, 5, end_row, col_count)
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {
+        "A": 10, "B": 18, "C": 50, "D": 10, "E": 10,
+        "F": 8, "G": 12, "H": 40, "I": 14,
+    })
+
+
+def _build_form_price(wb: Workbook, form_data: dict):
+    ws = wb.create_sheet("Form × Price")
+    ws.sheet_properties.tabColor = TAB_COLORS["Form × Price"]
+
+    # Part 1: Form Summary
+    form_summary = form_data.get("form_summary", [])
+    col_count = 6
+    _write_title(ws, "Product Form Analysis", "Item Form breakdown with performance metrics", col_count)
+
+    headers = ["Form", "Count", "Avg Price", "Avg Rating", "Avg Reviews", "Avg BSR"]
+    for c, h in enumerate(headers, 1):
+        ws.cell(row=4, column=c, value=h)
+    _style_header_row(ws, 4, col_count)
+
+    for i, f in enumerate(form_summary):
+        row = 5 + i
+        ws.cell(row=row, column=1, value=f["form"])
+        ws.cell(row=row, column=2, value=f["count"])
+        if f["avg_price"] is not None:
+            ws.cell(row=row, column=3, value=f["avg_price"]).number_format = "$#,##0.00"
+        ws.cell(row=row, column=4, value=f["avg_rating"])
+        ws.cell(row=row, column=5, value=f["avg_reviews"]).number_format = "#,##0"
+        if f["avg_bsr"] is not None:
+            ws.cell(row=row, column=6, value=f["avg_bsr"]).number_format = "#,##0"
+
+    end_row = 4 + len(form_summary)
+    _style_data_rows(ws, 5, end_row, col_count)
+
+    # Part 2: Price × Form Matrix
+    matrix = form_data.get("matrix", {})
+    matrix_start = end_row + 3
+    ws.cell(row=matrix_start, column=1, value="Price Tier × Form Matrix").font = TITLE_FONT
+
+    all_forms = sorted({
+        form for tier_data in matrix.values() for form in tier_data
+    })
+    for c, form in enumerate(all_forms, 2):
+        ws.cell(row=matrix_start + 1, column=c, value=form)
+    ws.cell(row=matrix_start + 1, column=1, value="Price Tier")
+    _style_header_row(ws, matrix_start + 1, len(all_forms) + 1)
+
+    for i, tier in enumerate(["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]):
+        row = matrix_start + 2 + i
+        ws.cell(row=row, column=1, value=tier)
+        tier_data = matrix.get(tier, {})
+        for c, form in enumerate(all_forms, 2):
+            count = tier_data.get(form, 0)
+            ws.cell(row=row, column=c, value=count if count else "")
+
+    _style_data_rows(ws, matrix_start + 2, matrix_start + 5, len(all_forms) + 1)
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {
+        "A": 20, "B": 14, "C": 14, "D": 12, "E": 14, "F": 12,
+    })
+
+
 def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     """AI 시장 분석 리포트를 Market Insight 시트에 기록.
 
@@ -312,6 +414,52 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     ws.freeze_panes = "A4"
 
 
+def _build_analysis_data(wb: Workbook, analysis_data: dict):
+    """Gemini에 전달한 시장 분석 원본 데이터를 시트로 출력."""
+    ws = wb.create_sheet("Analysis Data")
+    ws.sheet_properties.tabColor = TAB_COLORS["Analysis Data"]
+
+    sections = [
+        ("price_tier_analysis", "Price Tier Analysis"),
+        ("bsr_analysis", "BSR Top vs Bottom"),
+        ("brand_analysis", "Brand Profiles"),
+        ("cooccurrence_analysis", "Ingredient Co-occurrence"),
+        ("form_price_matrix", "Form x Price Matrix"),
+        ("brand_positioning", "Brand Positioning"),
+        ("rising_products", "Rising Products"),
+        ("rating_ingredients", "Rating vs Ingredients"),
+    ]
+
+    _write_title(
+        ws,
+        "Analysis Data — Raw Input to AI Market Report",
+        f"Keyword: {analysis_data.get('keyword', '')} | "
+        f"{analysis_data.get('total_products', 0)} products analyzed",
+        1,
+    )
+
+    row = 4
+    for key, label in sections:
+        data = analysis_data.get(key, {})
+        if not data:
+            continue
+        ws.cell(row=row, column=1, value=label).font = Font(
+            name="Arial", size=11, bold=True, color="1B2A4A",
+        )
+        _style_header_row(ws, row, 1)
+        row += 1
+
+        json_text = json.dumps(data, ensure_ascii=False, indent=2)
+        cell = ws.cell(row=row, column=1, value=json_text)
+        cell.font = DATA_FONT
+        cell.alignment = Alignment(wrap_text=True, vertical="top")
+        line_count = json_text.count("\n") + 1
+        ws.row_dimensions[row].height = min(line_count * 15, 4000)
+        row += 2
+
+    ws.column_dimensions["A"].width = 120
+
+
 def build_excel(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -320,16 +468,30 @@ def build_excel(
     search_products: list[SearchProduct],
     details: list[ProductDetail],
     market_report: str = "",
+    rising_products: list[dict] | None = None,
+    form_price_data: dict | None = None,
+    analysis_data: dict | None = None,
 ) -> bytes:
     wb = Workbook()
 
     _build_ingredient_ranking(wb, keyword, rankings, len(weighted_products))
     _build_category_summary(wb, categories)
     _build_product_detail(wb, weighted_products)
+    if rising_products:
+        _build_rising_products(wb, rising_products)
+    if form_price_data:
+        _build_form_price(wb, form_price_data)
     _build_raw_search(wb, keyword, search_products)
     _build_raw_detail(wb, details)
     if market_report:
         _build_market_insight(wb, keyword, market_report)
+    if analysis_data:
+        _build_analysis_data(wb, analysis_data)
+
+    # Move Market Insight to front (first sheet)
+    if market_report and "Market Insight" in wb.sheetnames:
+        idx = wb.sheetnames.index("Market Insight")
+        wb.move_sheet("Market Insight", offset=-idx)
 
     buf = BytesIO()
     wb.save(buf)

@@ -175,6 +175,185 @@ def analyze_cooccurrence(
     }
 
 
+def analyze_form_by_price(
+    products: list[WeightedProduct],
+    details: list[ProductDetail],
+) -> dict:
+    """가격대 × 제형(Item Form) 매트릭스."""
+    detail_map = {d.asin: d for d in details}
+    matrix: dict[str, Counter] = defaultdict(Counter)
+    form_stats: dict[str, dict] = defaultdict(lambda: {
+        "prices": [], "ratings": [], "reviews": [], "bsr_values": [],
+    })
+
+    for p in products:
+        d = detail_map.get(p.asin)
+        if not d:
+            continue
+        features = d.features or {}
+        form = (features.get("Item Form") or "Unknown").strip().capitalize()
+        tier = _price_tier(p.price)
+        matrix[tier][form] += 1
+        stats = form_stats[form]
+        if p.price is not None:
+            stats["prices"].append(p.price)
+        stats["ratings"].append(p.rating)
+        stats["reviews"].append(p.reviews)
+        if p.bsr_category is not None:
+            stats["bsr_values"].append(p.bsr_category)
+
+    form_summary = []
+    for form, stats in form_stats.items():
+        prices = stats["prices"]
+        bsr_vals = stats["bsr_values"]
+        form_summary.append({
+            "form": form,
+            "count": len(stats["ratings"]),
+            "avg_price": round(sum(prices) / len(prices), 2) if prices else None,
+            "avg_rating": round(sum(stats["ratings"]) / len(stats["ratings"]), 2),
+            "avg_reviews": round(sum(stats["reviews"]) / len(stats["reviews"])),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+        })
+    form_summary.sort(key=lambda x: x["count"], reverse=True)
+
+    matrix_data = {}
+    for tier in ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]:
+        matrix_data[tier] = dict(matrix[tier].most_common())
+
+    return {"matrix": matrix_data, "form_summary": form_summary}
+
+
+def analyze_brand_positioning(
+    products: list[WeightedProduct],
+    details: list[ProductDetail],
+) -> list[dict]:
+    """브랜드 포지셔닝: 가격 vs BSR."""
+    detail_map = {d.asin: d for d in details}
+    brand_data: dict[str, dict] = defaultdict(lambda: {
+        "prices": [], "bsr_values": [], "ratings": [], "reviews": [],
+        "product_count": 0,
+    })
+
+    for p in products:
+        d = detail_map.get(p.asin)
+        brand = d.brand if d and d.brand else "Unknown"
+        if brand == "Unknown":
+            continue
+        bd = brand_data[brand]
+        bd["product_count"] += 1
+        if p.price is not None:
+            bd["prices"].append(p.price)
+        bd["ratings"].append(p.rating)
+        bd["reviews"].append(p.reviews)
+        if p.bsr_category is not None:
+            bd["bsr_values"].append(p.bsr_category)
+
+    result = []
+    for brand, bd in brand_data.items():
+        prices = bd["prices"]
+        bsr_vals = bd["bsr_values"]
+        if not prices or not bsr_vals:
+            continue
+        avg_price = round(sum(prices) / len(prices), 2)
+        result.append({
+            "brand": brand,
+            "product_count": bd["product_count"],
+            "avg_price": avg_price,
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)),
+            "avg_rating": round(sum(bd["ratings"]) / len(bd["ratings"]), 2),
+            "total_reviews": sum(bd["reviews"]),
+            "segment": _price_tier(avg_price),
+        })
+
+    result.sort(key=lambda x: x["avg_bsr"])
+    return result
+
+
+def detect_rising_products(
+    products: list[WeightedProduct],
+    details: list[ProductDetail],
+) -> list[dict]:
+    """신제품/급성장 제품 탐지: 리뷰 적지만 BSR 좋은 제품."""
+    detail_map = {d.asin: d for d in details}
+    median_reviews = sorted(p.reviews for p in products)[len(products) // 2]
+    threshold = min(median_reviews, 2000)
+
+    rising = []
+    for p in products:
+        if p.bsr_category is None or p.reviews >= threshold:
+            continue
+        if p.bsr_category > 10000:
+            continue
+        d = detail_map.get(p.asin)
+        brand = d.brand if d and d.brand else "Unknown"
+        form = ""
+        if d and d.features:
+            form = d.features.get("Item Form", "")
+        ingredients_top3 = ", ".join(
+            ing.common_name or ing.name for ing in p.ingredients[:3]
+        )
+        rising.append({
+            "asin": p.asin,
+            "title": p.title[:80],
+            "brand": brand,
+            "price": p.price,
+            "reviews": p.reviews,
+            "rating": p.rating,
+            "bsr": p.bsr_category,
+            "form": form,
+            "top_ingredients": ingredients_top3,
+        })
+
+    rising.sort(key=lambda x: x["bsr"])
+    return rising[:15]
+
+
+def analyze_rating_ingredients(
+    products: list[WeightedProduct],
+) -> dict:
+    """고평점(4.5+) vs 저평점(<4.3) 제품의 성분 비교."""
+    high_counter: Counter = Counter()
+    low_counter: Counter = Counter()
+    high_count = 0
+    low_count = 0
+
+    for p in products:
+        names = [_get_display_name(ing) for ing in p.ingredients]
+        if p.rating >= 4.5:
+            high_count += 1
+            for n in names:
+                high_counter[n] += 1
+        elif p.rating < 4.3:
+            low_count += 1
+            for n in names:
+                low_counter[n] += 1
+
+    high_only = [
+        {"name": name, "count": count}
+        for name, count in high_counter.most_common()
+        if name not in low_counter and count >= 3
+    ][:10]
+
+    low_only = [
+        {"name": name, "count": count}
+        for name, count in low_counter.most_common()
+        if name not in high_counter and count >= 2
+    ][:10]
+
+    return {
+        "high_rated_count": high_count,
+        "low_rated_count": low_count,
+        "high_only_ingredients": high_only,
+        "low_only_ingredients": low_only,
+        "high_top10": [
+            {"name": n, "count": c} for n, c in high_counter.most_common(10)
+        ],
+        "low_top10": [
+            {"name": n, "count": c} for n, c in low_counter.most_common(10)
+        ],
+    }
+
+
 def build_market_analysis(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -188,4 +367,8 @@ def build_market_analysis(
         "bsr_analysis": analyze_by_bsr(weighted_products),
         "brand_analysis": analyze_by_brand(weighted_products, details),
         "cooccurrence_analysis": analyze_cooccurrence(weighted_products),
+        "form_price_matrix": analyze_form_by_price(weighted_products, details),
+        "brand_positioning": analyze_brand_positioning(weighted_products, details),
+        "rising_products": detect_rising_products(weighted_products, details),
+        "rating_ingredients": analyze_rating_ingredients(weighted_products),
     }
