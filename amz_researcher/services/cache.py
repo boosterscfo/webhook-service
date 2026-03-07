@@ -212,7 +212,7 @@ class AmzCacheService:
             return {}
         placeholders = ",".join(["%s"] * len(asins))
         query = (
-            f"SELECT asin, ingredient_name, category "
+            f"SELECT asin, ingredient_name, common_name, category "
             f"FROM amz_ingredient_cache WHERE asin IN ({placeholders})"
         )
         try:
@@ -229,7 +229,11 @@ class AmzCacheService:
             if asin not in result:
                 result[asin] = []
             if row["ingredient_name"] != "_NONE_":
-                result[asin].append(Ingredient(name=row["ingredient_name"], category=row["category"]))
+                result[asin].append(Ingredient(
+                    name=row["ingredient_name"],
+                    common_name=row["common_name"] or row["ingredient_name"],
+                    category=row["category"],
+                ))
         return result
 
     def save_ingredient_cache(self, gemini_results: list[ProductIngredients]) -> None:
@@ -242,14 +246,15 @@ class AmzCacheService:
                     rows.append({
                         "asin": pi.asin,
                         "ingredient_name": ing.name,
+                        "common_name": ing.common_name or ing.name,
                         "category": ing.category,
                         "extracted_at": now,
                     })
             else:
-                # 성분 없음 마커 — 재분석 방지
                 rows.append({
                     "asin": pi.asin,
                     "ingredient_name": "_NONE_",
+                    "common_name": "",
                     "category": "",
                     "extracted_at": now,
                 })
@@ -263,6 +268,59 @@ class AmzCacheService:
                        len(rows), len(gemini_results))
         except Exception:
             logger.exception("Failed to save ingredient cache")
+
+    def harmonize_common_names(self) -> int:
+        """common_name 자동 보정: 같은 name에 다른 common_name → 다수결 통일.
+
+        동수면 먼저 수집된(extracted_at이 빠른) 값 우선.
+        Returns: 보정된 레코드 수.
+        """
+        query = """
+            SELECT ingredient_name, common_name, COUNT(*) as cnt,
+                   MIN(extracted_at) as first_seen
+            FROM amz_ingredient_cache
+            WHERE ingredient_name != '_NONE_' AND common_name != ''
+            GROUP BY ingredient_name, common_name
+            ORDER BY ingredient_name, cnt DESC, first_seen ASC
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query)
+        except Exception:
+            logger.exception("Failed to read for harmonization")
+            return 0
+
+        if df.empty:
+            return 0
+
+        # 각 ingredient_name별 대표 common_name 결정
+        canonical: dict[str, str] = {}
+        for _, row in df.iterrows():
+            inci = row["ingredient_name"]
+            if inci not in canonical:
+                # ORDER BY cnt DESC, first_seen ASC이므로 첫 번째가 대표
+                canonical[inci] = row["common_name"]
+
+        # 불일치 레코드 업데이트
+        updated = 0
+        try:
+            with MysqlConnector(self._env) as conn:
+                for inci, canon in canonical.items():
+                    update_q = (
+                        "UPDATE amz_ingredient_cache "
+                        "SET common_name = %s "
+                        "WHERE ingredient_name = %s AND common_name != %s"
+                    )
+                    conn.cursor.execute(update_q, (canon, inci, canon))
+                    updated += conn.cursor.rowcount
+                conn.connection.commit()
+        except Exception:
+            logger.exception("Failed to harmonize common names")
+            return 0
+
+        if updated:
+            logger.info("Harmonized %d ingredient records", updated)
+        return updated
 
     # ── Market Report Cache ──────────────────────────
 

@@ -140,6 +140,7 @@ async def run_research(
             ]
             new_gemini_results = await gemini.extract_ingredients(products_for_gemini)
             cache.save_ingredient_cache(new_gemini_results)
+            cache.harmonize_common_names()
             # 캐시 + 신규 병합
             gemini_results = new_gemini_results + [
                 ProductIngredients(asin=asin, ingredients=ings)

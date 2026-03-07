@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -33,9 +34,19 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
 2. 제품 특성(features, additional_details)도 참고하여 성분의 맥락을 파악하라.
 
 규칙:
-1. 성분명은 영문 표준명으로 통일 (예: 아르간오일 → Argan Oil)
-2. 같은 성분의 다른 이름은 가장 널리 쓰이는 이름으로 통일
-   (예: Vitamin B7 = Biotin → "Biotin", Tocopherol = Vitamin E → "Vitamin E")
+1. name: INCI 전성분에 표기된 원본 성분명 그대로 기록
+   (예: "Argania Spinosa Kernel Oil", "Rosmarinus Officinalis Leaf Extract")
+2. common_name: 소비자/마케팅에서 쓰는 핵심 일반명으로 통일
+   - 부위(Leaf, Seed, Fruit, Kernel, Root)는 제거
+   - 형태(Extract, Oil, Powder, Water)는 유지하되 간결하게
+   - 같은 성분은 반드시 동일한 common_name 사용
+   예시:
+     "Argania Spinosa Kernel Oil" → "Argan Oil"
+     "Rosmarinus Officinalis Leaf Extract" → "Rosemary Extract"
+     "Rosmarinus Officinalis Leaf Oil" → "Rosemary Oil"
+     "Tocopherol" → "Vitamin E"
+     "Biotin" → "Biotin"
+     "Cocos Nucifera Oil" → "Coconut Oil"
 3. 각 성분에 카테고리 부여:
    Natural Oil / Essential Oil / Vitamin / Protein / Peptide /
    Active/Functional / Hair Growth Complex / Silicone / Botanical /
@@ -49,7 +60,7 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
     {{
       "asin": "제품ASIN",
       "ingredients": [
-        {{"name": "Argan Oil", "category": "Natural Oil"}}
+        {{"name": "Argania Spinosa Kernel Oil", "common_name": "Argan Oil", "category": "Natural Oil"}}
       ]
     }}
   ]
@@ -118,18 +129,26 @@ class GeminiService:
         self.client = httpx.AsyncClient(timeout=120.0)
 
     async def extract_ingredients(
-        self, products: list[dict], batch_size: int = 25,
+        self, products: list[dict], batch_size: int = 20,
     ) -> list[ProductIngredients]:
+        batches = [
+            products[i:i + batch_size]
+            for i in range(0, len(products), batch_size)
+        ]
+        logger.info(
+            "Gemini extraction: %d products → %d batches (parallel)",
+            len(products), len(batches),
+        )
+
+        tasks = [self._extract_batch(batch) for batch in batches]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
         all_results: list[ProductIngredients] = []
-
-        for i in range(0, len(products), batch_size):
-            batch = products[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            total_batches = (len(products) + batch_size - 1) // batch_size
-            logger.info("Gemini batch %d/%d (%d products)", batch_num, total_batches, len(batch))
-
-            result = await self._extract_batch(batch)
-            all_results.extend(result)
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error("Gemini batch %d/%d failed: %s", i + 1, len(batches), result)
+            else:
+                all_results.extend(result)
 
         logger.info("Gemini total: %d/%d products extracted", len(all_results), len(products))
         return all_results
@@ -150,7 +169,7 @@ class GeminiService:
                         "contents": [{"parts": [{"text": prompt}]}],
                         "generationConfig": {
                             "temperature": 0.1,
-                            "maxOutputTokens": 16384,
+                            "maxOutputTokens": 32768,
                             "responseMimeType": "application/json",
                         },
                     },

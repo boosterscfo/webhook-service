@@ -1,4 +1,3 @@
-import re
 from collections import defaultdict
 
 from amz_researcher.models import (
@@ -39,35 +38,9 @@ def _generate_key_insight(
     return ""
 
 
-# INCI 학명 → 일반명 변환 패턴: "Genus Species (Common Name) Part" → "Common Name Part"
-_INCI_RE = re.compile(r"^[A-Z][a-z]+ [A-Za-z]+ \((.+?)\)\s*(.*)")
-
-# 동의어 통합 맵 (key: 정규화 후 이름, value: 대표명)
-_SYNONYM_MAP = {
-    "Rosemary Leaf Extract": "Rosemary Extract",
-    "Rosemary Leaf Oil": "Rosemary Oil",
-    "Rosemary": "Rosemary Extract",
-    "Sunflower Seed Oil": "Sunflower Oil",
-    "Rose Hips Fruit Extract": "Rosehip Extract",
-    "Linseed Seed Oil": "Flaxseed Oil",
-    "Wild Bergamot Fruit Extract": "Bergamot Extract",
-    "Nettle Extract": "Nettle Extract",
-    "Kiwi Fruit Extract": "Kiwi Extract",
-    "Jasmine Extract": "Jasmine Extract",
-}
-
-
-def _normalize_ingredient_name(name: str) -> str:
-    """INCI 학명을 일반명으로 변환하고 동의어를 통합."""
-    # Step 1: INCI 학명 패턴 변환
-    m = _INCI_RE.match(name)
-    if m:
-        common = m.group(1).strip()
-        part = m.group(2).strip()
-        name = f"{common} {part}".strip() if part else common
-
-    # Step 2: 동의어 통합
-    return _SYNONYM_MAP.get(name, name)
+def _get_display_name(ing) -> str:
+    """성분의 표시명 반환: common_name 우선, 없으면 name."""
+    return ing.common_name if ing.common_name else ing.name
 
 
 def _aggregate_ingredients(
@@ -77,7 +50,7 @@ def _aggregate_ingredients(
 
     for wp in weighted_products:
         for ing in wp.ingredients:
-            key = _normalize_ingredient_name(ing.name)
+            key = _get_display_name(ing)
             if key not in ingredient_data:
                 ingredient_data[key] = {
                     "category": ing.category,

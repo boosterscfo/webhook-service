@@ -34,7 +34,8 @@ class ProductDetail(BaseModel):
 
 
 class Ingredient(BaseModel):
-    name: str
+    name: str  # INCI 학명 또는 원본 성분명
+    common_name: str = ""  # 핵심 성분명 (마케팅용 일반명)
     category: str
 
 

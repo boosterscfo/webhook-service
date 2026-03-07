@@ -10,7 +10,7 @@ from amz_researcher.models import (
     ProductDetail,
     WeightedProduct,
 )
-from amz_researcher.services.analyzer import _normalize_ingredient_name
+from amz_researcher.services.analyzer import _get_display_name
 
 
 def _price_tier(price: float | None) -> str:
@@ -36,7 +36,7 @@ def analyze_by_price_tier(
         tier = _price_tier(p.price)
         tier_counts[tier] += 1
         for ing in p.ingredients:
-            tier_ingredients[tier][_normalize_ingredient_name(ing.name)] += 1
+            tier_ingredients[tier][_get_display_name(ing)] += 1
 
     result = {}
     for tier in ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]:
@@ -67,10 +67,10 @@ def analyze_by_bsr(
     bottom_counter: Counter = Counter()
     for p in top_group:
         for ing in p.ingredients:
-            top_counter[_normalize_ingredient_name(ing.name)] += 1
+            top_counter[_get_display_name(ing)] += 1
     for p in bottom_group:
         for ing in p.ingredients:
-            bottom_counter[_normalize_ingredient_name(ing.name)] += 1
+            bottom_counter[_get_display_name(ing)] += 1
 
     winning = [
         name for name, _ in top_counter.most_common()
@@ -114,7 +114,7 @@ def analyze_by_brand(
         if p.bsr_category is not None:
             bd["bsr_values"].append(p.bsr_category)
         for ing in p.ingredients:
-            bd["ingredients"][_normalize_ingredient_name(ing.name)] += 1
+            bd["ingredients"][_get_display_name(ing)] += 1
 
     result = []
     for brand, bd in brand_data.items():
@@ -148,7 +148,7 @@ def analyze_cooccurrence(
     low_rated_pairs: Counter = Counter()
 
     for p in products:
-        names = sorted(set(_normalize_ingredient_name(ing.name) for ing in p.ingredients))
+        names = sorted(set(_get_display_name(ing) for ing in p.ingredients))
         for i in range(len(names)):
             for j in range(i + 1, len(names)):
                 pair = (names[i], names[j])
