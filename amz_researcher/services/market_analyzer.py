@@ -25,11 +25,38 @@ def _price_tier(price: float | None) -> str:
     return "Luxury ($50+)"
 
 
-def _get_item_form(detail: ProductDetail) -> str:
-    """ProductDetail에서 Item Form 추출. features가 dict/list 어느 형태든 처리."""
-    features = detail.features or {}
-    if isinstance(features, dict):
-        return (features.get("Item Form") or "").strip().capitalize()
+import re
+
+# title에서 추출할 제형 키워드 (긴 것부터 매칭)
+_FORM_KEYWORDS = [
+    "cleansing oil", "face wash", "body wash", "toner pad", "sheet mask",
+    "peel off mask", "sleeping mask", "lip mask", "eye cream", "lip balm",
+    "lip tint", "sun stick", "sunscreen spray", "sunscreen stick",
+    "serum", "cream", "lotion", "gel", "oil", "balm", "foam",
+    "mist", "spray", "stick", "mask", "pad", "toner", "essence",
+    "ampoule", "emulsion", "ointment", "mousse", "wipe", "cleanser",
+    "scrub", "peel", "powder", "sunscreen", "moisturizer", "treatment",
+    "drops", "elixir",
+]
+_FORM_PATTERN = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in _FORM_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _get_item_form(detail: ProductDetail, title: str = "") -> str:
+    """제형 추출: product_details > title 순으로 시도."""
+    # 1) product_details에서 Item Form
+    if isinstance(detail.features, dict):
+        form = (detail.features.get("Item Form") or "").strip()
+        if form:
+            return form.capitalize()
+
+    # 2) title에서 키워드 매칭
+    if title:
+        m = _FORM_PATTERN.search(title)
+        if m:
+            return m.group(1).capitalize()
     return ""
 
 
@@ -198,7 +225,7 @@ def analyze_form_by_price(
         d = detail_map.get(p.asin)
         if not d:
             continue
-        form = _get_item_form(d) or "Unknown"
+        form = _get_item_form(d, p.title) or "Unknown"
         tier = _price_tier(p.price)
         matrix[tier][form] += 1
         stats = form_stats[form]
@@ -293,7 +320,7 @@ def detect_rising_products(
             continue
         d = detail_map.get(p.asin)
         brand = d.brand if d and d.brand else "Unknown"
-        form = _get_item_form(d) if d else ""
+        form = _get_item_form(d, p.title) if d else ""
         ingredients_top3 = ", ".join(
             ing.common_name or ing.name for ing in p.ingredients[:3]
         )
