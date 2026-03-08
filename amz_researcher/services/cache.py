@@ -286,14 +286,15 @@ class AmzCacheService:
     def get_ingredient_cache(self, asins: list[str]) -> dict[str, list[Ingredient]]:
         """Gemini 추출 성분 캐시 조회. {asin: [Ingredient]} 반환.
 
-        제품 데이터가 캐시 이후 업데이트된 ASIN은 제외 (재추출 유도).
+        제품이 새로 수집(collected_at)된 경우만 재추출 유도.
+        updated_at은 브랜드 보정 등 성분과 무관한 변경에도 갱신되므로 사용하지 않음.
         """
         if not asins:
             return {}
         placeholders = ",".join(["%s"] * len(asins))
         query = (
             f"SELECT ic.asin, ic.ingredient_name, ic.common_name, "
-            f"ic.category, ic.extracted_at, p.updated_at "
+            f"ic.category, ic.extracted_at, p.collected_at "
             f"FROM amz_ingredient_cache ic "
             f"LEFT JOIN amz_products p ON ic.asin = p.asin "
             f"WHERE ic.asin IN ({placeholders})"
@@ -307,13 +308,13 @@ class AmzCacheService:
         if df.empty:
             return {}
 
-        # 제품 updated_at > 캐시 extracted_at이면 stale → 제외
+        # 제품 collected_at > 캐시 extracted_at이면 stale → 제외
         stale_asins: set[str] = set()
         for _, row in df.iterrows():
             extracted = row.get("extracted_at")
-            updated = row.get("updated_at")
-            if extracted is not None and updated is not None:
-                if pd.Timestamp(updated) > pd.Timestamp(extracted):
+            collected = row.get("collected_at")
+            if extracted is not None and collected is not None:
+                if pd.Timestamp(collected) > pd.Timestamp(extracted):
                     stale_asins.add(row["asin"])
 
         if stale_asins:
