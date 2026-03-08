@@ -94,8 +94,9 @@ async def slack_amz(
                             "`/amz add {이름} {URL}` — 새 카테고리 추가\n"
                             "  예: `/amz add Hair Oils https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281`\n\n"
                             "*🔄 데이터 수집*\n"
-                            "`/amz refresh` — 전체 카테고리 수동 수집 트리거\n"
-                            "  Bright Data에서 BSR Top 100을 새로 수집합니다."
+                            "`/amz refresh` — 전체 카테고리 수집\n"
+                            "`/amz refresh {키워드}` — 특정 카테고리만 수집\n"
+                            "  예: `/amz refresh serum`"
                         ),
                     },
                 },
@@ -147,10 +148,24 @@ async def slack_amz(
             "text": f"📋 등록된 카테고리 ({len(categories)}개):\n" + "\n".join(lines),
         }
 
-    # /amz refresh
+    # /amz refresh [keyword]
     if subcommand == "refresh":
+        keyword = " ".join(parts[1:]).strip() if len(parts) > 1 else ""
+        if keyword:
+            # 특정 카테고리만 수집
+            product_db = ProductDBService("CFO")
+            matches = product_db.search_categories(keyword)
+            if not matches:
+                return {"response_type": "ephemeral", "text": f"🔍 \"{keyword}\" 관련 카테고리를 찾을 수 없습니다."}
+            cat = matches[0]
+            url = product_db.get_category_url(cat["node_id"])
+            if not url:
+                return {"response_type": "ephemeral", "text": "❌ 카테고리 URL을 찾을 수 없습니다."}
+            background_tasks.add_task(_run_manual_collection, [url])
+            return {"response_type": "ephemeral", "text": f"🔄 *{cat['name']}* 수집 트리거됨. 완료까지 수 분 소요."}
+        # 전체 수집
         background_tasks.add_task(_run_manual_collection)
-        return {"response_type": "ephemeral", "text": "🔄 수동 수집 트리거됨. 완료까지 수 분 소요."}
+        return {"response_type": "ephemeral", "text": "🔄 전체 카테고리 수집 트리거됨. 완료까지 수 분 소요."}
 
     # /amz prod {keyword} — V3 하위 호환
     if subcommand == "prod":
@@ -240,15 +255,20 @@ async def research_test(
     return {"status": "started", "keyword": keyword, "refresh": req.refresh}
 
 
-async def _run_manual_collection():
-    """수동 수집 트리거 — trigger만 보내고 종료 (webhook으로 수신)."""
+async def _run_manual_collection(urls: list[str] | None = None):
+    """수동 수집 트리거 — trigger만 보내고 종료 (webhook으로 수신).
+
+    Args:
+        urls: 수집할 카테고리 URL 목록. None이면 전체 활성 카테고리.
+    """
     bright_data = BrightDataService(
         api_token=settings.BRIGHT_DATA_API_TOKEN,
         dataset_id=settings.BRIGHT_DATA_DATASET_ID,
     )
     product_db = ProductDBService("CFO")
     try:
-        urls = product_db.get_all_active_category_urls()
+        if urls is None:
+            urls = product_db.get_all_active_category_urls()
         if not urls:
             logger.warning("No active categories to collect")
             return

@@ -58,6 +58,17 @@ class ProductDBService:
             return []
         return df.to_dict("records")
 
+    def get_category_url(self, node_id: str) -> str | None:
+        """특정 카테고리의 URL 반환."""
+        query = "SELECT url FROM amz_categories WHERE node_id = %s AND is_active = TRUE"
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (node_id,))
+        except Exception:
+            logger.exception("Failed to get category URL for %s", node_id)
+            return None
+        return df.iloc[0]["url"] if not df.empty else None
+
     def get_all_active_category_urls(self) -> list[str]:
         """활성 카테고리의 URL 목록 반환 (수집 job용)."""
         query = "SELECT url FROM amz_categories WHERE is_active = TRUE"
