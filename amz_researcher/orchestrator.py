@@ -1,11 +1,19 @@
+import json
 import logging
 import re
 
 from app.config import settings
-from amz_researcher.models import IngredientRanking, ProductIngredients
+from amz_researcher.models import (
+    BrightDataProduct,
+    IngredientRanking,
+    ProductDetail,
+    ProductIngredients,
+    SearchProduct,
+)
 from amz_researcher.services.browse_ai import BrowseAiService
 from amz_researcher.services.cache import AmzCacheService
 from amz_researcher.services.gemini import GeminiService
+from amz_researcher.services.product_db import ProductDBService
 from amz_researcher.services.analyzer import calculate_weights
 from amz_researcher.services.excel_builder import build_excel
 from amz_researcher.services.market_analyzer import build_market_analysis
@@ -310,6 +318,188 @@ async def run_research(
             )
     finally:
         for client in (browse, gemini, slack):
+            try:
+                await client.close()
+            except Exception:
+                logger.warning("Failed to close %s", type(client).__name__)
+
+
+# ── V4: DB 기반 분석 파이프라인 ──────────────────────────
+
+
+def _parse_db_row(row: dict) -> dict:
+    """DB 조회 결과(dict)를 BrightDataProduct 생성자 인자로 변환."""
+    result = dict(row)
+    # JSON 문자열 → Python 객체
+    for field in ("features", "categories", "subcategory_ranks"):
+        val = result.get(field)
+        if isinstance(val, str):
+            try:
+                result[field] = json.loads(val)
+            except (json.JSONDecodeError, TypeError):
+                result[field] = []
+    return result
+
+
+def _adapt_for_analyzer(
+    products: list[BrightDataProduct],
+) -> tuple[list[SearchProduct], list[ProductDetail]]:
+    """BrightDataProduct → 기존 analyzer가 기대하는 SearchProduct + ProductDetail 변환."""
+    search_products = []
+    details = []
+    for i, p in enumerate(products):
+        search_products.append(SearchProduct(
+            position=i + 1,
+            title=p.title,
+            asin=p.asin,
+            price=p.final_price,
+            reviews=p.reviews_count,
+            rating=p.rating,
+        ))
+        details.append(ProductDetail(
+            asin=p.asin,
+            ingredients_raw=p.ingredients,
+            bsr_category=p.bs_rank,
+            bsr_category_name=p.bs_category,
+            rating=p.rating,
+            review_count=p.reviews_count,
+            brand=p.brand,
+            manufacturer=p.manufacturer,
+        ))
+    return search_products, details
+
+
+async def run_analysis(
+    category_node_id: str,
+    category_name: str,
+    response_url: str,
+    channel_id: str,
+):
+    """V4 DB 기반 분석 파이프라인. 카테고리 선택 후 호출."""
+    product_db = ProductDBService("CFO")
+    gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+    cache = AmzCacheService("CFO")
+
+    async def _msg(text: str, ephemeral: bool = False):
+        await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
+
+    try:
+        # Step 1: DB에서 제품 조회
+        raw_products = product_db.get_products_by_category(category_node_id)
+        if not raw_products:
+            await _msg(f"⚠️ *{category_name}* 카테고리에 수집된 제품이 없습니다. `/amz refresh`로 수집을 시작하세요.")
+            return
+
+        products = [BrightDataProduct(**_parse_db_row(r)) for r in raw_products]
+        await _msg(
+            f"📦 {len(products)}개 제품 로드 완료. 성분 분석 중...",
+            ephemeral=True,
+        )
+
+        # Step 2: Gemini 성분 추출 (캐시 우선)
+        asins = [p.asin for p in products]
+        cached_ingredients = cache.get_ingredient_cache(asins)
+        uncached = [p for p in products if p.asin not in cached_ingredients]
+
+        if uncached:
+            await _msg(
+                f"🧪 성분 추출 중... (캐시 {len(cached_ingredients)}개, "
+                f"신규 {len(uncached)}개 → Gemini Flash)",
+                ephemeral=True,
+            )
+            products_for_gemini = [
+                {
+                    "asin": p.asin,
+                    "title": p.title,
+                    "ingredients_raw": p.ingredients,
+                    "features": p.features,
+                    "additional_details": {},
+                }
+                for p in uncached
+            ]
+            new_results = await gemini.extract_ingredients(products_for_gemini)
+            extracted_asins = {r.asin for r in new_results}
+            failed_extraction = len(uncached) - len(extracted_asins)
+            if failed_extraction:
+                logger.warning(
+                    "Gemini extraction failed for %d/%d ASINs",
+                    failed_extraction, len(uncached),
+                )
+            if new_results:
+                cache.save_ingredient_cache(new_results)
+                cache.harmonize_common_names()
+            gemini_results = new_results + [
+                ProductIngredients(asin=asin, ingredients=ings)
+                for asin, ings in cached_ingredients.items()
+            ]
+        else:
+            await _msg(
+                f"♻️ 성분 추출 전체 캐시 사용: {len(cached_ingredients)}개",
+                ephemeral=True,
+            )
+            gemini_results = [
+                ProductIngredients(asin=asin, ingredients=ings)
+                for asin, ings in cached_ingredients.items()
+            ]
+
+        # Step 3: 가중치 계산 (기존 analyzer 재사용)
+        search_products, all_details = _adapt_for_analyzer(products)
+        weighted_products, rankings, categories = calculate_weights(
+            search_products, all_details, gemini_results,
+        )
+
+        # Step 4: 시장 분석 리포트
+        analysis_data = build_market_analysis(category_name, weighted_products, all_details)
+
+        market_report = cache.get_market_report_cache(category_name, len(weighted_products)) or ""
+        if market_report:
+            logger.info("Market report cache hit for category=%s", category_name)
+            await _msg("♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
+        else:
+            await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
+            market_report = await gemini.generate_market_report(analysis_data)
+            cache.save_market_report_cache(category_name, market_report, len(weighted_products))
+
+        # Step 5: Excel
+        excel_bytes = build_excel(
+            category_name, weighted_products, rankings, categories,
+            search_products, all_details,
+            market_report=market_report,
+            rising_products=analysis_data.get("rising_products"),
+            form_price_data=analysis_data.get("form_price_matrix"),
+            analysis_data=analysis_data,
+        )
+
+        # Step 6: Slack 요약
+        fallback_text, summary_blocks = _build_summary_blocks(
+            category_name, len(weighted_products), rankings[:10], market_report,
+        )
+        await slack.send_message(
+            response_url, fallback_text,
+            ephemeral=False, channel_id=channel_id,
+            blocks=summary_blocks,
+        )
+
+        # Step 7: 파일 업로드
+        filename = f"{category_name.replace(' ', '_')}_analysis.xlsx"
+        await slack.upload_file(
+            channel_id, excel_bytes, filename,
+            comment="📊 상세 분석 엑셀 파일",
+        )
+        logger.info("Analysis completed for category=%s (%d products)", category_name, len(products))
+
+    except Exception as e:
+        logger.exception("Analysis failed for category=%s", category_name)
+        await _msg(f"❌ *{category_name}* 분석 실패: {e!s}", ephemeral=True)
+        admin_id = settings.AMZ_ADMIN_SLACK_ID
+        if admin_id:
+            await slack.send_dm(
+                admin_id,
+                f"🚨 AMZ Analysis 에러\n카테고리: {category_name}\n에러: {e!s}",
+            )
+    finally:
+        for client in (gemini, slack):
             try:
                 await client.close()
             except Exception:
