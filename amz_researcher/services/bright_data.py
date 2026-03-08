@@ -17,7 +17,7 @@ class BrightDataService:
         self.api_token = api_token
         self.dataset_id = dataset_id
         self.base_url = "https://api.brightdata.com/datasets/v3"
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self.client = httpx.AsyncClient(timeout=300.0)
 
     async def trigger_collection(
         self,
