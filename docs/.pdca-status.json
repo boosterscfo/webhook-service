@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-08T12:34:55.847Z",
+  "lastUpdated": "2026-03-08T12:56:25.415Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
@@ -143,9 +143,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:23:35.355Z",
-        "lastUpdated": "2026-03-08T12:05:14.613Z"
+        "lastUpdated": "2026-03-08T12:56:25.415Z"
       },
-      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/router.py"
+      "lastFile": "/home/ubuntu/webhook-service/amz_researcher/router.py"
     },
     "__init__.py": {
       "phase": "do",
@@ -359,7 +359,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-03-08T12:34:55.847Z"
+    "lastActivity": "2026-03-08T12:56:25.415Z"
   },
   "history": [
     {
@@ -1500,6 +1500,18 @@
     {
       "timestamp": "2026-03-08T12:34:55.847Z",
       "feature": "migrations",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-08T12:56:18.490Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-08T12:56:25.415Z",
+      "feature": "amz_researcher",
       "phase": "do",
       "action": "updated"
     }

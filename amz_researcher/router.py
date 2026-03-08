@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -226,17 +227,33 @@ async def brightdata_webhook(
     return {"status": "accepted", "snapshot_id": snapshot_id}
 
 
+# ingestion 전체 타임아웃(초). 초과 시 태스크 취소 후 리소스 정리
+INGESTION_TIMEOUT = 300  # 5분
+
+
 async def _ingest_snapshot(snapshot_id: str):
-    """Bright Data 스냅샷 fetch → DB 적재."""
+    """Bright Data 스냅샷 fetch → DB 적재. 타임아웃 시 취소되어 리소스 해제."""
     bright_data = BrightDataService(
         api_token=settings.BRIGHT_DATA_API_TOKEN,
         dataset_id=settings.BRIGHT_DATA_DATASET_ID,
     )
     collector = DataCollector("CFO")
-    try:
+
+    async def _work() -> None:
         products = await bright_data.fetch_snapshot(snapshot_id)
         count = collector.process_snapshot(products)
         logger.info("Webhook ingestion complete: snapshot=%s, %d products", snapshot_id, count)
+
+    try:
+        await asyncio.wait_for(_work(), timeout=INGESTION_TIMEOUT)
+    except asyncio.TimeoutError:
+        logger.error(
+            "Webhook ingestion timeout (cancelled): snapshot=%s, limit=%ds",
+            snapshot_id,
+            INGESTION_TIMEOUT,
+        )
+    except asyncio.CancelledError:
+        logger.warning("Webhook ingestion cancelled: snapshot=%s", snapshot_id)
     except Exception:
         logger.exception("Webhook ingestion failed: snapshot=%s", snapshot_id)
     finally:
