@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "amazon-researcher",
-  "pdcaPhase": "completed",
+  "feature": "amazon-researcher-v4",
+  "pdcaPhase": "do",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-03-07T06:29:13.668Z",
-  "lastUpdated": "2026-03-07T06:55:50.061Z",
+  "startedAt": "2026-03-08T11:44:22.350Z",
+  "lastUpdated": "2026-03-08T11:49:11.402Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "7f7cd902-b8f6-485b-8ff3-992ff2a41170"
+  "sessionId": "46be55c4-4a3b-45a0-b347-3038e6d4e350"
 }

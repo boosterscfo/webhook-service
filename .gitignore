@@ -11,6 +11,7 @@ wheels/
 
 # Environment & secrets
 .env
+.env.docker
 google_keys/
 
 # Reference (migration source)
