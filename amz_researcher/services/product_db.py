@@ -82,3 +82,25 @@ class ProductDBService:
             logger.exception("Failed to list categories")
             return []
         return df.to_dict("records") if not df.empty else []
+
+    def add_category(self, name: str, url: str) -> dict:
+        """Amazon Best Sellers URL로 카테고리 추가. node_id는 URL에서 추출."""
+        import re
+        m = re.search(r"/(\d+)(?:\?|$)", url)
+        if not m:
+            return {"ok": False, "error": "URL에서 node_id를 추출할 수 없습니다."}
+        node_id = m.group(1)
+
+        query = """
+            INSERT INTO amz_categories (node_id, name, url, is_active)
+            VALUES (%s, %s, %s, TRUE)
+            ON DUPLICATE KEY UPDATE name=VALUES(name), url=VALUES(url), is_active=TRUE
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(query, (node_id, name, url))
+                conn.connection.commit()
+        except Exception:
+            logger.exception("Failed to add category %s", name)
+            return {"ok": False, "error": "DB 저장 실패"}
+        return {"ok": True, "node_id": node_id, "name": name}

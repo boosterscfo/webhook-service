@@ -16,7 +16,7 @@ class SearchProduct(BaseModel):
 
 
 class ProductDetail(BaseModel):
-    """Browse.ai 상세 크롤링 결과 (V2 — capturedTexts 신규 필드)."""
+    """제품 상세 정보 (Bright Data 기반)."""
     asin: str
     ingredients_raw: str = ""
     features: dict = {}

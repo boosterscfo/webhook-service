@@ -1,4 +1,3 @@
-import json
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -33,7 +32,6 @@ TAB_COLORS = {
     "Rising Products": "00BCD4",
     "Form × Price": "FF9800",
     "Market Insight": "E91E63",
-    "Analysis Data": "795548",
 }
 
 
@@ -89,7 +87,7 @@ def _build_ingredient_ranking(
     col_count = 9
     title = f"{keyword.title()} Ingredient Analysis — Weighted by Market Performance"
     subtitle = (
-        f"Weight = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%) "
+        f"Weight = BoughtPastMonth(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%) "
         f"| {product_count} products, {len(rankings)} ingredients"
     )
     _write_title(ws, title, subtitle, col_count)
@@ -254,7 +252,7 @@ def _build_raw_search(wb: Workbook, keyword: str, products: list[SearchProduct])
     title = f'Amazon Search Results — "{keyword}" (Raw Data, {len(products)} products)'
     _write_title(
         ws, title,
-        "Browse.ai가 수집한 Amazon 검색 결과 원본. Position은 검색 페이지 노출 순서.",
+        "Amazon 검색 결과 원본 데이터. Position은 검색 페이지 노출 순서.",
         col_count,
     )
 
@@ -476,57 +474,6 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     ws.freeze_panes = "A5"
 
 
-def _build_analysis_data(wb: Workbook, analysis_data: dict):
-    """Gemini에 전달한 시장 분석 원본 데이터를 시트로 출력."""
-    ws = wb.create_sheet("Analysis Data")
-    ws.sheet_properties.tabColor = TAB_COLORS["Analysis Data"]
-
-    sections = [
-        ("price_tier_analysis", "Price Tier Analysis"),
-        ("bsr_analysis", "BSR Top vs Bottom"),
-        ("brand_analysis", "Brand Profiles"),
-        ("cooccurrence_analysis", "Ingredient Co-occurrence"),
-        ("form_price_matrix", "Form x Price Matrix"),
-        ("brand_positioning", "Brand Positioning"),
-        ("rising_products", "Rising Products"),
-        ("rating_ingredients", "Rating vs Ingredients"),
-        ("sales_volume", "Monthly Sales Volume"),
-        ("sns_pricing", "Subscribe & Save Pricing"),
-        ("competition", "Seller Competition"),
-        ("promotions", "Coupons & A+ Content"),
-    ]
-
-    _write_title(
-        ws,
-        "Analysis Data — Raw Input to AI Market Report",
-        f"Gemini에 전달한 분석 원본 JSON. 8개 섹션의 데이터를 직접 확인 가능. "
-        f"Keyword: {analysis_data.get('keyword', '')} | "
-        f"{analysis_data.get('total_products', 0)} products",
-        1,
-    )
-
-    row = 4
-    for key, label in sections:
-        data = analysis_data.get(key, {})
-        if not data:
-            continue
-        ws.cell(row=row, column=1, value=label).font = Font(
-            name="Arial", size=11, bold=True, color="1B2A4A",
-        )
-        _style_header_row(ws, row, 1)
-        row += 1
-
-        json_text = json.dumps(data, ensure_ascii=False, indent=2)
-        cell = ws.cell(row=row, column=1, value=json_text)
-        cell.font = DATA_FONT
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-        line_count = json_text.count("\n") + 1
-        ws.row_dimensions[row].height = min(line_count * 15, 4000)
-        row += 2
-
-    ws.column_dimensions["A"].width = 120
-
-
 def build_excel(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -537,7 +484,6 @@ def build_excel(
     market_report: str = "",
     rising_products: list[dict] | None = None,
     form_price_data: dict | None = None,
-    analysis_data: dict | None = None,
 ) -> bytes:
     wb = Workbook()
 
@@ -552,8 +498,6 @@ def build_excel(
     _build_raw_detail(wb, details)
     if market_report:
         _build_market_insight(wb, keyword, market_report)
-    if analysis_data:
-        _build_analysis_data(wb, analysis_data)
 
     # Move Market Insight to front (first sheet)
     if market_report and "Market Insight" in wb.sheetnames:

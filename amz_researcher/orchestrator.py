@@ -286,7 +286,6 @@ async def run_research(
             market_report=market_report,
             rising_products=analysis_data.get("rising_products"),
             form_price_data=analysis_data.get("form_price_matrix"),
-            analysis_data=analysis_data,
         )
 
         # Step 7: Summary message (Block Kit)
@@ -499,7 +498,6 @@ async def run_analysis(
             market_report=market_report,
             rising_products=analysis_data.get("rising_products"),
             form_price_data=analysis_data.get("form_price_matrix"),
-            analysis_data=analysis_data,
         )
 
         # Step 6: Slack 요약

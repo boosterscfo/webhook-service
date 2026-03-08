@@ -32,7 +32,7 @@ async def slack_amz_legacy(
     channel_id: str = Form(""),
     user_id: str = Form(""),
 ):
-    """V3 Browse.ai 기반 (향후 제거 예정)."""
+    """V3 키워드 기반 분석 (향후 제거 예정)."""
     parts = text.strip().split()
     if not parts:
         return {"response_type": "ephemeral", "text": "사용법: /amz prod {키워드}"}
@@ -65,10 +65,31 @@ async def slack_amz(
     if not parts:
         return {
             "response_type": "ephemeral",
-            "text": "사용법:\n• `/amz {키워드}` — 카테고리 검색 → 분석\n• `/amz list` — 카테고리 목록\n• `/amz refresh` — 수동 데이터 수집",
+            "text": "사용법:\n• `/amz {키워드}` — 카테고리 검색 → 분석\n• `/amz list` — 카테고리 목록\n• `/amz add {이름} {URL}` — 카테고리 추가\n• `/amz refresh` — 수동 데이터 수집",
         }
 
     subcommand = parts[0].lower()
+
+    # /amz add {name} {url}
+    if subcommand == "add":
+        if len(parts) < 3:
+            return {
+                "response_type": "ephemeral",
+                "text": "사용법: `/amz add {카테고리명} {Amazon Best Sellers URL}`\n예: `/amz add \"Hair Oils\" https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281`",
+            }
+        # URL은 마지막 파트, 나머지가 이름
+        url = parts[-1]
+        name = " ".join(parts[1:-1])
+        if not url.startswith("http"):
+            return {"response_type": "ephemeral", "text": "❌ 마지막 인자는 Amazon URL이어야 합니다."}
+        product_db = ProductDBService("CFO")
+        result = product_db.add_category(name, url)
+        if result["ok"]:
+            return {
+                "response_type": "in_channel",
+                "text": f"✅ 카테고리 추가 완료: *{result['name']}* (`{result['node_id']}`)\n다음 수집 시 자동 포함됩니다.",
+            }
+        return {"response_type": "ephemeral", "text": f"❌ 추가 실패: {result['error']}"}
 
     # /amz list
     if subcommand == "list":
