@@ -340,11 +340,30 @@ class BrowseAiService:
             f"Bulk run polling timeout after {max_attempts * interval}s"
         )
 
+    @staticmethod
+    def classify_failure_reason(task: dict) -> str:
+        """Browse.ai 태스크 실패 원인 분류."""
+        error = (task.get("userFriendlyError") or "").lower()
+        status_code = task.get("statusCode") or 0
+
+        if status_code == 404 or "not found" in error or "page not found" in error:
+            return "not_found"
+        if status_code == 403 or "blocked" in error or "captcha" in error or "bot" in error:
+            return "blocked"
+        if "timeout" in error or "timed out" in error:
+            return "timeout"
+        return "browse_ai_failure"
+
     async def run_details_batch(
         self, asins: list[str],
-    ) -> list[ProductDetail]:
+    ) -> tuple[list[ProductDetail], dict[str, list[str]]]:
+        """상세 정보 배치 크롤링. (성공 목록, 실패 분류 dict) 반환.
+
+        Returns:
+            (details, failures) where failures = {"reason": [asin, ...]}
+        """
         if not asins:
-            return []
+            return [], {}
 
         input_params_list = [
             {"originUrl": f"https://www.amazon.com/dp/{asin}"}
@@ -362,23 +381,32 @@ class BrowseAiService:
         raw_tasks = await self._poll_bulk_run(self.detail_robot_id, bulk_run_id)
 
         details = []
+        failures: dict[str, list[str]] = {}
         for task in raw_tasks:
-            if task.get("status") != "successful":
+            input_url = task.get("inputParameters", {}).get("originUrl", "")
+            asin = extract_asin(input_url)
+            if not asin:
                 continue
+
+            if task.get("status") != "successful":
+                reason = self.classify_failure_reason(task)
+                failures.setdefault(reason, []).append(asin)
+                logger.debug("Task failed: asin=%s reason=%s", asin, reason)
+                continue
+
             try:
                 texts = task.get("capturedTexts", {})
-                input_url = (
-                    task.get("inputParameters", {}).get("originUrl", "")
-                )
-                asin = extract_asin(input_url)
-                if not asin:
-                    continue
                 details.append(parse_detail_from_captured_texts(asin, texts))
             except Exception:
                 logger.exception("Failed to parse bulk task: %s", task.get("id"))
+                failures.setdefault("parse_error", []).append(asin)
 
-        logger.info("Detail batch: %d/%d succeeded", len(details), len(asins))
-        return details
+        logger.info(
+            "Detail batch: %d/%d succeeded, failures=%s",
+            len(details), len(asins),
+            {k: len(v) for k, v in failures.items()} if failures else "none",
+        )
+        return details, failures
 
     async def close(self):
         await self.client.aclose()

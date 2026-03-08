@@ -1,4 +1,5 @@
 import logging
+import re
 
 from app.config import settings
 from amz_researcher.models import IngredientRanking, ProductIngredients
@@ -13,9 +14,26 @@ from amz_researcher.services.slack_sender import SlackSender
 logger = logging.getLogger(__name__)
 
 
-def _build_summary(
+def _extract_action_items_section(report_md: str) -> str:
+    """시장 리포트 마크다운에서 '7. 제품 기획 액션 아이템' 섹션만 추출 (다음 8. 또는 ## 전까지)."""
+    if not report_md or not report_md.strip():
+        return ""
+    # "7. **제품 기획 액션 아이템 (Action Items)**" 또는 "## 7." 형식 → 다음 "8." / "## 8" / 끝까지
+    m = re.search(
+        r"(?:^|\n)(?:##\s*)?7\.\s*(?:\*\*)?(?:제품\s*기획\s*액션\s*아이템|액션\s*아이템).*?\n(.*?)(?=\n(?:##\s*)?8\.|\n##\s|\Z)",
+        report_md,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m:
+        text = m.group(1).strip()
+        return text[:2000] if len(text) > 2000 else text
+    return ""
+
+
+def _build_summary_text(
     keyword: str, product_count: int, top_rankings: list[IngredientRanking],
 ) -> str:
+    """Fallback용 플레인 텍스트 요약 (알림/접근성)."""
     lines = []
     for r in top_rankings[:5]:
         avg_price_str = f"${r.avg_price:.0f}" if r.avg_price else "-"
@@ -25,7 +43,6 @@ def _build_summary(
             f"{r.product_count}개 제품  |  {avg_price_str}"
         )
     rankings_text = "\n".join(lines)
-
     return (
         f"*Amazon \"{keyword}\" 성분 분석 완료*\n"
         f"{product_count}개 제품 분석 | Gemini Flash\n\n"
@@ -33,6 +50,64 @@ def _build_summary(
         f"_Score = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)_\n"
         f"_자세한 내용은 첨부 Excel 파일의 Market Insight 시트를 참조하세요._"
     )
+
+
+def _build_summary_blocks(
+    keyword: str,
+    product_count: int,
+    top_rankings: list[IngredientRanking],
+    market_report: str,
+) -> tuple[str, list[dict]]:
+    """Block Kit 블록으로 요약 구성. (fallback_text, blocks) 반환."""
+    lines = []
+    for r in top_rankings[:5]:
+        avg_price_str = f"${r.avg_price:.0f}" if r.avg_price else "-"
+        lines.append(
+            f"• {r.rank}. *{r.ingredient}*  Score {r.weighted_score:.2f}  "
+            f"| {r.product_count}개 제품 | {avg_price_str}"
+        )
+    rankings_mrkdwn = "\n".join(lines)
+    action_md = _extract_action_items_section(market_report)
+
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f'Amazon "{keyword}" 성분 분석 완료', "emoji": True},
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{product_count}개 제품 분석 | Gemini Flash",
+            },
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Top 5 성분*\n{rankings_mrkdwn}\n\n_Score = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)_",
+            },
+        },
+    ]
+    if action_md:
+        blocks.append({"type": "divider"})
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*제품 기획 액션 아이템*\n{action_md}",
+            },
+        })
+    blocks.append({
+        "type": "context",
+        "elements": [
+            {"type": "mrkdwn", "text": "자세한 내용은 첨부 Excel 파일의 Market Insight 시트를 참조하세요."},
+        ],
+    })
+
+    fallback_text = _build_summary_text(keyword, product_count, top_rankings)
+    return fallback_text, blocks
 
 
 async def run_research(
@@ -87,20 +162,20 @@ async def run_research(
 
         if uncached_asins:
             try:
-                new_details = await browse.run_details_batch(uncached_asins)
-                cache.save_detail_cache(new_details)
-                # 실패한 ASIN 기록
-                succeeded_asins = {d.asin for d in new_details}
-                newly_failed = [a for a in uncached_asins if a not in succeeded_asins]
-                if newly_failed:
-                    cache.save_failed_asins(newly_failed, keyword)
+                new_details, failures = await browse.run_details_batch(uncached_asins)
+                if not cache.save_detail_cache(new_details):
+                    logger.error("Detail cache save failed — %d results may be lost", len(new_details))
+                # 실패 원인별로 분류 저장
+                for reason, failed_list in failures.items():
+                    cache.save_failed_asins(failed_list, keyword, reason=reason)
             except Exception:
                 logger.warning(
                     "Browse.ai batch failed for %d ASINs, proceeding with %d cached",
                     len(uncached_asins), len(cached_details),
                 )
                 new_details = []
-                cache.save_failed_asins(uncached_asins, keyword)
+                # 배치 전체 실패 → 일시적 실패로 기록 (재시도 가능)
+                cache.save_failed_asins(uncached_asins, keyword, reason="batch_error")
             all_details = list(cached_details.values()) + new_details
             await _msg(
                 f"📦 상세 정보: 캐시 {len(cached_details)}개 + 신규 {len(new_details)}개"
@@ -114,6 +189,15 @@ async def run_research(
                 + (f" (실패 {skipped_count}개 스킵)" if skipped_count else ""),
                 ephemeral=True,
             )
+
+        if not all_details:
+            await _msg(
+                f"⚠️ *{keyword}* 상세 정보를 가져올 수 없어 분석을 중단합니다. "
+                f"(캐시 0개, 크롤링 실패)",
+                ephemeral=True,
+            )
+            logger.warning("No details available for keyword=%s, aborting", keyword)
+            return
 
         # Step 3: Gemini 성분 추출 (캐시 우선)
         detail_asins = [d.asin for d in all_details]
@@ -141,8 +225,18 @@ async def run_research(
                 for asin in uncached_detail_asins
             ]
             new_gemini_results = await gemini.extract_ingredients(products_for_gemini)
-            cache.save_ingredient_cache(new_gemini_results)
-            cache.harmonize_common_names()
+            # 추출 성공한 것만 캐시 (빈 결과는 캐시하지 않음)
+            extracted_asins = {r.asin for r in new_gemini_results}
+            failed_extraction = len(uncached_detail_asins) - len(extracted_asins)
+            if failed_extraction:
+                logger.warning(
+                    "Gemini extraction failed for %d/%d ASINs, not caching failures",
+                    failed_extraction, len(uncached_detail_asins),
+                )
+            if new_gemini_results:
+                if not cache.save_ingredient_cache(new_gemini_results):
+                    logger.error("Ingredient cache save failed — %d results may be lost", len(new_gemini_results))
+                cache.harmonize_common_names()
             # 캐시 + 신규 병합
             gemini_results = new_gemini_results + [
                 ProductIngredients(asin=asin, ingredients=ings)
@@ -187,9 +281,15 @@ async def run_research(
             analysis_data=analysis_data,
         )
 
-        # Step 7: Summary message
-        summary = _build_summary(keyword, len(weighted_products), rankings[:10])
-        await _msg(summary)
+        # Step 7: Summary message (Block Kit)
+        fallback_text, summary_blocks = _build_summary_blocks(
+            keyword, len(weighted_products), rankings[:10], market_report,
+        )
+        await slack.send_message(
+            response_url, fallback_text,
+            ephemeral=False, channel_id=channel_id,
+            blocks=summary_blocks,
+        )
 
         # Step 8: File upload
         filename = f"{keyword.replace(' ', '_')}_analysis.xlsx"
@@ -209,6 +309,8 @@ async def run_research(
                 f"🚨 AMZ Research 에러 발생\n키워드: {keyword}\n에러: {e!s}",
             )
     finally:
-        await browse.close()
-        await gemini.close()
-        await slack.close()
+        for client in (browse, gemini, slack):
+            try:
+                await client.close()
+            except Exception:
+                logger.warning("Failed to close %s", type(client).__name__)

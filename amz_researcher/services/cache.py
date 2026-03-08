@@ -12,6 +12,15 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL_DAYS = 30
 
+# ── Failed ASIN retry policy ─────────────────
+MAX_RETRY_COUNT = 3          # 일시적 실패 최대 재시도 횟수
+RETRY_COOLDOWN_DAYS = 7      # 재시도 대기 기간 (일)
+
+# 구조적 실패 → 즉시 영구 스킵
+PERMANENT_REASONS = frozenset({"not_found", "blocked", "asin_invalid"})
+# 일시적 실패 → MAX_RETRY_COUNT까지 재시도 허용
+TRANSIENT_REASONS = frozenset({"timeout", "batch_error", "browse_ai_failure", "network_error"})
+
 
 class AmzCacheService:
     """MySQL 기반 Amazon 데이터 캐시 서비스."""
@@ -142,10 +151,10 @@ class AmzCacheService:
             )
         return result
 
-    def save_detail_cache(self, details: list[ProductDetail]) -> None:
-        """상세 정보를 캐시에 저장 (upsert)."""
+    def save_detail_cache(self, details: list[ProductDetail]) -> bool:
+        """상세 정보를 캐시에 저장 (upsert). 성공 시 True."""
         if not details:
-            return
+            return True
         now = datetime.now()
         rows = [
             {
@@ -172,35 +181,103 @@ class AmzCacheService:
             with MysqlConnector(self._env) as conn:
                 conn.upsert_data(df, "amz_product_detail")
             logger.info("Detail cache saved: %d products", len(details))
+            return True
         except Exception:
             logger.exception("Failed to save detail cache")
+            return False
 
     # ── Failed ASIN Management ──────────────────────
 
     def get_failed_asins(self) -> set[str]:
-        """실패 ASIN 목록 조회. 한번 실패한 ASIN은 재수집하지 않는다."""
+        """스킵해야 할 ASIN 목록 조회.
+
+        스킵 조건:
+        - 구조적 실패 (not_found, blocked 등) → 영구 스킵
+        - 일시적 실패 + retry_count >= MAX_RETRY_COUNT → 스킵
+        - 일시적 실패 + 쿨다운 기간 내 → 스킵 (아직 대기 중)
+
+        재시도 대상 (반환하지 않음):
+        - 일시적 실패 + retry_count < MAX_RETRY_COUNT + 쿨다운 경과
+        """
         try:
             with MysqlConnector(self._env) as conn:
-                df = conn.read_query_table("SELECT asin FROM amz_failed_asins")
-            return set(df["asin"].tolist()) if not df.empty else set()
+                df = conn.read_query_table(
+                    "SELECT asin, reason, retry_count, last_failed_at "
+                    "FROM amz_failed_asins"
+                )
+            if df.empty:
+                return set()
+
+            skip = set()
+            now = datetime.now()
+            cooldown_cutoff = now - timedelta(days=RETRY_COOLDOWN_DAYS)
+
+            for _, row in df.iterrows():
+                reason = row["reason"] or "browse_ai_failure"
+                retry_count = int(row["retry_count"] or 0)
+                last_failed = row["last_failed_at"]
+
+                # 구조적 실패 → 영구 스킵
+                if reason in PERMANENT_REASONS:
+                    skip.add(row["asin"])
+                    continue
+
+                # 일시적 실패: 재시도 한도 초과 → 스킵
+                if retry_count >= MAX_RETRY_COUNT:
+                    skip.add(row["asin"])
+                    continue
+
+                # 일시적 실패: 쿨다운 기간 내 → 스킵 (아직 대기)
+                if last_failed and last_failed >= cooldown_cutoff:
+                    skip.add(row["asin"])
+                    continue
+
+                # 그 외 → 재시도 대상 (skip에 추가하지 않음)
+
+            return skip
         except Exception:
             logger.exception("Failed to read failed ASINs")
             return set()
 
-    def save_failed_asins(self, asins: list[str], keyword: str = "") -> None:
-        """실패 ASIN 기록."""
+    def save_failed_asins(
+        self, asins: list[str], keyword: str = "",
+        reason: str = "browse_ai_failure",
+    ) -> None:
+        """실패 ASIN 기록. 기존 레코드가 있으면 retry_count 증가."""
         if not asins:
             return
         now = datetime.now()
+
+        # 기존 실패 기록 조회
+        existing: dict[str, int] = {}
+        try:
+            placeholders = ",".join(["%s"] * len(asins))
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(
+                    f"SELECT asin, retry_count FROM amz_failed_asins "
+                    f"WHERE asin IN ({placeholders})",
+                    tuple(asins),
+                )
+            if not df.empty:
+                existing = dict(zip(df["asin"], df["retry_count"].astype(int)))
+        except Exception:
+            logger.debug("Could not read existing failed ASINs, treating as new")
+
         rows = [
-            {"asin": a, "keyword": keyword, "failed_at": now, "reason": "browse_ai_failure"}
+            {
+                "asin": a,
+                "keyword": keyword,
+                "last_failed_at": now,
+                "reason": reason,
+                "retry_count": existing.get(a, 0) + (1 if a in existing else 0),
+            }
             for a in asins
         ]
         try:
             df = pd.DataFrame(rows)
             with MysqlConnector(self._env) as conn:
                 conn.upsert_data(df, "amz_failed_asins")
-            logger.info("Failed ASINs saved: %d", len(asins))
+            logger.info("Failed ASINs saved: %d (reason=%s)", len(asins), reason)
         except Exception:
             logger.exception("Failed to save failed ASINs")
 
@@ -236,8 +313,8 @@ class AmzCacheService:
                 ))
         return result
 
-    def save_ingredient_cache(self, gemini_results: list[ProductIngredients]) -> None:
-        """Gemini 추출 성분을 캐시에 저장. 성분 0개인 제품도 마커 저장."""
+    def save_ingredient_cache(self, gemini_results: list[ProductIngredients]) -> bool:
+        """Gemini 추출 성분을 캐시에 저장. 성분 0개인 제품도 마커 저장. 성공 시 True."""
         rows = []
         now = datetime.now()
         for pi in gemini_results:
@@ -259,15 +336,17 @@ class AmzCacheService:
                     "extracted_at": now,
                 })
         if not rows:
-            return
+            return True
         try:
             df = pd.DataFrame(rows)
             with MysqlConnector(self._env) as conn:
                 conn.upsert_data(df, "amz_ingredient_cache")
             logger.info("Ingredient cache saved: %d ingredients from %d products",
                        len(rows), len(gemini_results))
+            return True
         except Exception:
             logger.exception("Failed to save ingredient cache")
+            return False
 
     def harmonize_common_names(self) -> int:
         """common_name 자동 보정: 같은 name에 다른 common_name → 다수결 통일.

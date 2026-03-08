@@ -265,30 +265,37 @@ class GeminiService:
             rating_ingredients_json=_dump("rating_ingredients"),
         )
 
-        try:
-            resp = await self.client.post(
-                self.url,
-                params={"key": self.api_key},
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "temperature": 0.3,
-                        "maxOutputTokens": 16384,
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                resp = await self.client.post(
+                    self.url,
+                    params={"key": self.api_key},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "maxOutputTokens": 16384,
+                        },
                     },
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            text = (
-                data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", "")
-            )
-            return text
-        except Exception:
-            logger.exception("Market report generation failed")
-            return ""
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                if text:
+                    return text
+                logger.warning("Market report empty response (attempt %d/%d)", attempt + 1, max_retries)
+            except Exception:
+                logger.warning("Market report generation failed (attempt %d/%d)", attempt + 1, max_retries)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)
+        logger.error("Market report generation failed after %d attempts", max_retries)
+        return ""
 
     async def close(self):
         await self.client.aclose()
