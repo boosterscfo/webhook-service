@@ -13,13 +13,19 @@ class SlackSender:
     async def send_message(
         self, response_url: str, text: str, ephemeral: bool = False,
         channel_id: str = "",
+        blocks: list[dict] | None = None,
     ):
+        """Send a message. text is required (fallback for notifications). blocks is optional Block Kit."""
+        payload: dict = {
+            "response_type": "ephemeral" if ephemeral else "in_channel",
+            "text": text,
+        }
+        if blocks:
+            payload["blocks"] = blocks
+
         if response_url:
             try:
-                resp = await self.client.post(response_url, json={
-                    "response_type": "ephemeral" if ephemeral else "in_channel",
-                    "text": text,
-                })
+                resp = await self.client.post(response_url, json=payload)
                 resp.raise_for_status()
                 return
             except Exception:
@@ -28,13 +34,16 @@ class SlackSender:
 
         if channel_id and self.bot_token:
             try:
+                body: dict = {"channel": channel_id, "text": text}
+                if blocks:
+                    body["blocks"] = blocks
                 resp = await self.client.post(
                     "https://slack.com/api/chat.postMessage",
                     headers={
                         "Authorization": f"Bearer {self.bot_token}",
                         "Content-Type": "application/json",
                     },
-                    json={"channel": channel_id, "text": text},
+                    json=body,
                 )
                 resp.raise_for_status()
                 return
