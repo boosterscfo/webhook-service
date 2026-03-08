@@ -98,11 +98,16 @@ TABLES = {
 }
 
 SEED_CATEGORIES = [
-    ("11058281", "Hair Growth Products", "11057241", "https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281", "hair growth, 탈모, 발모, 육모", 3),
-    ("3591081", "Hair Loss Shampoos", "11057651", "https://www.amazon.com/Best-Sellers/zgbs/beauty/3591081", "hair loss shampoo, 탈모샴푸", 3),
-    ("11060451", "Skin Care", "3760911", "https://www.amazon.com/Best-Sellers/zgbs/beauty/11060451", "skin care, 스킨케어, 기초화장품", 2),
-    ("11060901", "Facial Cleansing", "11060451", "https://www.amazon.com/Best-Sellers/zgbs/beauty/11060901", "facial cleansing, 클렌징, 세안", 3),
-    ("3764441", "Vitamins & Supplements", "3760901", "https://www.amazon.com/Best-Sellers/zgbs/hpc/3764441", "vitamins, supplements, 비타민, 영양제", 2),
+    ("382803011", "Hair Styling Serums", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/382803011", "hair serum, 헤어세럼, 헤어오일", 3),
+    ("7792528011", "Facial Serums", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/7792528011", "facial serum, 세럼, 앰플, 에센스", 3),
+    ("16479981011", "Face Moisturizers", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/16479981011", "moisturizer, 수분크림, 보습크림, 크림", 3),
+    ("11061931", "Facial Toners & Astringents", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/11061931", "toner, 토너, 스킨, 화장수", 3),
+    ("11060901", "Facial Cleansing Products", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/11060901", "cleansing, 클렌징, 세안, 클렌저", 3),
+    ("7730193011", "Facial Cleansing Washes", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/7730193011", "face wash, 세안제, 폼클렌징, 워시", 3),
+    ("11061121", "Facial Masks", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/11061121", "face mask, 마스크팩, 팩, 시트마스크", 3),
+    ("11062031", "Facial Treatments & Masks", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/11062031", "treatment, 트리트먼트, 필링, 각질", 3),
+    ("11062591", "Sun Skin Care", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/11062591", "sunscreen, 선크림, 자외선차단, SPF", 3),
+    ("979546011", "Lip Balms & Moisturizers", None, "https://www.amazon.com/Best-Sellers/zgbs/beauty/979546011", "lip balm, 립밤, 립케어, 립크림", 3),
 ]
 
 
