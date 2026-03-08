@@ -8,6 +8,101 @@ from lib.mysql_connector import MysqlConnector
 
 logger = logging.getLogger(__name__)
 
+# 모회사/OEM → 실제 소비자 브랜드 매핑
+# key: Bright Data brand 값 (대소문자 무시), value: title에서 매칭할 브랜드 목록
+_BRAND_MAPPINGS: dict[str, list[str]] = {
+    # 글로벌 대기업
+    "kenvue": ["Neutrogena", "Aveeno", "Clean & Clear"],
+    "galderma": ["Cetaphil", "Differin"],
+    "procter & gamble": ["Olay"],
+    "procter & gamble - haba hub": ["Olay"],
+    "unilever": ["Dove", "Vaseline", "Pond's", "Noxzema", "Nexxus", "TRESemmé", "St. Ives"],
+    "unilever intl": ["Vaseline"],
+    "beiersdorf, inc.": ["NIVEA", "Eucerin", "Aquaphor", "Coppertone"],
+    "kao usa inc.": ["Bioré", "Biore", "John Frieda", "Jergens", "Curél"],
+    "edgewell personal care brands, llc": ["Banana Boat", "Hawaiian Tropic"],
+    "l'oreal usa": ["CeraVe"],
+    "l'oreal/cerave": ["CeraVe"],
+    "factory eu - france cosmetique active production": ["La Roche-Posay"],
+    "factory eu - france cosmetique active production (c.a.p) (lidv)": ["La Roche-Posay"],
+    "amazonus/losqh": ["La Roche-Posay"],
+    "deciem": ["The Ordinary"],
+    "crown laboratories": ["PanOxyl", "Blue Lizard"],
+    "amazonus/sk45i": ["PanOxyl", "Blue Lizard"],
+    "burt's bees, inc.": ["Burt's Bees"],
+    "blistex inc": ["Blistex", "Stridex"],
+    "hero cosmetics": ["Mighty Patch", "Hero Cosmetics"],
+    "the honest company": ["Honest Beauty"],
+    "the honest company beauty": ["Honest Beauty"],
+    # 한국 모회사 / OEM
+    "apr": ["medicube", "Medicube"],
+    "benow inc.": ["numbuzin"],
+    "cosrx inc.": ["COSRX"],
+    "mainspring america, inc. dba direct cosmetics": ["COSRX"],
+    "boosters co., ltd.": ["EQQUALBERRY"],
+    "boosters": ["EQQUALBERRY"],
+    "theone cosmetic co.,ltd": ["EQQUALBERRY"],
+    "amorepacific corporation": ["AESTURA", "Illiyoon", "LANEIGE"],
+    "amorepacific us, inc. - laneige": ["LANEIGE"],
+    "vtcosmetics": ["VT COSMETICS", "VT"],
+    "mantong": ["TOSOWOONG"],
+    "kolmar": ["ANUA", "MEDIHEAL", "Dr.Althea"],
+    "kolmar korea co., ltd.": ["ANUA", "Abib"],
+    "kolmar korea co. ltd": ["MEDITHERAPY"],
+    "kolmar korea": ["ROUND LAB"],
+    "cosmax, inc.": ["ANUA", "Anua"],
+    "cosmax inc.": ["SUNGBOON EDITOR"],
+    "cosmax, inc": ["Anua"],
+    "cosmax.inc.": ["Abib"],
+    "cosmax": ["ROUND LAB", "Beauty of Joseon", "Anua"],
+    "cosmecca korea co., ltd": ["ANUA", "Anua"],
+    "cosmecca korea co.,ltd.": ["Beauty of Joseon"],
+    "cosmecca korea": ["Dr.Melaxin"],
+    "cosmecca korea co., ltd. / cosmax, inc.": ["ANUA"],
+    "john paul mitchell systems": ["Paul Mitchell"],
+    "dickinson brands": ["Dickinson's", "T.N. Dickinson's", "Humphreys"],
+    # Amazon 자체
+    "amazon.com services llc.": ["Amazon Basics"],
+    "amazon.com services, inc.": ["Amazon Basics"],
+    "amazonus/thczr": ["Thayers"],
+    "amazonus/beih7": ["Aquaphor"],
+    "amazonus/burbp": ["Burt's Bees"],
+    "amazonus/emcw9": ["AcneFree"],
+    "amazonus/lorcd": ["L'Oreal"],
+    "amazonus/vatpf": ["Vanicream"],
+    # 기타
+    "e.l.f. cosmetics": ["e.l.f."],
+    "neutrogena corporation": ["Neutrogena"],
+    "nivea for men": ["NIVEA"],
+    "johnson & johnson": ["Neutrogena"],
+    "johnson & johnson consumer products": ["Aveeno"],
+    "johnson and johnson": ["OGX"],
+    "church & dwight co., inc.": ["Viviscal"],
+    "church and dwight co.": ["Mighty Patch"],
+    "e.t. browne drug co., inc.": ["Palmer's"],
+    "e.t. browne drug company inc.": ["Palmer's"],
+    "e.t. browne drug company, inc.": ["Palmer's"],
+    "elida beauty": ["POND'S"],
+    "coty inc.": ["CoverGirl"],
+    "naos": ["Bioderma"],
+    "farouk systems inc": ["CHI"],
+}
+
+
+def _resolve_brand(raw_brand: str, title: str) -> str:
+    """모회사/OEM 브랜드를 title 기반으로 실제 소비자 브랜드로 보정."""
+    candidates = _BRAND_MAPPINGS.get(raw_brand.lower())
+    if not candidates:
+        return raw_brand
+
+    title_lower = title.lower()
+    # 긴 이름부터 매칭 (e.g. "Clean & Clear" before "Clean")
+    for brand in sorted(candidates, key=len, reverse=True):
+        if title_lower.startswith(brand.lower()):
+            return brand
+    # title 시작에 없으면 원본 유지
+    return raw_brand
+
 
 class DataCollector:
     """Bright Data 수집 데이터를 DB에 적재."""
@@ -58,10 +153,14 @@ class DataCollector:
         sns = buybox.get("sns_price") or {}
         sns_price = sns.get("base_price")
 
+        title = (raw.get("title") or "")[:500]
+        raw_brand = (raw.get("brand") or "")[:200]
+        brand = _resolve_brand(raw_brand, title)
+
         return {
             "asin": raw["asin"],
-            "title": (raw.get("title") or "")[:500],
-            "brand": (raw.get("brand") or "")[:200],
+            "title": title,
+            "brand": brand,
             "description": raw.get("description") or "",
             "initial_price": raw.get("initial_price"),
             "final_price": raw.get("final_price"),
