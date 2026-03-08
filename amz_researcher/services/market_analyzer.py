@@ -25,41 +25,6 @@ def _price_tier(price: float | None) -> str:
     return "Luxury ($50+)"
 
 
-import re
-
-# title에서 추출할 제형 키워드 (긴 것부터 매칭)
-_FORM_KEYWORDS = [
-    "cleansing oil", "face wash", "body wash", "toner pad", "sheet mask",
-    "peel off mask", "sleeping mask", "lip mask", "eye cream", "lip balm",
-    "lip tint", "sun stick", "sunscreen spray", "sunscreen stick",
-    "serum", "cream", "lotion", "gel", "oil", "balm", "foam",
-    "mist", "spray", "stick", "mask", "pad", "toner", "essence",
-    "ampoule", "emulsion", "ointment", "mousse", "wipe", "cleanser",
-    "scrub", "peel", "powder", "sunscreen", "moisturizer", "treatment",
-    "drops", "elixir",
-]
-_FORM_PATTERN = re.compile(
-    r"\b(" + "|".join(re.escape(k) for k in _FORM_KEYWORDS) + r")\b",
-    re.IGNORECASE,
-)
-
-
-def _get_item_form(detail: ProductDetail, title: str = "") -> str:
-    """제형 추출: product_details > title 순으로 시도."""
-    # 1) product_details에서 Item Form
-    if isinstance(detail.features, dict):
-        form = (detail.features.get("Item Form") or "").strip()
-        if form:
-            return form.capitalize()
-
-    # 2) title에서 키워드 매칭
-    if title:
-        m = _FORM_PATTERN.search(title)
-        if m:
-            return m.group(1).capitalize()
-    return ""
-
-
 def analyze_by_price_tier(
     products: list[WeightedProduct],
 ) -> dict:
@@ -210,53 +175,6 @@ def analyze_cooccurrence(
     }
 
 
-def analyze_form_by_price(
-    products: list[WeightedProduct],
-    details: list[ProductDetail],
-) -> dict:
-    """가격대 × 제형(Item Form) 매트릭스."""
-    detail_map = {d.asin: d for d in details}
-    matrix: dict[str, Counter] = defaultdict(Counter)
-    form_stats: dict[str, dict] = defaultdict(lambda: {
-        "prices": [], "ratings": [], "reviews": [], "bsr_values": [],
-    })
-
-    for p in products:
-        d = detail_map.get(p.asin)
-        if not d:
-            continue
-        form = _get_item_form(d, p.title) or "Unknown"
-        tier = _price_tier(p.price)
-        matrix[tier][form] += 1
-        stats = form_stats[form]
-        if p.price is not None:
-            stats["prices"].append(p.price)
-        stats["ratings"].append(p.rating)
-        stats["reviews"].append(p.reviews)
-        if p.bsr_category is not None:
-            stats["bsr_values"].append(p.bsr_category)
-
-    form_summary = []
-    for form, stats in form_stats.items():
-        prices = stats["prices"]
-        bsr_vals = stats["bsr_values"]
-        form_summary.append({
-            "form": form,
-            "count": len(stats["ratings"]),
-            "avg_price": round(sum(prices) / len(prices), 2) if prices else None,
-            "avg_rating": round(sum(stats["ratings"]) / len(stats["ratings"]), 2),
-            "avg_reviews": round(sum(stats["reviews"]) / len(stats["reviews"])),
-            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
-        })
-    form_summary.sort(key=lambda x: x["count"], reverse=True)
-
-    matrix_data = {}
-    for tier in ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]:
-        matrix_data[tier] = dict(matrix[tier].most_common())
-
-    return {"matrix": matrix_data, "form_summary": form_summary}
-
-
 def analyze_brand_positioning(
     products: list[WeightedProduct],
     details: list[ProductDetail],
@@ -320,7 +238,6 @@ def detect_rising_products(
             continue
         d = detail_map.get(p.asin)
         brand = d.brand if d and d.brand else "Unknown"
-        form = _get_item_form(d, p.title) if d else ""
         ingredients_top3 = ", ".join(
             ing.common_name or ing.name for ing in p.ingredients[:3]
         )
@@ -332,7 +249,6 @@ def detect_rising_products(
             "reviews": p.reviews,
             "rating": p.rating,
             "bsr": p.bsr_category,
-            "form": form,
             "top_ingredients": ingredients_top3,
         })
 
@@ -533,7 +449,6 @@ def build_market_analysis(
         "bsr_analysis": analyze_by_bsr(weighted_products),
         "brand_analysis": analyze_by_brand(weighted_products, details),
         "cooccurrence_analysis": analyze_cooccurrence(weighted_products),
-        "form_price_matrix": analyze_form_by_price(weighted_products, details),
         "brand_positioning": analyze_brand_positioning(weighted_products, details),
         "rising_products": detect_rising_products(weighted_products, details),
         "rating_ingredients": analyze_rating_ingredients(weighted_products),

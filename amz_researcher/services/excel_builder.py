@@ -30,7 +30,6 @@ TAB_COLORS = {
     "Raw - Search Results": "FF6B35",
     "Raw - Product Detail": "9B59B6",
     "Rising Products": "00BCD4",
-    "Form × Price": "FF9800",
     "Market Insight": "E91E63",
 }
 
@@ -343,7 +342,7 @@ def _build_rising_products(wb: Workbook, rising: list[dict]):
     ws = wb.create_sheet("Rising Products")
     ws.sheet_properties.tabColor = TAB_COLORS["Rising Products"]
 
-    col_count = 9
+    col_count = 8
     _write_title(
         ws,
         "Rising Products — Low Reviews, High BSR",
@@ -353,7 +352,7 @@ def _build_rising_products(wb: Workbook, rising: list[dict]):
 
     headers = [
         "BSR", "Brand", "Title", "Price", "Reviews",
-        "Rating", "Form", "Top Ingredients", "ASIN",
+        "Rating", "Top Ingredients", "ASIN",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=4, column=c, value=h)
@@ -368,76 +367,15 @@ def _build_rising_products(wb: Workbook, rising: list[dict]):
             ws.cell(row=row, column=4, value=p["price"]).number_format = "$#,##0.00"
         ws.cell(row=row, column=5, value=p["reviews"]).number_format = "#,##0"
         ws.cell(row=row, column=6, value=p["rating"])
-        ws.cell(row=row, column=7, value=p["form"])
-        ws.cell(row=row, column=8, value=p["top_ingredients"])
-        ws.cell(row=row, column=9, value=p["asin"])
+        ws.cell(row=row, column=7, value=p["top_ingredients"])
+        ws.cell(row=row, column=8, value=p["asin"])
 
     end_row = 4 + len(rising)
     _style_data_rows(ws, 5, end_row, col_count)
     ws.freeze_panes = "A5"
     _set_column_widths(ws, {
         "A": 10, "B": 18, "C": 50, "D": 10, "E": 10,
-        "F": 8, "G": 12, "H": 40, "I": 14,
-    })
-
-
-def _build_form_price(wb: Workbook, form_data: dict):
-    ws = wb.create_sheet("Form × Price")
-    ws.sheet_properties.tabColor = TAB_COLORS["Form × Price"]
-
-    # Part 1: Form Summary
-    form_summary = form_data.get("form_summary", [])
-    col_count = 6
-    _write_title(
-        ws, "Product Form Analysis",
-        "제형(Oil, Serum, Cream 등)별 평균 가격/평점/BSR 비교. 매트릭스에서 빈 칸 = 미개척 시장 기회.",
-        col_count,
-    )
-
-    headers = ["Form", "Count", "Avg Price", "Avg Rating", "Avg Reviews", "Avg BSR"]
-    for c, h in enumerate(headers, 1):
-        ws.cell(row=4, column=c, value=h)
-    _style_header_row(ws, 4, col_count)
-
-    for i, f in enumerate(form_summary):
-        row = 5 + i
-        ws.cell(row=row, column=1, value=f["form"])
-        ws.cell(row=row, column=2, value=f["count"])
-        if f["avg_price"] is not None:
-            ws.cell(row=row, column=3, value=f["avg_price"]).number_format = "$#,##0.00"
-        ws.cell(row=row, column=4, value=f["avg_rating"])
-        ws.cell(row=row, column=5, value=f["avg_reviews"]).number_format = "#,##0"
-        if f["avg_bsr"] is not None:
-            ws.cell(row=row, column=6, value=f["avg_bsr"]).number_format = "#,##0"
-
-    end_row = 4 + len(form_summary)
-    _style_data_rows(ws, 5, end_row, col_count)
-
-    # Part 2: Price × Form Matrix
-    matrix = form_data.get("matrix", {})
-    matrix_start = end_row + 3
-    ws.cell(row=matrix_start, column=1, value="Price Tier × Form Matrix").font = TITLE_FONT
-
-    all_forms = sorted({
-        form for tier_data in matrix.values() for form in tier_data
-    })
-    for c, form in enumerate(all_forms, 2):
-        ws.cell(row=matrix_start + 1, column=c, value=form)
-    ws.cell(row=matrix_start + 1, column=1, value="Price Tier")
-    _style_header_row(ws, matrix_start + 1, len(all_forms) + 1)
-
-    for i, tier in enumerate(["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]):
-        row = matrix_start + 2 + i
-        ws.cell(row=row, column=1, value=tier)
-        tier_data = matrix.get(tier, {})
-        for c, form in enumerate(all_forms, 2):
-            count = tier_data.get(form, 0)
-            ws.cell(row=row, column=c, value=count if count else "")
-
-    _style_data_rows(ws, matrix_start + 2, matrix_start + 5, len(all_forms) + 1)
-    ws.freeze_panes = "A5"
-    _set_column_widths(ws, {
-        "A": 20, "B": 14, "C": 14, "D": 12, "E": 14, "F": 12,
+        "F": 8, "G": 40, "H": 14,
     })
 
 
@@ -483,7 +421,6 @@ def build_excel(
     details: list[ProductDetail],
     market_report: str = "",
     rising_products: list[dict] | None = None,
-    form_price_data: dict | None = None,
 ) -> bytes:
     wb = Workbook()
 
@@ -492,8 +429,6 @@ def build_excel(
     _build_product_detail(wb, weighted_products)
     if rising_products:
         _build_rising_products(wb, rising_products)
-    if form_price_data:
-        _build_form_price(wb, form_price_data)
     _build_raw_search(wb, keyword, search_products)
     _build_raw_detail(wb, details)
     if market_report:

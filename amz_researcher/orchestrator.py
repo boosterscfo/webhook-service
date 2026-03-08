@@ -26,9 +26,9 @@ def _extract_action_items_section(report_md: str) -> str:
     """시장 리포트 마크다운에서 '7. 액션 아이템' 섹션만 추출 (다음 8. 또는 ## 전까지)."""
     if not report_md or not report_md.strip():
         return ""
-    # "7. **액션 아이템 (Action Items)**" 또는 "## 7." 형식 → 다음 "8." / "## 8" / 끝까지
+    # "6. **액션 아이템 (Action Items)**" 또는 "## 6." 형식 → 다음 "7." / "## 7" / 끝까지
     m = re.search(
-        r"(?:^|\n)(?:##\s*)?7\.\s*(?:\*\*)?(?:제품\s*기획\s*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?8\.|\n##\s|\Z)",
+        r"(?:^|\n)(?:##\s*)?6\.\s*(?:\*\*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?7\.|\n##\s|\Z)",
         report_md,
         re.DOTALL | re.IGNORECASE,
     )
@@ -285,7 +285,6 @@ async def run_research(
             search_products, all_details,
             market_report=market_report,
             rising_products=analysis_data.get("rising_products"),
-            form_price_data=analysis_data.get("form_price_matrix"),
         )
 
         # Step 7: Summary message (Block Kit)
@@ -497,7 +496,6 @@ async def run_analysis(
             search_products, all_details,
             market_report=market_report,
             rising_products=analysis_data.get("rising_products"),
-            form_price_data=analysis_data.get("form_price_matrix"),
         )
 
         # Step 6: Slack 요약
