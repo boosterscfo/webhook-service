@@ -33,6 +33,40 @@ class ProductDetail(BaseModel):
     product_url: str = ""
 
 
+class BrightDataProduct(BaseModel):
+    """Bright Data 기반 제품 모델. V3의 SearchProduct + ProductDetail 통합."""
+    asin: str
+    title: str = ""
+    brand: str = ""
+    description: str = ""
+    initial_price: float | None = None
+    final_price: float | None = None
+    currency: str = "USD"
+    rating: float = 0.0
+    reviews_count: int = 0
+    bs_rank: int | None = None
+    bs_category: str = ""
+    root_bs_rank: int | None = None
+    root_bs_category: str = ""
+    subcategory_ranks: list[dict] = []
+    ingredients: str = ""
+    features: list[str] = []
+    manufacturer: str = ""
+    department: str = ""
+    image_url: str = ""
+    url: str = ""
+    badge: str = ""
+    bought_past_month: int | None = None
+    categories: list[str] = []
+    customer_says: str = ""
+    unit_price: str = ""
+    sns_price: float | None = None
+    variations_count: int = 0
+    number_of_sellers: int = 1
+    coupon: str = ""
+    plus_content: bool = False
+
+
 class Ingredient(BaseModel):
     name: str  # INCI 학명 또는 원본 성분명
     common_name: str = ""  # 핵심 성분명 (마케팅용 일반명)
