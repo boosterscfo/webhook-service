@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     AMZ_DETAIL_ROBOT_ID: str = ""
     AMZ_ADMIN_SLACK_ID: str = ""
 
+    # Bright Data
+    BRIGHT_DATA_API_TOKEN: str = ""
+    BRIGHT_DATA_DATASET_ID: str = "gd_l7q7dkf244hwjntr0"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
