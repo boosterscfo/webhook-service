@@ -284,13 +284,19 @@ class AmzCacheService:
     # ── Ingredient Cache (Gemini) ────────────────────
 
     def get_ingredient_cache(self, asins: list[str]) -> dict[str, list[Ingredient]]:
-        """Gemini 추출 성분 캐시 조회. {asin: [Ingredient]} 반환."""
+        """Gemini 추출 성분 캐시 조회. {asin: [Ingredient]} 반환.
+
+        제품 데이터가 캐시 이후 업데이트된 ASIN은 제외 (재추출 유도).
+        """
         if not asins:
             return {}
         placeholders = ",".join(["%s"] * len(asins))
         query = (
-            f"SELECT asin, ingredient_name, common_name, category "
-            f"FROM amz_ingredient_cache WHERE asin IN ({placeholders})"
+            f"SELECT ic.asin, ic.ingredient_name, ic.common_name, "
+            f"ic.category, ic.extracted_at, p.updated_at "
+            f"FROM amz_ingredient_cache ic "
+            f"LEFT JOIN amz_products p ON ic.asin = p.asin "
+            f"WHERE ic.asin IN ({placeholders})"
         )
         try:
             with MysqlConnector(self._env) as conn:
@@ -300,9 +306,24 @@ class AmzCacheService:
             return {}
         if df.empty:
             return {}
+
+        # 제품 updated_at > 캐시 extracted_at이면 stale → 제외
+        stale_asins: set[str] = set()
+        for _, row in df.iterrows():
+            extracted = row.get("extracted_at")
+            updated = row.get("updated_at")
+            if extracted is not None and updated is not None:
+                if pd.Timestamp(updated) > pd.Timestamp(extracted):
+                    stale_asins.add(row["asin"])
+
+        if stale_asins:
+            logger.info("Ingredient cache stale for %d ASINs, will re-extract", len(stale_asins))
+
         result: dict[str, list[Ingredient]] = {}
         for _, row in df.iterrows():
             asin = row["asin"]
+            if asin in stale_asins:
+                continue
             if asin not in result:
                 result[asin] = []
             if row["ingredient_name"] != "_NONE_":
@@ -403,11 +424,39 @@ class AmzCacheService:
 
     # ── Market Report Cache ──────────────────────────
 
+    def _get_data_freshness(self, category_name: str) -> datetime | None:
+        """카테고리 제품의 최신 updated_at 조회.
+
+        category_name으로 amz_categories → amz_product_categories → amz_products 조인.
+        """
+        query = """
+            SELECT MAX(p.updated_at) as latest
+            FROM amz_products p
+            JOIN amz_product_categories pc ON p.asin = pc.asin
+            JOIN amz_categories c ON pc.category_node_id = c.node_id
+            WHERE c.name = %s
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (category_name,))
+            if df.empty or df.iloc[0]["latest"] is None:
+                return None
+            return pd.Timestamp(df.iloc[0]["latest"]).to_pydatetime()
+        except Exception:
+            logger.exception("Failed to get data freshness for %s", category_name)
+            return None
+
     def get_market_report_cache(self, keyword: str, product_count: int) -> str | None:
-        """시장 리포트 캐시 조회. 제품 수가 같을 때만 반환."""
+        """시장 리포트 캐시 조회.
+
+        무효화 조건:
+        - TTL 30일 초과
+        - 제품 수가 다름
+        - 캐시 생성 이후 제품 데이터가 업데이트됨
+        """
         cutoff = datetime.now() - timedelta(days=CACHE_TTL_DAYS)
         query = (
-            "SELECT report_md FROM amz_market_report_cache "
+            "SELECT report_md, generated_at FROM amz_market_report_cache "
             "WHERE keyword = %s AND product_count = %s AND generated_at >= %s"
         )
         try:
@@ -415,6 +464,19 @@ class AmzCacheService:
                 df = conn.read_query_table(query, (keyword, product_count, cutoff))
             if df.empty:
                 return None
+
+            generated_at = pd.Timestamp(df.iloc[0]["generated_at"]).to_pydatetime()
+
+            # 데이터 freshness 체크: 제품이 캐시 이후에 업데이트되었으면 무효화
+            data_updated = self._get_data_freshness(keyword)
+            if data_updated and data_updated > generated_at:
+                logger.info(
+                    "Market report cache stale: keyword=%s, "
+                    "cached=%s, data_updated=%s",
+                    keyword, generated_at, data_updated,
+                )
+                return None
+
             return df.iloc[0]["report_md"]
         except Exception:
             logger.exception("Failed to read market report cache")
