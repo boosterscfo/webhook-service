@@ -329,6 +329,8 @@ async def run_research(
 
 def _parse_db_row(row: dict) -> dict:
     """DB 조회 결과(dict)를 BrightDataProduct 생성자 인자로 변환."""
+    import math
+
     result = dict(row)
     # JSON 문자열 → Python 객체
     for field in ("features", "categories", "subcategory_ranks", "product_details"):
@@ -338,6 +340,10 @@ def _parse_db_row(row: dict) -> dict:
                 result[field] = json.loads(val)
             except (json.JSONDecodeError, TypeError):
                 result[field] = []
+    # pandas NaN → None 변환
+    for key, val in result.items():
+        if isinstance(val, float) and math.isnan(val):
+            result[key] = None
     return result
 
 
