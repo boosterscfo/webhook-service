@@ -1,9 +1,9 @@
 """주간 배치 수집 엔트리포인트.
 
 Usage:
-    python -m amz_researcher.jobs.collect                  # 전체 활성 카테고리
+    python -m amz_researcher.jobs.collect                  # 전체 활성 카테고리 (async, webhook 수신)
     python -m amz_researcher.jobs.collect 11058281          # 특정 카테고리만
-    python -m amz_researcher.jobs.collect 11058281 3591081  # 여러 카테고리
+    python -m amz_researcher.jobs.collect --sync             # 동기 polling 방식 (fallback)
 """
 import asyncio
 import logging
@@ -18,10 +18,16 @@ from lib.mysql_connector import MysqlConnector
 logger = logging.getLogger(__name__)
 
 
-async def run_collection(category_node_ids: list[str] | None = None):
-    """카테고리별 BSR Top 100 수집 → DB 적재."""
+async def run_collection(
+    category_node_ids: list[str] | None = None,
+    sync_mode: bool = False,
+):
+    """카테고리별 BSR Top 100 수집.
+
+    Args:
+        sync_mode: True면 polling으로 대기. False면 trigger만 보내고 종료 (webhook 수신).
+    """
     product_db = ProductDBService("CFO")
-    collector = DataCollector("CFO")
     bright_data = BrightDataService(
         api_token=settings.BRIGHT_DATA_API_TOKEN,
         dataset_id=settings.BRIGHT_DATA_DATASET_ID,
@@ -47,10 +53,23 @@ async def run_collection(category_node_ids: list[str] | None = None):
             logger.warning("No active categories to collect")
             return
 
-        logger.info("Starting collection for %d categories: %s", len(urls), urls)
-        products = await bright_data.collect_categories(urls)
-        count = collector.process_snapshot(products)
-        logger.info("Collection complete: %d products processed", count)
+        if sync_mode:
+            # Polling 방식: trigger → poll → DB 적재
+            logger.info("Starting SYNC collection for %d categories", len(urls))
+            products = await bright_data.collect_categories(urls)
+            collector = DataCollector("CFO")
+            count = collector.process_snapshot(products)
+            logger.info("Collection complete: %d products processed", count)
+        else:
+            # Async 방식: trigger만 보내고 종료 (webhook으로 수신)
+            notify_url = f"{settings.WEBHOOK_BASE_URL}/webhook/brightdata"
+            snapshot_id = await bright_data.trigger_collection(
+                urls, notify_url=notify_url,
+            )
+            logger.info(
+                "Collection triggered (async): snapshot_id=%s, %d categories, notify=%s",
+                snapshot_id, len(urls), notify_url,
+            )
 
     except (BrightDataError, TimeoutError) as e:
         logger.error("Collection failed: %s", e)
@@ -65,5 +84,7 @@ if __name__ == "__main__":
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
-    node_ids = sys.argv[1:] if len(sys.argv) > 1 else None
-    asyncio.run(run_collection(node_ids))
+    args = sys.argv[1:]
+    sync_mode = "--sync" in args
+    node_ids = [a for a in args if not a.startswith("--")] or None
+    asyncio.run(run_collection(node_ids, sync_mode=sync_mode))

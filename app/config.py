@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     # Bright Data
     BRIGHT_DATA_API_TOKEN: str = ""
     BRIGHT_DATA_DATASET_ID: str = "gd_l7q7dkf244hwjntr0"
+    WEBHOOK_BASE_URL: str = ""  # e.g. https://hooks.example.com
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

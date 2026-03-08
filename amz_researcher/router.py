@@ -1,7 +1,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Form
+from fastapi import APIRouter, BackgroundTasks, Form, Request
 from pydantic import BaseModel
 
 from amz_researcher.orchestrator import run_analysis, run_research
@@ -175,6 +175,69 @@ async def research_test(
 
 
 async def _run_manual_collection():
-    """수동 수집 트리거 (Slack /amz refresh용)."""
-    from amz_researcher.jobs.collect import run_collection
-    await run_collection()
+    """수동 수집 트리거 — trigger만 보내고 종료 (webhook으로 수신)."""
+    bright_data = BrightDataService(
+        api_token=settings.BRIGHT_DATA_API_TOKEN,
+        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+    )
+    product_db = ProductDBService("CFO")
+    try:
+        urls = product_db.get_all_active_category_urls()
+        if not urls:
+            logger.warning("No active categories to collect")
+            return
+
+        notify_url = f"{settings.WEBHOOK_BASE_URL}/webhook/brightdata"
+        snapshot_id = await bright_data.trigger_collection(
+            urls, notify_url=notify_url,
+        )
+        logger.info(
+            "Collection triggered (async): snapshot_id=%s, %d categories, notify=%s",
+            snapshot_id, len(urls), notify_url,
+        )
+    except Exception:
+        logger.exception("Manual collection trigger failed")
+    finally:
+        await bright_data.close()
+
+
+# ── Bright Data 웹훅 콜백 ────────────────────────────────
+
+@router.post("/webhook/brightdata")
+async def brightdata_webhook(
+    background_tasks: BackgroundTasks,
+    request: Request,
+):
+    """Bright Data 수집 완료 콜백. snapshot_id를 받아 데이터를 fetch → DB 적재."""
+    body = await request.json()
+    snapshot_id = body.get("snapshot_id")
+    status = body.get("status")
+
+    if not snapshot_id:
+        logger.warning("Bright Data webhook: no snapshot_id in body: %s", body)
+        return {"status": "ignored", "reason": "no snapshot_id"}
+
+    if status and status != "ready":
+        logger.info("Bright Data webhook: snapshot %s status=%s (not ready)", snapshot_id, status)
+        return {"status": "ignored", "reason": f"status={status}"}
+
+    logger.info("Bright Data webhook: snapshot %s ready, starting ingestion", snapshot_id)
+    background_tasks.add_task(_ingest_snapshot, snapshot_id)
+    return {"status": "accepted", "snapshot_id": snapshot_id}
+
+
+async def _ingest_snapshot(snapshot_id: str):
+    """Bright Data 스냅샷 fetch → DB 적재."""
+    bright_data = BrightDataService(
+        api_token=settings.BRIGHT_DATA_API_TOKEN,
+        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+    )
+    collector = DataCollector("CFO")
+    try:
+        products = await bright_data.fetch_snapshot(snapshot_id)
+        count = collector.process_snapshot(products)
+        logger.info("Webhook ingestion complete: snapshot=%s, %d products", snapshot_id, count)
+    except Exception:
+        logger.exception("Webhook ingestion failed: snapshot=%s", snapshot_id)
+    finally:
+        await bright_data.close()

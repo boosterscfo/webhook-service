@@ -20,9 +20,16 @@ class BrightDataService:
         self.client = httpx.AsyncClient(timeout=60.0)
 
     async def trigger_collection(
-        self, category_urls: list[str], limit_per_input: int = 100,
+        self,
+        category_urls: list[str],
+        limit_per_input: int = 100,
+        notify_url: str = "",
     ) -> str:
-        """수집 트리거 → snapshot_id 반환."""
+        """수집 트리거 → snapshot_id 반환.
+
+        Args:
+            notify_url: 설정 시 Bright Data가 완료 후 이 URL로 POST 콜백.
+        """
         url = (
             f"{self.base_url}/trigger"
             f"?dataset_id={self.dataset_id}"
@@ -30,6 +37,9 @@ class BrightDataService:
             f"&discover_by=best_sellers_url"
             f"&limit_per_input={limit_per_input}"
         )
+        if notify_url:
+            url += f"&notify={notify_url}"
+
         body = [{"category_url": cat_url} for cat_url in category_urls]
 
         resp = await self.client.post(url, headers=self._headers(), json=body)
@@ -42,12 +52,29 @@ class BrightDataService:
             raise BrightDataError(f"No snapshot_id in response: {data}")
         return snapshot_id
 
+    async def fetch_snapshot(self, snapshot_id: str) -> list[dict]:
+        """완료된 스냅샷 데이터를 가져온다."""
+        url = f"{self.base_url}/snapshot/{snapshot_id}?format=json"
+        resp = await self.client.get(url, headers=self._headers())
+
+        if resp.status_code == 200:
+            data = resp.json()
+            logger.info("Snapshot %s fetched: %d products", snapshot_id, len(data))
+            return data
+
+        if resp.status_code == 202:
+            raise BrightDataError(f"Snapshot {snapshot_id} not ready yet")
+
+        raise BrightDataError(
+            f"Fetch failed: {resp.status_code} {resp.text[:300]}"
+        )
+
     async def poll_snapshot(
         self, snapshot_id: str,
         poll_interval: int = 10,
-        max_attempts: int = 30,
+        max_attempts: int = 60,
     ) -> list[dict]:
-        """스냅샷 결과 폴링. 완료 시 JSON 배열 반환."""
+        """스냅샷 결과 폴링 (fallback용). 완료 시 JSON 배열 반환."""
         url = f"{self.base_url}/snapshot/{snapshot_id}?format=json"
 
         for attempt in range(max_attempts):
@@ -71,7 +98,7 @@ class BrightDataService:
     async def collect_categories(
         self, category_urls: list[str], limit_per_input: int = 100,
     ) -> list[dict]:
-        """trigger + poll 한번에 수행."""
+        """trigger + poll 한번에 수행 (동기 방식 fallback)."""
         snapshot_id = await self.trigger_collection(category_urls, limit_per_input)
         logger.info("Collection triggered: snapshot_id=%s, %d categories", snapshot_id, len(category_urls))
         return await self.poll_snapshot(snapshot_id)
