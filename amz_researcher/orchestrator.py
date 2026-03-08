@@ -345,13 +345,34 @@ def _parse_db_row(row: dict) -> dict:
     return result
 
 
-def _product_details_to_dict(product_details: list[dict]) -> dict:
-    """Bright Data product_details [{type, value}] → dict 변환."""
-    return {
-        item.get("type", ""): item.get("value", "")
-        for item in product_details
-        if item.get("type")
-    }
+# product_details에서 measurements로 분류할 키
+_MEASUREMENT_KEYS = {
+    "Product Dimensions", "Package Dimensions", "Item Weight",
+    "Item Dimensions LxWxH", "Units",
+}
+
+
+def _product_details_to_dicts(
+    product_details: list[dict],
+) -> tuple[dict, dict, dict]:
+    """Bright Data product_details [{type, value}] → (features, measurements, additional) 분리."""
+    features: dict = {}
+    measurements: dict = {}
+    additional: dict = {}
+    # 메타/중복 키는 additional로
+    _META_KEYS = {"ASIN", "Best Sellers Rank", "Customer Reviews", "Manufacturer"}
+    for item in product_details:
+        key = item.get("type", "")
+        val = item.get("value", "")
+        if not key:
+            continue
+        if key in _MEASUREMENT_KEYS:
+            measurements[key] = val
+        elif key in _META_KEYS:
+            additional[key] = val
+        else:
+            features[key] = val
+    return features, measurements, additional
 
 
 def _adapt_for_analyzer(
@@ -361,27 +382,43 @@ def _adapt_for_analyzer(
     search_products = []
     details = []
     for i, p in enumerate(products):
+        price_str = f"${p.final_price:.2f}" if p.final_price is not None else ""
         search_products.append(SearchProduct(
             position=i + 1,
             title=p.title,
             asin=p.asin,
             price=p.final_price,
+            price_raw=price_str,
             reviews=p.reviews_count,
+            reviews_raw=str(p.reviews_count) if p.reviews_count else "",
             rating=p.rating,
+            product_link=p.url,
             bought_past_month=p.bought_past_month,
         ))
-        # product_details [{type, value}] → dict for features
-        features_dict = _product_details_to_dict(p.product_details)
+        # product_details [{type, value}] → features/measurements/additional 분리
+        features_dict, meas_dict, add_dict = _product_details_to_dicts(p.product_details)
+        # subcategory_ranks에서 첫 번째 서브카테고리 추출
+        sub_rank = None
+        sub_name = ""
+        if p.subcategory_ranks:
+            first_sub = p.subcategory_ranks[0]
+            sub_rank = first_sub.get("subcategory_rank")
+            sub_name = first_sub.get("subcategory_name", "")
         details.append(ProductDetail(
             asin=p.asin,
             ingredients_raw=p.ingredients,
             features=features_dict,
+            measurements=meas_dict,
+            additional_details=add_dict,
             bsr_category=p.bs_rank,
             bsr_category_name=p.bs_category,
+            bsr_subcategory=sub_rank,
+            bsr_subcategory_name=sub_name,
             rating=p.rating,
             review_count=p.reviews_count,
             brand=p.brand,
             manufacturer=p.manufacturer,
+            product_url=p.url,
         ))
     return search_products, details
 

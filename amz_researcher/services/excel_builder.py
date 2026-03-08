@@ -391,7 +391,7 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     _write_title(
         ws,
         f"{keyword.title()} Market Insight — AI Analysis Report",
-        "Powered by Gemini | Data-driven product planning insights",
+        "Powered by Gemini | Data-driven market insights",
         col_count,
     )
 
