@@ -23,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_action_items_section(report_md: str) -> str:
-    """시장 리포트 마크다운에서 '7. 제품 기획 액션 아이템' 섹션만 추출 (다음 8. 또는 ## 전까지)."""
+    """시장 리포트 마크다운에서 '7. 액션 아이템' 섹션만 추출 (다음 8. 또는 ## 전까지)."""
     if not report_md or not report_md.strip():
         return ""
-    # "7. **제품 기획 액션 아이템 (Action Items)**" 또는 "## 7." 형식 → 다음 "8." / "## 8" / 끝까지
+    # "7. **액션 아이템 (Action Items)**" 또는 "## 7." 형식 → 다음 "8." / "## 8" / 끝까지
     m = re.search(
-        r"(?:^|\n)(?:##\s*)?7\.\s*(?:\*\*)?(?:제품\s*기획\s*액션\s*아이템|액션\s*아이템).*?\n(.*?)(?=\n(?:##\s*)?8\.|\n##\s|\Z)",
+        r"(?:^|\n)(?:##\s*)?7\.\s*(?:\*\*)?(?:제품\s*기획\s*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?8\.|\n##\s|\Z)",
         report_md,
         re.DOTALL | re.IGNORECASE,
     )
@@ -104,7 +104,7 @@ def _build_summary_blocks(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*제품 기획 액션 아이템*\n{action_md}",
+                "text": f"*액션 아이템*\n{action_md}",
             },
         })
     blocks.append({
