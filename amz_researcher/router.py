@@ -65,7 +65,51 @@ async def slack_amz(
     if not parts:
         return {
             "response_type": "ephemeral",
-            "text": "사용법:\n• `/amz {키워드}` — 카테고리 검색 → 분석\n• `/amz list` — 카테고리 목록\n• `/amz add {이름} {URL}` — 카테고리 추가\n• `/amz refresh` — 수동 데이터 수집",
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": "Amazon BSR Analyzer"},
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "Amazon Best Sellers 카테고리별 Top 100 제품을 분석하여\n"
+                            "성분 트렌드, 시장 인사이트, 브랜드 포지셔닝 리포트를 생성합니다."
+                        ),
+                    },
+                },
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "*📊 분석*\n"
+                            "`/amz {키워드}` — 카테고리 검색 후 분석 실행\n"
+                            "  예: `/amz serum`, `/amz sunscreen`\n\n"
+                            "*📋 카테고리 관리*\n"
+                            "`/amz list` — 등록된 카테고리 목록\n"
+                            "`/amz add {이름} {URL}` — 새 카테고리 추가\n"
+                            "  예: `/amz add Hair Oils https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281`\n\n"
+                            "*🔄 데이터 수집*\n"
+                            "`/amz refresh` — 전체 카테고리 수동 수집 트리거\n"
+                            "  Bright Data에서 BSR Top 100을 새로 수집합니다."
+                        ),
+                    },
+                },
+                {"type": "divider"},
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "💡 데이터가 업데이트되면 리포트가 자동 갱신됩니다 | Powered by Bright Data + Gemini",
+                        },
+                    ],
+                },
+            ],
         }
 
     subcommand = parts[0].lower()
