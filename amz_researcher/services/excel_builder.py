@@ -184,7 +184,7 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws = wb.create_sheet("Product Detail")
     ws.sheet_properties.tabColor = TAB_COLORS["Product Detail"]
 
-    col_count = 10
+    col_count = 17
     _write_title(
         ws,
         "Product-Level Data with Weight Breakdown",
@@ -193,17 +193,18 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     )
 
     desc = (
-        "Composite Weight: Position(20%)+Reviews(25%)+Rating(15%)+BSR(40%) 종합 점수. "
-        "BSR(Category): Amazon 전체 카테고리 베스트셀러 순위 (낮을수록 잘 팔림). "
-        "BSR(Sub): 서브카테고리 순위."
+        "Composite Weight: BoughtPastMonth(30%)+BSR(25%)+Reviews(20%)+Position(15%)+Rating(10%) 종합 점수. "
+        "BSR(Category): Amazon 전체 카테고리 베스트셀러 순위 (낮을수록 잘 팔림)."
     )
     desc_cell = ws.cell(row=3, column=1, value=desc)
     desc_cell.font = Font(name="Arial", size=9, italic=True, color="666666")
     ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
 
     headers = [
-        "ASIN", "Title", "Position", "Price", "Reviews",
-        "Rating", "BSR (Category)", "BSR (Sub)", "Composite Weight", "Ingredients Found",
+        "ASIN", "Brand", "Title", "Price", "SNS Price",
+        "Bought/Mo", "Reviews", "Rating", "BSR",
+        "Weight", "Unit Price", "Sellers", "Coupon",
+        "A+", "Customer Says", "Ingredients Found", "URL",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=4, column=c, value=h)
@@ -213,25 +214,35 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         row = 5 + i
         ingredients_str = ", ".join(ing.name for ing in p.ingredients)
         ws.cell(row=row, column=1, value=p.asin)
-        ws.cell(row=row, column=2, value=p.title)
-        ws.cell(row=row, column=3, value=p.position)
+        ws.cell(row=row, column=2, value=p.brand)
+        ws.cell(row=row, column=3, value=p.title)
         if p.price is not None:
             ws.cell(row=row, column=4, value=p.price).number_format = "$#,##0.00"
-        ws.cell(row=row, column=5, value=p.reviews).number_format = "#,##0"
-        ws.cell(row=row, column=6, value=p.rating)
+        if p.sns_price is not None:
+            ws.cell(row=row, column=5, value=p.sns_price).number_format = "$#,##0.00"
+        if p.bought_past_month is not None:
+            ws.cell(row=row, column=6, value=p.bought_past_month).number_format = "#,##0"
+        ws.cell(row=row, column=7, value=p.reviews).number_format = "#,##0"
+        ws.cell(row=row, column=8, value=p.rating)
         if p.bsr_category is not None:
-            ws.cell(row=row, column=7, value=p.bsr_category).number_format = "#,##0"
-        if p.bsr_subcategory is not None:
-            ws.cell(row=row, column=8, value=p.bsr_subcategory).number_format = "#,##0"
-        ws.cell(row=row, column=9, value=p.composite_weight).number_format = "0.000"
-        ws.cell(row=row, column=10, value=ingredients_str)
+            ws.cell(row=row, column=9, value=p.bsr_category).number_format = "#,##0"
+        ws.cell(row=row, column=10, value=p.composite_weight).number_format = "0.000"
+        ws.cell(row=row, column=11, value=p.unit_price)
+        ws.cell(row=row, column=12, value=p.number_of_sellers)
+        ws.cell(row=row, column=13, value=p.coupon)
+        ws.cell(row=row, column=14, value="Y" if p.plus_content else "")
+        cs_cell = ws.cell(row=row, column=15, value=p.customer_says)
+        cs_cell.alignment = WRAP_ALIGN
+        ws.cell(row=row, column=16, value=ingredients_str)
 
     end_row = 4 + len(products)
     _style_data_rows(ws, 5, end_row, col_count)
     ws.freeze_panes = "A5"
     _set_column_widths(ws, {
-        "A": 14, "B": 50, "C": 10, "D": 10, "E": 10,
-        "F": 8, "G": 14, "H": 10, "I": 16, "J": 50,
+        "A": 14, "B": 16, "C": 45, "D": 10, "E": 10,
+        "F": 12, "G": 10, "H": 8, "I": 10,
+        "J": 10, "K": 16, "L": 8, "M": 14,
+        "N": 5, "O": 40, "P": 45, "Q": 14,
     })
 
 
@@ -479,6 +490,10 @@ def _build_analysis_data(wb: Workbook, analysis_data: dict):
         ("brand_positioning", "Brand Positioning"),
         ("rising_products", "Rising Products"),
         ("rating_ingredients", "Rating vs Ingredients"),
+        ("sales_volume", "Monthly Sales Volume"),
+        ("sns_pricing", "Subscribe & Save Pricing"),
+        ("competition", "Seller Competition"),
+        ("promotions", "Coupons & A+ Content"),
     ]
 
     _write_title(

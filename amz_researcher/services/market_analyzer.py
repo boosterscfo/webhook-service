@@ -25,6 +25,14 @@ def _price_tier(price: float | None) -> str:
     return "Luxury ($50+)"
 
 
+def _get_item_form(detail: ProductDetail) -> str:
+    """ProductDetail에서 Item Form 추출. features가 dict/list 어느 형태든 처리."""
+    features = detail.features or {}
+    if isinstance(features, dict):
+        return (features.get("Item Form") or "").strip().capitalize()
+    return ""
+
+
 def analyze_by_price_tier(
     products: list[WeightedProduct],
 ) -> dict:
@@ -190,8 +198,7 @@ def analyze_form_by_price(
         d = detail_map.get(p.asin)
         if not d:
             continue
-        features = d.features or {}
-        form = (features.get("Item Form") or "Unknown").strip().capitalize()
+        form = _get_item_form(d) or "Unknown"
         tier = _price_tier(p.price)
         matrix[tier][form] += 1
         stats = form_stats[form]
@@ -286,9 +293,7 @@ def detect_rising_products(
             continue
         d = detail_map.get(p.asin)
         brand = d.brand if d and d.brand else "Unknown"
-        form = ""
-        if d and d.features:
-            form = d.features.get("Item Form", "")
+        form = _get_item_form(d) if d else ""
         ingredients_top3 = ", ".join(
             ing.common_name or ing.name for ing in p.ingredients[:3]
         )
@@ -354,6 +359,140 @@ def analyze_rating_ingredients(
     }
 
 
+# ── V4 신규 분석 ──────────────────────────────────────────
+
+
+def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
+    """Subscribe & Save 할인 분석."""
+    with_sns = [p for p in products if p.sns_price is not None and p.price]
+    without_sns = [p for p in products if p.sns_price is None]
+
+    discounts = []
+    for p in with_sns:
+        discount_pct = (1 - p.sns_price / p.price) * 100 if p.price > 0 else 0
+        discounts.append({
+            "asin": p.asin,
+            "title": p.title[:60],
+            "price": p.price,
+            "sns_price": p.sns_price,
+            "discount_pct": round(discount_pct, 1),
+        })
+    discounts.sort(key=lambda x: x["discount_pct"], reverse=True)
+
+    avg_discount = (
+        round(sum(d["discount_pct"] for d in discounts) / len(discounts), 1)
+        if discounts else 0
+    )
+
+    return {
+        "total_products": len(products),
+        "with_sns_count": len(with_sns),
+        "without_sns_count": len(without_sns),
+        "sns_adoption_pct": round(len(with_sns) / len(products) * 100, 1) if products else 0,
+        "avg_discount_pct": avg_discount,
+        "top_discounts": discounts[:10],
+    }
+
+
+def analyze_competition(products: list[WeightedProduct]) -> dict:
+    """판매자 수 기반 경쟁 강도 분석."""
+    seller_counts = [p.number_of_sellers for p in products]
+    if not seller_counts:
+        return {}
+
+    single_seller = sum(1 for s in seller_counts if s <= 1)
+    multi_seller = sum(1 for s in seller_counts if s > 1)
+    high_competition = sum(1 for s in seller_counts if s >= 5)
+
+    return {
+        "total_products": len(products),
+        "single_seller_count": single_seller,
+        "multi_seller_count": multi_seller,
+        "high_competition_count": high_competition,
+        "avg_sellers": round(sum(seller_counts) / len(seller_counts), 1),
+        "max_sellers": max(seller_counts),
+    }
+
+
+def analyze_promotions(products: list[WeightedProduct]) -> dict:
+    """쿠폰/프로모션 분석."""
+    with_coupon = [p for p in products if p.coupon]
+    with_plus = [p for p in products if p.plus_content]
+
+    coupon_types: Counter = Counter()
+    for p in with_coupon:
+        coupon_types[p.coupon] += 1
+
+    # 쿠폰 유무에 따른 평균 BSR 비교
+    coupon_bsr = [p.bsr_category for p in with_coupon if p.bsr_category is not None]
+    no_coupon_bsr = [
+        p.bsr_category for p in products
+        if not p.coupon and p.bsr_category is not None
+    ]
+
+    return {
+        "total_products": len(products),
+        "coupon_count": len(with_coupon),
+        "coupon_pct": round(len(with_coupon) / len(products) * 100, 1) if products else 0,
+        "plus_content_count": len(with_plus),
+        "plus_content_pct": round(len(with_plus) / len(products) * 100, 1) if products else 0,
+        "coupon_types": [
+            {"coupon": c, "count": n} for c, n in coupon_types.most_common(10)
+        ],
+        "avg_bsr_with_coupon": (
+            round(sum(coupon_bsr) / len(coupon_bsr)) if coupon_bsr else None
+        ),
+        "avg_bsr_without_coupon": (
+            round(sum(no_coupon_bsr) / len(no_coupon_bsr)) if no_coupon_bsr else None
+        ),
+    }
+
+
+def analyze_sales_volume(products: list[WeightedProduct]) -> dict:
+    """월간 판매량(bought_past_month) 분석."""
+    with_sales = [p for p in products if p.bought_past_month is not None]
+    if not with_sales:
+        return {}
+
+    total_sales = sum(p.bought_past_month for p in with_sales)
+    with_sales.sort(key=lambda p: p.bought_past_month, reverse=True)
+
+    top_sellers = [
+        {
+            "asin": p.asin,
+            "title": p.title[:60],
+            "brand": p.brand,
+            "bought_past_month": p.bought_past_month,
+            "price": p.price,
+            "bsr": p.bsr_category,
+        }
+        for p in with_sales[:10]
+    ]
+
+    # 가격대별 판매량
+    tier_sales: dict[str, list[int]] = defaultdict(list)
+    for p in with_sales:
+        tier = _price_tier(p.price)
+        tier_sales[tier].append(p.bought_past_month)
+
+    tier_summary = {
+        tier: {
+            "count": len(sales),
+            "total_sales": sum(sales),
+            "avg_sales": round(sum(sales) / len(sales)),
+        }
+        for tier, sales in tier_sales.items()
+    }
+
+    return {
+        "total_products_with_data": len(with_sales),
+        "total_monthly_sales": total_sales,
+        "avg_monthly_sales": round(total_sales / len(with_sales)),
+        "top_sellers": top_sellers,
+        "sales_by_price_tier": tier_summary,
+    }
+
+
 def build_market_analysis(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -371,4 +510,9 @@ def build_market_analysis(
         "brand_positioning": analyze_brand_positioning(weighted_products, details),
         "rising_products": detect_rising_products(weighted_products, details),
         "rating_ingredients": analyze_rating_ingredients(weighted_products),
+        # V4 신규 분석
+        "sales_volume": analyze_sales_volume(weighted_products),
+        "sns_pricing": analyze_sns_pricing(weighted_products),
+        "competition": analyze_competition(weighted_products),
+        "promotions": analyze_promotions(weighted_products),
     }

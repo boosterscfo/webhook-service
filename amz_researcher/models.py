@@ -12,6 +12,7 @@ class SearchProduct(BaseModel):
     rating: float = 0.0
     sponsored: bool = False
     product_link: str = ""
+    bought_past_month: int | None = None
 
 
 class ProductDetail(BaseModel):
@@ -51,6 +52,7 @@ class BrightDataProduct(BaseModel):
     subcategory_ranks: list[dict] = []
     ingredients: str = ""
     features: list[str] = []
+    product_details: list[dict] = []
     manufacturer: str = ""
     department: str = ""
     image_url: str = ""
@@ -93,6 +95,15 @@ class WeightedProduct(BaseModel):
     bsr_subcategory: int | None = None
     composite_weight: float = 0.0
     ingredients: list[Ingredient] = []
+    # V4 확장 필드
+    bought_past_month: int | None = None
+    brand: str = ""
+    sns_price: float | None = None
+    unit_price: str = ""
+    number_of_sellers: int = 1
+    coupon: str = ""
+    plus_content: bool = False
+    customer_says: str = ""
 
 
 class IngredientRanking(BaseModel):

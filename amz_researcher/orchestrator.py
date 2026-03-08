@@ -331,7 +331,7 @@ def _parse_db_row(row: dict) -> dict:
     """DB 조회 결과(dict)를 BrightDataProduct 생성자 인자로 변환."""
     result = dict(row)
     # JSON 문자열 → Python 객체
-    for field in ("features", "categories", "subcategory_ranks"):
+    for field in ("features", "categories", "subcategory_ranks", "product_details"):
         val = result.get(field)
         if isinstance(val, str):
             try:
@@ -339,6 +339,15 @@ def _parse_db_row(row: dict) -> dict:
             except (json.JSONDecodeError, TypeError):
                 result[field] = []
     return result
+
+
+def _product_details_to_dict(product_details: list[dict]) -> dict:
+    """Bright Data product_details [{type, value}] → dict 변환."""
+    return {
+        item.get("type", ""): item.get("value", "")
+        for item in product_details
+        if item.get("type")
+    }
 
 
 def _adapt_for_analyzer(
@@ -355,10 +364,14 @@ def _adapt_for_analyzer(
             price=p.final_price,
             reviews=p.reviews_count,
             rating=p.rating,
+            bought_past_month=p.bought_past_month,
         ))
+        # product_details [{type, value}] → dict for features
+        features_dict = _product_details_to_dict(p.product_details)
         details.append(ProductDetail(
             asin=p.asin,
             ingredients_raw=p.ingredients,
+            features=features_dict,
             bsr_category=p.bs_rank,
             bsr_category_name=p.bs_category,
             rating=p.rating,
@@ -448,6 +461,18 @@ async def run_analysis(
         weighted_products, rankings, categories = calculate_weights(
             search_products, all_details, gemini_results,
         )
+
+        # V4 확장 필드를 WeightedProduct에 주입
+        bright_map = {p.asin: p for p in products}
+        for wp in weighted_products:
+            bp = bright_map.get(wp.asin)
+            if bp:
+                wp.sns_price = bp.sns_price
+                wp.unit_price = bp.unit_price
+                wp.number_of_sellers = bp.number_of_sellers
+                wp.coupon = bp.coupon
+                wp.plus_content = bp.plus_content
+                wp.customer_says = bp.customer_says
 
         # Step 4: 시장 분석 리포트
         analysis_data = build_market_analysis(category_name, weighted_products, all_details)

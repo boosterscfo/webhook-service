@@ -13,14 +13,32 @@ from amz_researcher.models import (
 def _compute_composite_weight(
     position: int, reviews: int, rating: float, bsr_category: int | None,
     max_position: int, max_reviews: int, max_bsr: int,
+    bought_past_month: int | None = None, max_bought: int = 1,
 ) -> float:
-    """Weight = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)"""
+    """Weight 계산.
+
+    bought_past_month 있으면 V4 가중치:
+      BoughtPastMonth(30%) + BSR(25%) + Reviews(20%) + Rating(10%) + Position(15%)
+    없으면 V3 호환:
+      Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)
+    """
     pos_norm = 1 - (position - 1) / max_position if max_position > 0 else 0
     rev_norm = reviews / max_reviews if max_reviews > 0 else 0
     rat_norm = rating / 5.0
     bsr = bsr_category if bsr_category is not None else (max_bsr + 1)
     bsr_norm = 1 - (bsr - 1) / max_bsr if max_bsr > 0 else 0
     bsr_norm = max(bsr_norm, 0)
+
+    if bought_past_month is not None and max_bought > 0:
+        bought_norm = bought_past_month / max_bought
+        return (
+            bought_norm * 0.30
+            + bsr_norm * 0.25
+            + rev_norm * 0.20
+            + pos_norm * 0.15
+            + rat_norm * 0.10
+        )
+
     return pos_norm * 0.2 + rev_norm * 0.25 + rat_norm * 0.15 + bsr_norm * 0.4
 
 
@@ -165,6 +183,13 @@ def calculate_weights(
     ]
     max_bsr = max(bsr_values) if bsr_values else 1
 
+    bought_values = [
+        p.bought_past_month
+        for p in search_products
+        if p.bought_past_month is not None
+    ]
+    max_bought = max(bought_values) if bought_values else 0
+
     weighted_products = []
     for sp in search_products:
         detail = detail_map.get(sp.asin)
@@ -175,6 +200,8 @@ def calculate_weights(
         weight = _compute_composite_weight(
             sp.position, sp.reviews, rating, bsr_category,
             max_position, max_reviews, max_bsr,
+            bought_past_month=sp.bought_past_month,
+            max_bought=max_bought,
         )
 
         ingredients = ingredient_map.get(sp.asin, [])
@@ -190,6 +217,8 @@ def calculate_weights(
             bsr_subcategory=bsr_subcategory,
             composite_weight=weight,
             ingredients=ingredients,
+            bought_past_month=sp.bought_past_month,
+            brand=detail.brand if detail else "",
         ))
 
     weighted_products.sort(key=lambda p: p.composite_weight, reverse=True)
