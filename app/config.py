@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     BRIGHT_DATA_DATASET_ID: str = "gd_l7q7dkf244hwjntr0"
     WEBHOOK_BASE_URL: str = ""  # e.g. https://hooks.example.com
 
+    # Keyword Search
+    AMZ_KEYWORD_CACHE_DAYS: int = 7
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

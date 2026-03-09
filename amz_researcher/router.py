@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from pydantic import BaseModel
 
-from amz_researcher.orchestrator import run_analysis, run_research
+from amz_researcher.orchestrator import run_analysis, run_keyword_analysis, run_research
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.product_db import ProductDBService
@@ -51,6 +51,23 @@ def _build_help_response() -> dict:
                         "• `/amz serum` — serum 관련 카테고리 검색\n"
                         "• `/amz sunscreen` — 자외선 차단제 카테고리 검색\n"
                         "• `/amz hair oil` — 여러 단어 키워드도 가능"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*🔍 키워드 검색 분석*\n\n"
+                        "`/amz search {키워드}`\n"
+                        "Amazon 검색 결과를 분석합니다. 카테고리 등록 없이 자유롭게 검색 가능.\n"
+                        "7일 내 동일 키워드 재검색 시 캐시를 사용합니다.\n\n"
+                        "_예시:_\n"
+                        "• `/amz search vitamin c serum for face`\n"
+                        "• `/amz search organic hair oil`\n"
+                        "• `/amz search korean skincare set`"
                     ),
                 },
             },
@@ -248,6 +265,21 @@ async def slack_amz(
         # 전체 수집
         background_tasks.add_task(_run_manual_collection)
         return {"response_type": "ephemeral", "text": "🔄 전체 카테고리 수집 트리거됨. 완료까지 수 분 소요."}
+
+    # /amz search {keyword} — V6 키워드 검색 분석
+    if subcommand == "search":
+        keyword_parts = parts[1:]
+        keyword = " ".join(keyword_parts).strip()
+        if not keyword:
+            return {
+                "response_type": "ephemeral",
+                "text": "사용법: `/amz search {키워드}`\n예: `/amz search vitamin c serum for face`",
+            }
+        background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id)
+        return {
+            "response_type": "in_channel",
+            "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... (1-3분 소요)",
+        }
 
     # /amz prod {keyword} — V3 하위 호환
     if subcommand == "prod":

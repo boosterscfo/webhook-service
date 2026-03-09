@@ -15,8 +15,10 @@ from amz_researcher.services.cache import AmzCacheService
 from amz_researcher.services.gemini import GeminiService
 from amz_researcher.services.product_db import ProductDBService
 from amz_researcher.services.analyzer import calculate_weights
-from amz_researcher.services.excel_builder import build_excel
-from amz_researcher.services.market_analyzer import build_market_analysis
+from amz_researcher.services.bright_data import BrightDataService
+from amz_researcher.services.data_collector import DataCollector
+from amz_researcher.services.excel_builder import build_excel, build_keyword_excel
+from amz_researcher.services.market_analyzer import build_market_analysis, build_keyword_market_analysis
 from amz_researcher.services.slack_sender import SlackSender
 
 logger = logging.getLogger(__name__)
@@ -571,6 +573,285 @@ async def run_analysis(
             )
     finally:
         for client in (gemini, slack):
+            try:
+                await client.close()
+            except Exception:
+                logger.warning("Failed to close %s", type(client).__name__)
+
+
+# ── V6: 키워드 검색 분석 파이프라인 ──────────────────────
+
+
+def _prepare_for_gemini(keyword_product: dict) -> dict:
+    """키워드 검색 결과를 Gemini 성분 추출 입력으로 변환.
+
+    키워드 검색 API에는 ingredients 전용 필드가 없으므로
+    description → ingredients_raw로 매핑하여 Gemini가 추출하도록 함.
+    """
+    features_raw = keyword_product.get("features", "[]")
+    if isinstance(features_raw, str):
+        try:
+            features = json.loads(features_raw)
+        except (json.JSONDecodeError, TypeError):
+            features = []
+    else:
+        features = features_raw or []
+
+    return {
+        "asin": keyword_product["asin"],
+        "title": keyword_product.get("title", ""),
+        "ingredients_raw": keyword_product.get("description", ""),
+        "features": features,
+        "additional_details": {},
+    }
+
+
+def _adapt_search_for_analyzer(
+    keyword_products: list[dict],
+) -> tuple[list[SearchProduct], list[ProductDetail]]:
+    """키워드 검색 결과(DB dict) → SearchProduct + ProductDetail 변환."""
+    search_products = []
+    details = []
+
+    for row in keyword_products:
+        price = row.get("price")
+        if price is not None:
+            price = float(price)
+        price_str = f"${price:.2f}" if price is not None else ""
+
+        search_products.append(SearchProduct(
+            position=row.get("position", 0),
+            title=row.get("title", ""),
+            asin=row["asin"],
+            price=price,
+            price_raw=price_str,
+            reviews=row.get("reviews_count", 0) or 0,
+            reviews_raw=str(row.get("reviews_count", 0) or 0),
+            rating=float(row.get("rating", 0) or 0),
+            sponsored=bool(row.get("sponsored", 0)),
+            product_link=row.get("product_url", ""),
+            bought_past_month=row.get("bought_past_month"),
+        ))
+
+        # features: JSON string → list → dict 변환
+        features_raw = row.get("features", "[]")
+        if isinstance(features_raw, str):
+            try:
+                features_list = json.loads(features_raw)
+            except (json.JSONDecodeError, TypeError):
+                features_list = []
+        else:
+            features_list = features_raw or []
+        features_dict = {f"Feature {i+1}": f for i, f in enumerate(features_list)} if isinstance(features_list, list) else {}
+
+        bsr = row.get("bsr")
+        if bsr is not None:
+            bsr = int(bsr)
+
+        details.append(ProductDetail(
+            asin=row["asin"],
+            ingredients_raw=row.get("description", ""),
+            features=features_dict,
+            measurements={},
+            additional_details={},
+            bsr_category=bsr,
+            bsr_category_name=row.get("bsr_category", ""),
+            rating=float(row.get("rating") or 0),
+            review_count=row.get("reviews_count") or 0,
+            brand=row.get("brand", ""),
+            manufacturer=row.get("manufacturer", ""),
+            product_url=row.get("product_url", ""),
+        ))
+
+    return search_products, details
+
+
+async def run_keyword_analysis(
+    keyword: str,
+    response_url: str,
+    channel_id: str,
+):
+    """V6 키워드 검색 기반 분석 파이프라인."""
+    product_db = ProductDBService("CFO")
+    bright_data = BrightDataService(
+        api_token=settings.BRIGHT_DATA_API_TOKEN,
+        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+    )
+    gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+    cache = AmzCacheService("CFO")
+    collector = DataCollector("CFO")
+
+    normalized_keyword = " ".join(keyword.lower().split())
+
+    async def _msg(text: str, ephemeral: bool = False):
+        await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
+
+    try:
+        # Step 1: 캐시 확인
+        cached = product_db.get_keyword_cache(normalized_keyword)
+
+        if cached and cached.get("status") == "collecting":
+            from datetime import datetime
+            elapsed = (datetime.now() - cached["searched_at"]).total_seconds()
+            if elapsed < 600:  # 10분 미만
+                await _msg(
+                    f"⏳ *\"{keyword}\"* 검색이 이미 진행 중입니다. 잠시 후 다시 시도하세요.",
+                    ephemeral=True,
+                )
+                return
+            # 10분 초과 → timeout, 재수집 허용
+
+        keyword_products = []
+        searched_at = None
+
+        if cached and cached.get("status") == "completed":
+            # 캐시 HIT
+            searched_at = cached["searched_at"]
+            keyword_products = product_db.get_keyword_products(normalized_keyword, searched_at)
+            if keyword_products:
+                from datetime import datetime
+                days_ago = (datetime.now() - searched_at).days
+                await _msg(
+                    f"♻️ 캐시 사용 ({days_ago}일 전 수집, {len(keyword_products)}개 제품). 분석 시작...",
+                    ephemeral=True,
+                )
+
+        if not keyword_products:
+            # 캐시 MISS → Bright Data 수집
+            await _msg(f"📡 *\"{keyword}\"* Bright Data 수집 시작... (1-3분 소요)", ephemeral=True)
+
+            searched_at = product_db.save_keyword_search_log(normalized_keyword)
+
+            try:
+                snapshot_id = await bright_data.trigger_keyword_search(normalized_keyword)
+                products_raw = await bright_data.poll_snapshot(snapshot_id)
+
+                if not products_raw:
+                    product_db.update_keyword_search_log(normalized_keyword, searched_at, "failed")
+                    await _msg(f"⚠️ *\"{keyword}\"* 검색 결과가 없습니다.", ephemeral=True)
+                    return
+
+                count = collector.process_search_snapshot(products_raw, normalized_keyword, searched_at)
+                product_db.update_keyword_search_log(normalized_keyword, searched_at, "completed", count)
+
+                keyword_products = product_db.get_keyword_products(normalized_keyword, searched_at)
+                await _msg(f"📦 {len(keyword_products)}개 제품 수집 완료. 성분 분석 중...", ephemeral=True)
+
+            except Exception as e:
+                product_db.update_keyword_search_log(normalized_keyword, searched_at, "failed")
+                raise
+
+        if not keyword_products:
+            await _msg(f"⚠️ *\"{keyword}\"* 검색 결과가 없습니다.", ephemeral=True)
+            return
+
+        # Step 2: 성분 보완 (2-Layer)
+        asins = [p["asin"] for p in keyword_products]
+        cached_ingredients = cache.get_ingredient_cache(asins)
+        uncached_asins = [a for a in asins if a not in cached_ingredients]
+
+        if uncached_asins:
+            await _msg(
+                f"🧪 성분 캐시 {len(cached_ingredients)}건 매칭 / {len(uncached_asins)}건 Gemini 추출 중...",
+                ephemeral=True,
+            )
+            product_map = {p["asin"]: p for p in keyword_products}
+            products_for_gemini = [
+                _prepare_for_gemini(product_map[asin])
+                for asin in uncached_asins
+                if asin in product_map
+            ]
+            new_results = await gemini.extract_ingredients(products_for_gemini)
+            extracted_asins = {r.asin for r in new_results}
+            failed_extraction = len(uncached_asins) - len(extracted_asins)
+            if failed_extraction:
+                logger.warning(
+                    "Gemini extraction failed for %d/%d ASINs (keyword search)",
+                    failed_extraction, len(uncached_asins),
+                )
+            if new_results:
+                cache.save_ingredient_cache(new_results)
+                cache.harmonize_common_names()
+            gemini_results = new_results + [
+                ProductIngredients(asin=asin, ingredients=ings)
+                for asin, ings in cached_ingredients.items()
+            ]
+        else:
+            await _msg(
+                f"♻️ 성분 추출 전체 캐시 사용: {len(cached_ingredients)}개",
+                ephemeral=True,
+            )
+            gemini_results = [
+                ProductIngredients(asin=asin, ingredients=ings)
+                for asin, ings in cached_ingredients.items()
+            ]
+
+        # Step 3: 가중치 계산
+        search_products, all_details = _adapt_search_for_analyzer(keyword_products)
+        weighted_products, rankings, categories = calculate_weights(
+            search_products, all_details, gemini_results,
+        )
+
+        # V4 확장 필드 주입
+        kp_map = {p["asin"]: p for p in keyword_products}
+        for wp in weighted_products:
+            kp = kp_map.get(wp.asin)
+            if kp:
+                wp.badge = kp.get("badge", "")
+                wp.initial_price = float(kp["initial_price"]) if kp.get("initial_price") is not None else None
+                wp.manufacturer = kp.get("manufacturer", "")
+                wp.variations_count = kp.get("variations_count", 0) or 0
+                wp.coupon = kp.get("coupon", "")
+                wp.plus_content = bool(kp.get("plus_content", 0))
+                wp.customer_says = kp.get("customer_says", "")
+                wp.number_of_sellers = kp.get("number_of_sellers", 1) or 1
+                wp.bought_past_month = kp.get("bought_past_month")
+
+        # Step 4: 시장 분석 (BSR 의존 분석 제외)
+        analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details)
+
+        # V1: market report 캐시 비활성화
+        await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
+        market_report = await gemini.generate_market_report(analysis_data)
+
+        # Step 5: Excel 생성 (9시트)
+        excel_bytes = build_keyword_excel(
+            keyword, weighted_products, rankings, categories,
+            search_products, all_details,
+            market_report=market_report,
+            analysis_data=analysis_data,
+        )
+
+        # Step 6: Slack 요약
+        fallback_text, summary_blocks = _build_summary_blocks(
+            keyword, len(weighted_products), rankings[:10], market_report,
+        )
+        await slack.send_message(
+            response_url, fallback_text,
+            ephemeral=False, channel_id=channel_id,
+            blocks=summary_blocks,
+        )
+
+        # Step 7: 파일 업로드
+        filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
+        await slack.upload_file(
+            channel_id, excel_bytes, filename,
+            comment="📊 키워드 검색 분석 엑셀 파일",
+        )
+        logger.info("Keyword analysis completed for keyword=%s (%d products)", keyword, len(keyword_products))
+
+    except Exception as e:
+        logger.exception("Keyword analysis failed for keyword=%s", keyword)
+        await _msg(f"❌ *\"{keyword}\"* 검색 분석 실패: {e!s}", ephemeral=True)
+        admin_id = settings.AMZ_ADMIN_SLACK_ID
+        if admin_id:
+            await slack.send_dm(
+                admin_id,
+                f"🚨 AMZ Keyword Analysis 에러\n키워드: {keyword}\n에러: {e!s}",
+            )
+    finally:
+        for client in (bright_data, gemini, slack):
             try:
                 await client.close()
             except Exception:

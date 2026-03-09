@@ -102,6 +102,42 @@ class BrightDataService:
 
         raise TimeoutError(f"Snapshot {snapshot_id} not ready after {max_attempts * poll_interval}s")
 
+    async def trigger_keyword_search(
+        self,
+        keyword: str,
+        limit_per_input: int = 100,
+    ) -> str:
+        """키워드 검색 트리거 → snapshot_id 반환.
+
+        기존 trigger_collection()과 동일 base URL, discover_by만 변경.
+        """
+        url = (
+            f"{self.base_url}/trigger"
+            f"?dataset_id={self.dataset_id}"
+            f"&type=discover_new"
+            f"&discover_by=keyword"
+            f"&limit_per_input={limit_per_input}"
+        )
+
+        body = [{"keyword": keyword}]
+
+        last_error: Exception | None = None
+        for attempt in range(2):
+            try:
+                resp = await self.client.post(url, headers=self._headers(), json=body)
+                if resp.status_code != 200:
+                    raise BrightDataError(f"Keyword trigger failed: {resp.status_code} {resp.text[:300]}")
+                data = resp.json()
+                snapshot_id = data.get("snapshot_id")
+                if not snapshot_id:
+                    raise BrightDataError(f"No snapshot_id in response: {data}")
+                return snapshot_id
+            except BrightDataError as e:
+                last_error = e
+                if attempt == 0:
+                    logger.warning("trigger_keyword_search attempt %d failed, retrying: %s", attempt + 1, e)
+        raise last_error  # type: ignore[misc]
+
     async def collect_categories(
         self, category_urls: list[str], limit_per_input: int = 100,
     ) -> list[dict]:

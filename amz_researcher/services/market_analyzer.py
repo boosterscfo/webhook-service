@@ -891,6 +891,38 @@ def analyze_sku_strategy(products: list[WeightedProduct]) -> dict:
     }
 
 
+def build_keyword_market_analysis(
+    keyword: str,
+    weighted_products: list[WeightedProduct],
+    details: list[ProductDetail],
+) -> dict:
+    """키워드 검색 전용 시장 분석. BSR 의존 분석 3개 제외.
+
+    제외 항목:
+    - brand_positioning: 크로스 카테고리 BSR 비교 오해 유발
+    - rising_products: BSR < 10,000 로직 무의미
+    - badges: Mann-Whitney U 검정 무의미
+    """
+    return {
+        "keyword": keyword,
+        "total_products": len(weighted_products),
+        "price_tier_analysis": analyze_by_price_tier(weighted_products),
+        "bsr_analysis": analyze_by_bsr(weighted_products),
+        "brand_analysis": analyze_by_brand(weighted_products, details),
+        "cooccurrence_analysis": analyze_cooccurrence(weighted_products),
+        "rating_ingredients": analyze_rating_ingredients(weighted_products),
+        "sales_volume": analyze_sales_volume(weighted_products),
+        "sns_pricing": analyze_sns_pricing(weighted_products),
+        "promotions": analyze_promotions(weighted_products),
+        "customer_voice": analyze_customer_voice(weighted_products),
+        "discount_impact": analyze_discount_impact(weighted_products),
+        "title_keywords": analyze_title_keywords(weighted_products),
+        "unit_economics": analyze_unit_economics(weighted_products),
+        "manufacturer": analyze_manufacturer(weighted_products, details),
+        "sku_strategy": analyze_sku_strategy(weighted_products),
+    }
+
+
 def build_market_analysis(
     keyword: str,
     weighted_products: list[WeightedProduct],

@@ -429,7 +429,7 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
 
 
 # Item 3: Consumer Voice with BSR section
-def _build_consumer_voice(wb: Workbook, customer_voice_data: dict):
+def _build_consumer_voice(wb: Workbook, customer_voice_data: dict, is_keyword: bool = False):
     """customer_says 키워드 분석 결과 시트."""
     ws = wb.create_sheet("Consumer Voice")
     # Item 1: Use TAB_COLORS instead of hardcoded value
@@ -477,6 +477,12 @@ def _build_consumer_voice(wb: Workbook, customer_voice_data: dict):
 
     data_end_row = row - 1
     _style_data_rows(ws, 5, data_end_row, 4)
+
+    # BSR Correlation section — 키워드 검색에서는 스킵 (크로스 카테고리 비교 무의미)
+    if is_keyword:
+        ws.freeze_panes = "A5"
+        _set_column_widths(ws, {"A": 20, "B": 10, "C": 16, "D": 18, "E": 12})
+        return
 
     # Item 3: BSR Correlation section
     bsr_top_pos = customer_voice_data.get("bsr_top_half_positive")
@@ -1106,6 +1112,73 @@ def build_excel(
         "Raw - Product Detail",
     ]
     # Filter to only existing sheets, preserve any unlisted sheets at the end
+    existing = wb.sheetnames
+    ordered = [s for s in desired_order if s in existing]
+    ordered += [s for s in existing if s not in ordered]
+    wb._sheets = [wb[s] for s in ordered]
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def build_keyword_excel(
+    keyword: str,
+    weighted_products: list[WeightedProduct],
+    rankings: list[IngredientRanking],
+    categories: list[CategorySummary],
+    search_products: list[SearchProduct],
+    details: list[ProductDetail],
+    market_report: str = "",
+    analysis_data: dict | None = None,
+) -> bytes:
+    """키워드 검색 전용 9시트 Excel 생성.
+
+    카테고리 리포트(12시트)에서 BSR 의존 3시트 제거:
+    - Badge Analysis (삭제)
+    - Brand Positioning (삭제)
+    - Rising Products (삭제)
+
+    Consumer Voice는 BSR correlation 섹션만 제거 (is_keyword=True).
+    """
+    wb = Workbook()
+
+    # === Insight tabs ===
+    _build_ingredient_ranking(wb, keyword, rankings, len(weighted_products))
+    if market_report:
+        _build_market_insight(wb, keyword, market_report)
+    if analysis_data:
+        customer_voice = analysis_data.get("customer_voice")
+        if customer_voice:
+            _build_consumer_voice(wb, customer_voice, is_keyword=True)
+        # Badge Analysis 제거
+        _build_sales_pricing(wb, analysis_data)
+
+    # === Analysis tabs ===
+    if analysis_data:
+        # Brand Positioning 제거
+        _build_marketing_keywords(wb, analysis_data)
+    _build_category_summary(wb, categories)
+    # Rising Products 제거
+    _build_product_detail(wb, weighted_products)
+
+    # === Raw tabs ===
+    _build_raw_search(wb, keyword, search_products)
+    _build_raw_detail(wb, details)
+
+    # Reorder: 9시트
+    desired_order = [
+        "Market Insight",
+        "Consumer Voice",
+        "Sales & Pricing",
+        "Marketing Keywords",
+        "Ingredient Ranking",
+        "Category Summary",
+        "Product Detail",
+        "Raw - Search Results",
+        "Raw - Product Detail",
+    ]
     existing = wb.sheetnames
     ordered = [s for s in desired_order if s in existing]
     ordered += [s for s in existing if s not in ordered]

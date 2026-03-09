@@ -94,6 +94,89 @@ class ProductDBService:
             return []
         return df.to_dict("records") if not df.empty else []
 
+    # ── 키워드 검색 캐시 ──────────────────────────────
+
+    def get_keyword_cache(self, keyword: str) -> dict | None:
+        """7일 이내 키워드 검색 캐시 조회.
+
+        Returns:
+            {keyword, product_count, searched_at, status, snapshot_id} or None
+        """
+        from app.config import settings
+
+        normalized = " ".join(keyword.lower().split())
+        query = """
+            SELECT keyword, product_count, searched_at, status, snapshot_id
+            FROM amz_keyword_search_log
+            WHERE keyword = %s
+              AND searched_at >= NOW() - INTERVAL %s DAY
+            ORDER BY searched_at DESC
+            LIMIT 1
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (normalized, settings.AMZ_KEYWORD_CACHE_DAYS))
+        except Exception:
+            logger.exception("Failed to get keyword cache for %s", keyword)
+            return None
+        if df.empty:
+            return None
+        return df.iloc[0].to_dict()
+
+    def get_keyword_products(self, keyword: str, searched_at) -> list[dict]:
+        """캐시된 키워드 검색 결과 조회."""
+        normalized = " ".join(keyword.lower().split())
+        query = """
+            SELECT * FROM amz_keyword_products
+            WHERE keyword = %s AND searched_at = %s
+            ORDER BY position ASC
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (normalized, searched_at))
+        except Exception:
+            logger.exception("Failed to get keyword products for %s", keyword)
+            return []
+        return df.to_dict("records") if not df.empty else []
+
+    def save_keyword_search_log(
+        self, keyword: str, snapshot_id: str = "",
+    ):
+        """검색 로그 INSERT (status='collecting'). searched_at 반환."""
+        from datetime import datetime
+
+        normalized = " ".join(keyword.lower().split())
+        searched_at = datetime.now()
+        query = """
+            INSERT INTO amz_keyword_search_log (keyword, snapshot_id, status, searched_at)
+            VALUES (%s, %s, 'collecting', %s)
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(query, (normalized, snapshot_id, searched_at))
+                conn.connection.commit()
+        except Exception:
+            logger.exception("Failed to save keyword search log for %s", keyword)
+            raise
+        return searched_at
+
+    def update_keyword_search_log(
+        self, keyword: str, searched_at, status: str, product_count: int = 0,
+    ):
+        """검색 로그 상태 업데이트."""
+        normalized = " ".join(keyword.lower().split())
+        query = """
+            UPDATE amz_keyword_search_log
+            SET status = %s, product_count = %s
+            WHERE keyword = %s AND searched_at = %s
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(query, (status, product_count, normalized, searched_at))
+                conn.connection.commit()
+        except Exception:
+            logger.exception("Failed to update keyword search log for %s", keyword)
+
     def add_category(self, name: str, url: str) -> dict:
         """Amazon Best Sellers URL로 카테고리 추가. node_id는 URL에서 추출."""
         import re

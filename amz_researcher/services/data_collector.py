@@ -210,6 +210,78 @@ class DataCollector:
             "coupon": raw.get("coupon") or "",
         }
 
+    def process_search_snapshot(
+        self,
+        products: list[dict],
+        keyword: str,
+        searched_at: datetime,
+    ) -> int:
+        """키워드 검색 결과를 amz_keyword_products에 적재.
+
+        Args:
+            products: Bright Data API 응답 (JSON array)
+            keyword: 정규화된 검색 키워드
+            searched_at: 검색 시각 (캐시 키)
+
+        Returns:
+            적재된 제품 수
+        """
+        if not products:
+            return 0
+
+        rows = []
+        for i, raw in enumerate(products):
+            title = (raw.get("title") or "")[:500]
+            raw_brand = (raw.get("brand") or "")[:200]
+            brand = _resolve_brand(raw_brand, title)
+
+            # customer_says / customers_say fallback
+            customer_says = raw.get("customer_says") or raw.get("customers_say") or ""
+
+            rows.append({
+                "keyword": keyword,
+                "asin": raw.get("asin", ""),
+                "title": title,
+                "brand": brand,
+                "manufacturer": (raw.get("manufacturer") or "")[:200],
+                "price": raw.get("final_price"),
+                "initial_price": raw.get("initial_price"),
+                "currency": raw.get("currency", "USD"),
+                "rating": raw.get("rating") or 0,
+                "reviews_count": raw.get("reviews_count") or 0,
+                "bsr": raw.get("root_bs_rank"),
+                "bsr_category": (raw.get("root_bs_category") or "")[:200],
+                "position": i + 1,
+                "sponsored": 1 if raw.get("sponsored") else 0,
+                "badge": (raw.get("badge") or "")[:100],
+                "bought_past_month": raw.get("bought_past_month"),
+                "coupon": (raw.get("coupon") or "")[:200],
+                "customer_says": customer_says,
+                "plus_content": 1 if raw.get("plus_content") else 0,
+                "number_of_sellers": raw.get("number_of_sellers") or 1,
+                "variations_count": len(raw.get("variations") or []) if isinstance(raw.get("variations"), list) else (raw.get("variations_count") or 0),
+                "image_url": (raw.get("image_url") or "")[:500],
+                "product_url": (raw.get("url") or "")[:500],
+                "features": json.dumps(raw.get("features") or [], ensure_ascii=False),
+                "description": raw.get("description") or "",
+                "categories": json.dumps(raw.get("categories") or [], ensure_ascii=False),
+                "searched_at": searched_at,
+            })
+
+        df = pd.DataFrame(rows)
+        with MysqlConnector(self._env) as conn:
+            # 동일 keyword + searched_at 기존 데이터 삭제 후 INSERT
+            conn.delete_and_insert(
+                df, "amz_keyword_products",
+                where="keyword = %s AND searched_at = %s",
+                where_params=(keyword, searched_at),
+            )
+        logger.info(
+            "Inserted %d keyword products (keyword=%s, searched_at=%s)",
+            len(rows), keyword, searched_at,
+        )
+        return len(rows)
+
     def _map_categories(self, products: list[dict], snapshot_date: date) -> list[dict]:
         """origin_url에서 카테고리 node_id를 추출하여 매핑 행 생성."""
         rows = []
