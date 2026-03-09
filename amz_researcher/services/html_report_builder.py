@@ -719,6 +719,15 @@ function esc(str) {
   return d.innerHTML;
 }
 
+// Normalize keyword data: dict {"kw": {count, ...}} or {"kw": count} → array [{keyword, count, ...}]
+function normalizeKws(kws) {
+  if (!kws) return [];
+  if (Array.isArray(kws)) return kws;
+  return Object.entries(kws).map(([k, v]) =>
+    typeof v === 'object' ? { keyword: k, ...v } : { keyword: k, count: v }
+  );
+}
+
 function fmt(n, digits) {
   if (n == null || n === '') return '-';
   const num = parseFloat(n);
@@ -979,8 +988,8 @@ function renderConsumerVoice(data) {
   const cv = data.analysis && data.analysis.customer_voice;
   if (!cv) { el.style.display = 'none'; return; }
 
-  const posKws = cv.positive_keywords || [];
-  const negKws = cv.negative_keywords || [];
+  const posKws = normalizeKws(cv.positive_keywords);
+  const negKws = normalizeKws(cv.negative_keywords);
   const maxPos = posKws.length ? Math.max(...posKws.map(k => k.count || 0)) : 1;
   const maxNeg = negKws.length ? Math.max(...negKws.map(k => k.count || 0)) : 1;
 
@@ -1013,11 +1022,11 @@ function renderConsumerVoice(data) {
     if (data.report_type === 'keyword') {
       bsrSubsection.style.display = 'none';
     } else {
-      const topKws = cv.bsr_top_half_keywords || [];
-      const botKws = cv.bsr_bottom_half_keywords || [];
-      const allKws = [...new Set([...topKws.map(k => k.keyword || k.word || ''), ...botKws.map(k => k.keyword || k.word || '')])].slice(0, 10);
-      const topMap = Object.fromEntries((topKws).map(k => [k.keyword || k.word || '', k.count || 0]));
-      const botMap = Object.fromEntries((botKws).map(k => [k.keyword || k.word || '', k.count || 0]));
+      const topKws = normalizeKws(cv.bsr_top_half_keywords || cv.bsr_top_half_positive);
+      const botKws = normalizeKws(cv.bsr_bottom_half_keywords || cv.bsr_bottom_half_positive);
+      const allKws = [...new Set([...topKws.map(k => k.keyword), ...botKws.map(k => k.keyword)])].slice(0, 10);
+      const topMap = Object.fromEntries(topKws.map(k => [k.keyword, k.count || 0]));
+      const botMap = Object.fromEntries(botKws.map(k => [k.keyword, k.count || 0]));
       const ctx = el.querySelector('#bsr-correlation-chart');
       if (ctx && allKws.length) {
         new Chart(ctx, {
@@ -1059,7 +1068,11 @@ function renderBadgeAnalysis(data) {
   const nb = bd.without_badge || {};
   const threshold = bd.acquisition_threshold || {};
   const statTest = bd.stat_test_bsr || {};
-  const badgeTypes = bd.badge_types || {};
+  const rawBt = bd.badge_types || [];
+  // Normalize: array of {badge,count} → dict {badge: count}
+  const badgeTypes = Array.isArray(rawBt)
+    ? Object.fromEntries(rawBt.map(b => [b.badge || b.type || '', b.count || 0]))
+    : rawBt;
 
   const withBadgeEl = el.querySelector('#badge-with');
   if (withBadgeEl) {
@@ -1165,8 +1178,9 @@ function renderSalesPricing(data) {
 
   // Price tier chart
   const ptCtx = el.querySelector('#price-tier-chart');
-  if (ptCtx && sv && sv.price_tiers) {
-    const tiers = sv.price_tiers;
+  const rawPriceTiers = sv && (sv.price_tiers || sv.sales_by_price_tier);
+  if (ptCtx && rawPriceTiers) {
+    const tiers = rawPriceTiers;
     const labels = Object.keys(tiers);
     new Chart(ptCtx, {
       type: 'bar',
@@ -1188,16 +1202,20 @@ function renderSalesPricing(data) {
   // SNS stats
   const snsEl = el.querySelector('#sns-stats');
   if (snsEl && sns) {
+    // Field names: sns_adoption_pct (0-100), avg_discount_pct (0-100), retention_signal.sns_avg_bought
+    const adoptPct = sns.sns_adoption_pct != null ? sns.sns_adoption_pct : (sns.adoption_rate != null ? sns.adoption_rate * 100 : null);
+    const discPct = sns.avg_discount_pct != null ? sns.avg_discount_pct : (sns.avg_discount != null ? sns.avg_discount * 100 : null);
+    const ret = sns.retention_signal || {};
     const items = [
-      ['SNS Adoption Rate', sns.adoption_rate != null ? Math.round(sns.adoption_rate * 100) + '%' : '-'],
-      ['Avg SNS Discount', sns.avg_discount != null ? (sns.avg_discount * 100).toFixed(1) + '%' : '-'],
-      ['SNS Avg Bought/Mo', sns.sns_avg_bought],
-      ['No-SNS Avg Bought/Mo', sns.no_sns_avg_bought],
+      ['SNS Adoption Rate', adoptPct != null ? Math.round(adoptPct) + '%' : '-'],
+      ['Avg SNS Discount', discPct != null ? discPct.toFixed(1) + '%' : '-'],
+      ['SNS Avg Bought/Mo', ret.sns_avg_bought || sns.sns_avg_bought],
+      ['No-SNS Avg Bought/Mo', ret.no_sns_avg_bought || sns.no_sns_avg_bought],
       ['With SNS Count', sns.with_sns_count],
       ['Without SNS Count', sns.without_sns_count],
     ];
     const adoptEl = snsEl.querySelector('#sns-adoption-value');
-    if (adoptEl) adoptEl.textContent = sns.adoption_rate != null ? Math.round(sns.adoption_rate * 100) + '%' : '-';
+    if (adoptEl) adoptEl.textContent = adoptPct != null ? Math.round(adoptPct) + '%' : '-';
     const listEl = snsEl.querySelector('#sns-stat-list');
     if (listEl) {
       listEl.innerHTML = items.slice(1).map(([label, val]) =>
@@ -1209,7 +1227,11 @@ function renderSalesPricing(data) {
   // Discount impact chart
   const discCtx = el.querySelector('#discount-chart');
   if (discCtx && disc && disc.tiers) {
-    const tiers = disc.tiers;
+    // Normalize: dict {"tier_name": {avg_bsr, ...}} or array [{tier, avg_bsr, ...}]
+    const rawTiers = disc.tiers;
+    const tiers = Array.isArray(rawTiers)
+      ? rawTiers
+      : Object.entries(rawTiers).map(([k, v]) => ({ tier: k, ...v }));
     const labels = tiers.map(t => t.tier || t.label || '');
     new Chart(discCtx, {
       type: 'bar',
@@ -1233,8 +1255,13 @@ function renderSalesPricing(data) {
 
   // Coupon distribution
   const couponEl = el.querySelector('#coupon-tbody');
-  if (couponEl && promo && promo.coupon_distribution) {
-    couponEl.innerHTML = Object.entries(promo.coupon_distribution).map(([k, v]) =>
+  const rawCoupons = promo && (promo.coupon_distribution || promo.coupon_types);
+  if (couponEl && rawCoupons) {
+    // Normalize: array [{coupon, count}] or dict {type: count}
+    const couponRows = Array.isArray(rawCoupons)
+      ? rawCoupons.map(c => [c.coupon || c.type || '', c.count || 0])
+      : Object.entries(rawCoupons);
+    couponEl.innerHTML = couponRows.map(([k, v]) =>
       `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`
     ).join('');
   }
@@ -1247,9 +1274,11 @@ function renderBrandPositioning(data) {
   const el = document.getElementById('brand-positioning');
   if (!el) return;
   if (data.report_type === 'keyword') { el.style.display = 'none'; return; }
-  const bp = data.analysis && data.analysis.brand_positioning;
+  const rawBp = data.analysis && data.analysis.brand_positioning;
   const mfr = data.analysis && data.analysis.manufacturer;
-  if (!bp) { el.style.display = 'none'; return; }
+  if (!rawBp) { el.style.display = 'none'; return; }
+  // brand_positioning can be array directly or {positioning: [...]}
+  const bp = { positioning: Array.isArray(rawBp) ? rawBp : (rawBp.positioning || []) };
 
   function segmentBadge(seg) {
     if (!seg) return '';
@@ -1315,12 +1344,12 @@ function renderBrandPositioning(data) {
     ).join('');
   }
 
-  const mc = bp.market_concentration || {};
+  const mc = (mfr && mfr.market_concentration) || bp.market_concentration || {};
   const mcStatsEl = el.querySelector('#mc-stats');
   if (mcStatsEl) {
     mcStatsEl.innerHTML = [
       ['Total Brands', mc.total_brands],
-      ['Top 10 Market Share', mc.top10_share != null ? Math.round(mc.top10_share * 100) + '%' : null],
+      ['Top 10 Market Share', mc.top10_share_pct != null ? Math.round(mc.top10_share_pct) + '%' : (mc.top10_share != null ? Math.round(mc.top10_share * 100) + '%' : null)],
       ['K-Beauty Brands', mc.kbeauty_count != null ? `<span class="badge badge-kbeauty">${mc.kbeauty_count}</span>` : null],
     ].filter(([,v]) => v != null).map(([l, v]) =>
       `<div class="stat-box"><span class="stat-box-label">${esc(l)}</span><span class="stat-box-value">${typeof v === 'string' && v.startsWith('<') ? v : esc(v)}</span></div>`
@@ -1328,8 +1357,9 @@ function renderBrandPositioning(data) {
   }
 
   const concCtx = el.querySelector('#concentration-chart');
-  if (concCtx && mc.top10_share != null) {
-    const top10 = mc.top10_share > 1 ? mc.top10_share : Math.round(mc.top10_share * 100);
+  const mcShare = mc.top10_share_pct != null ? mc.top10_share_pct : (mc.top10_share != null ? mc.top10_share * 100 : null);
+  if (concCtx && mcShare != null) {
+    const top10 = Math.round(mcShare > 1 ? mcShare : mcShare * 100);
     new Chart(concCtx, {
       type: 'doughnut',
       data: {
@@ -1370,7 +1400,12 @@ function renderMarketingKeywords(data) {
 
   const kwCtx = el.querySelector('#keywords-chart');
   if (kwCtx && tk && tk.keyword_analysis) {
-    const kws = tk.keyword_analysis.slice(0, 20).sort((a, b) => (a.avg_bsr || 0) - (b.avg_bsr || 0));
+    // Normalize: dict {"kw": {count, avg_bsr, ...}} or array [{keyword, count, ...}]
+    const rawKws = tk.keyword_analysis;
+    const kwArr = Array.isArray(rawKws)
+      ? rawKws
+      : Object.entries(rawKws).map(([k, v]) => ({ keyword: k, ...v }));
+    const kws = kwArr.slice(0, 20).sort((a, b) => (a.avg_bsr || 0) - (b.avg_bsr || 0));
     new Chart(kwCtx, {
       type: 'bar',
       data: {
@@ -1398,7 +1433,7 @@ function renderMarketingKeywords(data) {
       return `<tr>
         <td><span class="badge ${badges[tierKey]}">${esc(t.tier)}</span></td>
         <td>${fmt(t.product_count || t.count)}</td>
-        <td class="muted">${esc(t.top_ingredients || '')}</td>
+        <td class="muted">${esc(Array.isArray(t.top_ingredients) ? t.top_ingredients.map(i => i.name || i).join(', ') : (t.top_ingredients || ''))}</td>
       </tr>`;
     }).join('');
   }
@@ -1547,7 +1582,7 @@ function renderRisingProducts(data) {
           ${p.rating ? `<span>&#9733;${fmt(p.rating,1)}</span>` : ''}
           ${p.reviews != null ? `<span>${fmt(p.reviews)}r</span>` : ''}
         </div>
-        ${p.top_ingredients ? `<div class="rising-ingredients">Ingredients: ${esc(p.top_ingredients)}</div>` : ''}
+        ${p.top_ingredients ? `<div class="rising-ingredients">Ingredients: ${esc(Array.isArray(p.top_ingredients) ? p.top_ingredients.join(', ') : p.top_ingredients)}</div>` : ''}
       </div>`
     ).join('');
   }
@@ -2114,19 +2149,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Build sections HTML
   document.getElementById('main-content').innerHTML = buildSectionsHTML();
 
-  // Render each section
-  renderMarketInsight(D);
-  renderConsumerVoice(D);
-  renderBadgeAnalysis(D);
-  renderSalesPricing(D);
-  renderBrandPositioning(D);
-  renderMarketingKeywords(D);
-  renderIngredientRanking(D);
-  renderCategorySummary(D);
-  renderRisingProducts(D);
-  renderProductDetail(D);
-  renderRawSearch(D);
-  renderRawDetail(D);
+  // Render each section (isolated try-catch so one failure doesn't block others)
+  const renderers = [
+    renderMarketInsight, renderConsumerVoice, renderBadgeAnalysis,
+    renderSalesPricing, renderBrandPositioning, renderMarketingKeywords,
+    renderIngredientRanking, renderCategorySummary, renderRisingProducts,
+    renderProductDetail, renderRawSearch, renderRawDetail,
+  ];
+  for (const fn of renderers) {
+    try { fn(D); } catch (e) { console.error('[' + fn.name + ']', e); }
+  }
 
   // Build sidebar after sections are rendered (so visibility is determined)
   buildSidebar(D);
