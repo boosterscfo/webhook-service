@@ -181,7 +181,7 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws = wb.create_sheet("Product Detail")
     ws.sheet_properties.tabColor = TAB_COLORS["Product Detail"]
 
-    col_count = 17
+    col_count = 20
     _write_title(
         ws,
         "Product-Level Data with Weight Breakdown",
@@ -201,7 +201,8 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         "ASIN", "Brand", "Title", "Price", "SNS Price",
         "Bought/Mo", "Reviews", "Rating", "BSR",
         "Weight", "Unit Price", "Sellers", "Coupon",
-        "A+", "Customer Says", "Ingredients Found", "URL",
+        "A+", "Badge", "Discount%", "Variations",
+        "Customer Says", "Ingredients Found", "URL",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=4, column=c, value=h)
@@ -228,9 +229,15 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         ws.cell(row=row, column=12, value=p.number_of_sellers)
         ws.cell(row=row, column=13, value=p.coupon)
         ws.cell(row=row, column=14, value="Y" if p.plus_content else "")
-        cs_cell = ws.cell(row=row, column=15, value=p.customer_says)
+        ws.cell(row=row, column=15, value=p.badge)
+        # Discount%
+        if p.initial_price is not None and p.price is not None and p.initial_price > 0:
+            discount_pct = round((1 - p.price / p.initial_price) * 100, 1)
+            ws.cell(row=row, column=16, value=discount_pct).number_format = "0.0"
+        ws.cell(row=row, column=17, value=p.variations_count)
+        cs_cell = ws.cell(row=row, column=18, value=p.customer_says)
         cs_cell.alignment = WRAP_ALIGN
-        ws.cell(row=row, column=16, value=ingredients_str)
+        ws.cell(row=row, column=19, value=ingredients_str)
 
     end_row = 4 + len(products)
     _style_data_rows(ws, 5, end_row, col_count)
@@ -239,7 +246,8 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         "A": 14, "B": 16, "C": 45, "D": 10, "E": 10,
         "F": 12, "G": 10, "H": 8, "I": 10,
         "J": 10, "K": 16, "L": 8, "M": 14,
-        "N": 5, "O": 40, "P": 45, "Q": 14,
+        "N": 5, "O": 18, "P": 10, "Q": 10,
+        "R": 40, "S": 45, "T": 14,
     })
 
 
@@ -412,6 +420,101 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     ws.freeze_panes = "A5"
 
 
+def _build_consumer_voice(wb: Workbook, customer_voice_data: dict):
+    """customer_says 키워드 분석 결과 시트."""
+    ws = wb.create_sheet("Consumer Voice")
+    ws.sheet_properties.tabColor = "FF9800"
+
+    col_count = 4
+    _write_title(
+        ws,
+        "Consumer Voice Analysis — Keyword Sentiment",
+        "Amazon AI review summary(customer_says) 기반 키워드 빈도 및 BSR 상관 분석",
+        col_count,
+    )
+
+    headers = ["Keyword", "Count", "Avg BSR", "Avg Rating"]
+    for c, h in enumerate(headers, 1):
+        ws.cell(row=4, column=c, value=h)
+    _style_header_row(ws, 4, col_count)
+
+    row = 5
+    # Positive keywords
+    ws.cell(row=row, column=1, value="--- POSITIVE ---")
+    ws.cell(row=row, column=1).font = Font(bold=True, color="2E7D32")
+    row += 1
+    for kw, stats in (customer_voice_data.get("positive_keywords") or {}).items():
+        ws.cell(row=row, column=1, value=kw)
+        ws.cell(row=row, column=2, value=stats["count"])
+        if stats["avg_bsr"] is not None:
+            ws.cell(row=row, column=3, value=stats["avg_bsr"]).number_format = "#,##0"
+        if stats["avg_rating"] is not None:
+            ws.cell(row=row, column=4, value=stats["avg_rating"])
+        row += 1
+
+    # Negative keywords
+    ws.cell(row=row, column=1, value="--- NEGATIVE ---")
+    ws.cell(row=row, column=1).font = Font(bold=True, color="C62828")
+    row += 1
+    for kw, stats in (customer_voice_data.get("negative_keywords") or {}).items():
+        ws.cell(row=row, column=1, value=kw)
+        ws.cell(row=row, column=2, value=stats["count"])
+        if stats["avg_bsr"] is not None:
+            ws.cell(row=row, column=3, value=stats["avg_bsr"]).number_format = "#,##0"
+        if stats["avg_rating"] is not None:
+            ws.cell(row=row, column=4, value=stats["avg_rating"])
+        row += 1
+
+    _style_data_rows(ws, 5, row - 1, col_count)
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {"A": 20, "B": 10, "C": 12, "D": 10})
+
+
+def _build_badge_analysis(wb: Workbook, badge_data: dict):
+    """badge 보유/미보유 비교 시트."""
+    ws = wb.create_sheet("Badge Analysis")
+    ws.sheet_properties.tabColor = "673AB7"
+
+    col_count = 5
+    _write_title(
+        ws,
+        "Badge Analysis — Amazon's Choice / Best Seller Impact",
+        "Badge 보유 여부에 따른 BSR, 가격, 리뷰, 평점 비교",
+        col_count,
+    )
+
+    headers = ["Group", "Count", "Avg BSR", "Avg Price", "Avg Rating"]
+    for c, h in enumerate(headers, 1):
+        ws.cell(row=4, column=c, value=h)
+    _style_header_row(ws, 4, col_count)
+
+    for i, (label, key) in enumerate([("With Badge", "with_badge"), ("Without Badge", "without_badge")]):
+        row = 5 + i
+        metrics = badge_data.get(key, {})
+        ws.cell(row=row, column=1, value=label)
+        ws.cell(row=row, column=2, value=metrics.get("count", 0))
+        if metrics.get("avg_bsr") is not None:
+            ws.cell(row=row, column=3, value=metrics["avg_bsr"]).number_format = "#,##0"
+        if metrics.get("avg_price") is not None:
+            ws.cell(row=row, column=4, value=metrics["avg_price"]).number_format = "$#,##0.00"
+        if metrics.get("avg_rating") is not None:
+            ws.cell(row=row, column=5, value=metrics["avg_rating"])
+
+    # Badge types section
+    row = 8
+    ws.cell(row=row, column=1, value="Badge Type Distribution")
+    ws.cell(row=row, column=1).font = Font(bold=True)
+    row += 1
+    for bt in badge_data.get("badge_types", []):
+        ws.cell(row=row, column=1, value=bt["badge"])
+        ws.cell(row=row, column=2, value=bt["count"])
+        row += 1
+
+    _style_data_rows(ws, 5, row - 1, col_count)
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {"A": 25, "B": 10, "C": 12, "D": 12, "E": 10})
+
+
 def build_excel(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -421,6 +524,8 @@ def build_excel(
     details: list[ProductDetail],
     market_report: str = "",
     rising_products: list[dict] | None = None,
+    # V5 추가
+    analysis_data: dict | None = None,
 ) -> bytes:
     wb = Workbook()
 
@@ -433,6 +538,15 @@ def build_excel(
     _build_raw_detail(wb, details)
     if market_report:
         _build_market_insight(wb, keyword, market_report)
+
+    # V5: 신규 시트
+    if analysis_data:
+        customer_voice = analysis_data.get("customer_voice")
+        if customer_voice:
+            _build_consumer_voice(wb, customer_voice)
+        badge_data = analysis_data.get("badges")
+        if badge_data:
+            _build_badge_analysis(wb, badge_data)
 
     # Move Market Insight to front (first sheet)
     if market_report and "Market Insight" in wb.sheetnames:

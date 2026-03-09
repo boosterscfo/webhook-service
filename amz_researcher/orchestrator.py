@@ -26,9 +26,9 @@ def _extract_action_items_section(report_md: str) -> str:
     """시장 리포트 마크다운에서 '7. 액션 아이템' 섹션만 추출 (다음 8. 또는 ## 전까지)."""
     if not report_md or not report_md.strip():
         return ""
-    # "6. **액션 아이템 (Action Items)**" 또는 "## 6." 형식 → 다음 "7." / "## 7" / 끝까지
+    # "7. **액션 아이템 (Action Items)**" 또는 "## 7." 형식 → 다음 "8." / "## 8" / 끝까지
     m = re.search(
-        r"(?:^|\n)(?:##\s*)?6\.\s*(?:\*\*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?7\.|\n##\s|\Z)",
+        r"(?:^|\n)(?:##\s*)?7\.\s*(?:\*\*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?8\.|\n##\s|\Z)",
         report_md,
         re.DOTALL | re.IGNORECASE,
     )
@@ -285,6 +285,7 @@ async def run_research(
             search_products, all_details,
             market_report=market_report,
             rising_products=analysis_data.get("rising_products"),
+            analysis_data=analysis_data,
         )
 
         # Step 7: Summary message (Block Kit)
@@ -514,6 +515,11 @@ async def run_analysis(
                 wp.coupon = bp.coupon
                 wp.plus_content = bp.plus_content
                 wp.customer_says = bp.customer_says
+                # V5 신규
+                wp.badge = bp.badge
+                wp.initial_price = bp.initial_price
+                wp.manufacturer = bp.manufacturer
+                wp.variations_count = bp.variations_count
 
         # Step 4: 시장 분석 리포트
         analysis_data = build_market_analysis(category_name, weighted_products, all_details)
@@ -533,6 +539,7 @@ async def run_analysis(
             search_products, all_details,
             market_report=market_report,
             rising_products=analysis_data.get("rising_products"),
+            analysis_data=analysis_data,
         )
 
         # Step 6: Slack 요약

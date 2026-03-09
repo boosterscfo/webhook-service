@@ -19,6 +19,7 @@ dependencies = [
     "openpyxl",
     "beautifulsoup4",
     "python-multipart",
+    "scipy>=1.11",
 ]
 
 [dependency-groups]

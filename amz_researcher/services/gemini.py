@@ -106,11 +106,20 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 ### 7. 고평점 vs 저평점 성분 비교
 {rating_ingredients_json}
 
+### 8. 월간 판매량 분석
+{sales_volume_json}
+
+### 9. Subscribe & Save 가격 분석
+{sns_pricing_json}
+
+### 10. 쿠폰/프로모션 분석
+{promotions_json}
+
 ---
 
 위 데이터를 바탕으로 시장 분석 리포트를 작성하라.
 
-반드시 아래 7개 섹션을 포함:
+반드시 아래 8개 섹션을 포함:
 
 1. **시장 요약 (Market Overview)**
    - 가격대 분포와 성분 트렌드 한줄 요약
@@ -135,12 +144,17 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
    - 신규 브랜드/K-뷰티 등 트렌드 시그널
    - 이 제품들이 성공하는 이유 추론
 
-6. **액션 아이템 (Action Items)**
+6. **판매량 & 재구매 전략 (Sales & Retention)**
+   - 가격대별 판매량 차이와 전략적 의미
+   - SNS(Subscribe & Save) 채택 현황과 재구매 유도 효과
+   - 쿠폰/프로모션 사용 현황과 BSR 영향
+
+7. **액션 아이템 (Action Items)**
    - 바로 실행할 수 있는 3-5개 구체적 제안
    - 각 제안에 근거 데이터 명시
    - 타겟 가격대 명시
 
-7. **리스크 & 주의사항 (Risks)**
+8. **리스크 & 주의사항 (Risks)**
    - 과포화 세그먼트 경고
    - 피해야 할 포지셔닝
 
@@ -255,6 +269,10 @@ class GeminiService:
             brand_positioning_json=_dump("brand_positioning"),
             rising_products_json=_dump("rising_products"),
             rating_ingredients_json=_dump("rating_ingredients"),
+            # V5 추가
+            sales_volume_json=_dump("sales_volume"),
+            sns_pricing_json=_dump("sns_pricing"),
+            promotions_json=_dump("promotions"),
         )
 
         max_retries = 2

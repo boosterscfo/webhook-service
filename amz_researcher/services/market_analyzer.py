@@ -4,6 +4,7 @@ WeightedProduct + ProductDetail 데이터를 기반으로
 가격대별/BSR별/브랜드별/성분조합 분석을 수행한다.
 """
 
+import re
 from collections import Counter, defaultdict
 
 from amz_researcher.models import (
@@ -77,12 +78,17 @@ def analyze_by_bsr(
         if name not in bottom_counter
     ]
 
+    # V5: 상위/하위 BSR 통계 검증
+    top_bsr = [float(p.bsr_category) for p in top_group]
+    bottom_bsr = [float(p.bsr_category) for p in bottom_group]
+
     return {
         "top_count": len(top_group),
         "bottom_count": len(bottom_group),
         "top": [{"name": n, "count": c} for n, c in top_counter.most_common(10)],
         "bottom": [{"name": n, "count": c} for n, c in bottom_counter.most_common(10)],
         "winning_ingredients": winning[:10],
+        "stat_test_bsr": _stat_compare(top_bsr, bottom_bsr),
     }
 
 
@@ -306,7 +312,7 @@ def analyze_rating_ingredients(
 
 
 def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
-    """Subscribe & Save 할인 분석."""
+    """Subscribe & Save 할인 분석 (V5 확장)."""
     with_sns = [p for p in products if p.sns_price is not None and p.price]
     without_sns = [p for p in products if p.sns_price is None]
 
@@ -327,6 +333,43 @@ def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
         if discounts else 0
     )
 
+    # V5 심화: SNS 할인율 구간별 BSR 비교
+    def _sns_tier(pct: float) -> str:
+        if pct <= 0:
+            return "No Discount"
+        if pct <= 5:
+            return "1-5%"
+        if pct <= 10:
+            return "6-10%"
+        return "11%+"
+
+    sns_tiers: dict[str, list] = defaultdict(list)
+    for p in with_sns:
+        pct = (1 - p.sns_price / p.price) * 100 if p.price > 0 else 0
+        sns_tiers[_sns_tier(pct)].append(p)
+
+    tier_metrics = {}
+    for tier_name, group in sns_tiers.items():
+        bsr_vals = [p.bsr_category for p in group if p.bsr_category is not None]
+        bought_vals = [p.bought_past_month for p in group if p.bought_past_month is not None]
+        tier_metrics[tier_name] = {
+            "count": len(group),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_bought": round(sum(bought_vals) / len(bought_vals)) if bought_vals else None,
+        }
+
+    # V5 심화: SNS 채택 vs 미채택 bought_past_month 비교
+    sns_bought = [p.bought_past_month for p in with_sns if p.bought_past_month is not None]
+    no_sns_bought = [p.bought_past_month for p in without_sns if p.bought_past_month is not None]
+
+    # V5 심화: 가격대별 SNS 채택률
+    price_tier_sns: dict[str, dict] = defaultdict(lambda: {"total": 0, "with_sns": 0})
+    for p in products:
+        tier = _price_tier(p.price)
+        price_tier_sns[tier]["total"] += 1
+        if p.sns_price is not None:
+            price_tier_sns[tier]["with_sns"] += 1
+
     return {
         "total_products": len(products),
         "with_sns_count": len(with_sns),
@@ -334,39 +377,31 @@ def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
         "sns_adoption_pct": round(len(with_sns) / len(products) * 100, 1) if products else 0,
         "avg_discount_pct": avg_discount,
         "top_discounts": discounts[:10],
-    }
-
-
-def analyze_competition(products: list[WeightedProduct]) -> dict:
-    """판매자 수 기반 경쟁 강도 분석."""
-    seller_counts = [p.number_of_sellers for p in products]
-    if not seller_counts:
-        return {}
-
-    single_seller = sum(1 for s in seller_counts if s <= 1)
-    multi_seller = sum(1 for s in seller_counts if s > 1)
-    high_competition = sum(1 for s in seller_counts if s >= 5)
-
-    return {
-        "total_products": len(products),
-        "single_seller_count": single_seller,
-        "multi_seller_count": multi_seller,
-        "high_competition_count": high_competition,
-        "avg_sellers": round(sum(seller_counts) / len(seller_counts), 1),
-        "max_sellers": max(seller_counts),
+        # V5 심화
+        "discount_tier_metrics": tier_metrics,
+        "retention_signal": {
+            "sns_avg_bought": round(sum(sns_bought) / len(sns_bought)) if sns_bought else None,
+            "no_sns_avg_bought": round(sum(no_sns_bought) / len(no_sns_bought)) if no_sns_bought else None,
+        },
+        "price_tier_adoption": {
+            tier: {
+                "total": d["total"],
+                "with_sns": d["with_sns"],
+                "adoption_pct": round(d["with_sns"] / d["total"] * 100, 1) if d["total"] > 0 else 0,
+            }
+            for tier, d in price_tier_sns.items()
+        },
     }
 
 
 def analyze_promotions(products: list[WeightedProduct]) -> dict:
     """쿠폰/프로모션 분석."""
     with_coupon = [p for p in products if p.coupon]
-    with_plus = [p for p in products if p.plus_content]
 
     coupon_types: Counter = Counter()
     for p in with_coupon:
         coupon_types[p.coupon] += 1
 
-    # 쿠폰 유무에 따른 평균 BSR 비교
     coupon_bsr = [p.bsr_category for p in with_coupon if p.bsr_category is not None]
     no_coupon_bsr = [
         p.bsr_category for p in products
@@ -377,8 +412,6 @@ def analyze_promotions(products: list[WeightedProduct]) -> dict:
         "total_products": len(products),
         "coupon_count": len(with_coupon),
         "coupon_pct": round(len(with_coupon) / len(products) * 100, 1) if products else 0,
-        "plus_content_count": len(with_plus),
-        "plus_content_pct": round(len(with_plus) / len(products) * 100, 1) if products else 0,
         "coupon_types": [
             {"coupon": c, "count": n} for c, n in coupon_types.most_common(10)
         ],
@@ -436,6 +469,428 @@ def analyze_sales_volume(products: list[WeightedProduct]) -> dict:
     }
 
 
+# ── V5 신규 분석 ──────────────────────────────────────────
+
+
+def analyze_customer_voice(products: list[WeightedProduct]) -> dict:
+    """customer_says 키워드 빈도/감성 분석. Gemini 미사용, 키워드 사전 기반."""
+    POSITIVE_KEYWORDS = [
+        "effective", "moisturizing", "gentle", "lightweight", "absorbs quickly",
+        "hydrating", "brightening", "smooth", "refreshing", "no irritation",
+        "love", "soft", "clean", "works well", "great value",
+    ]
+    NEGATIVE_KEYWORDS = [
+        "sticky", "strong smell", "irritation", "greasy", "breakout",
+        "drying", "burning", "broke out", "allergic", "thin",
+        "oily", "too thick", "stinging", "rash", "waste",
+    ]
+
+    with_cs = [p for p in products if p.customer_says]
+    if not with_cs:
+        return {}
+
+    pos_counts: dict[str, list[WeightedProduct]] = {kw: [] for kw in POSITIVE_KEYWORDS}
+    neg_counts: dict[str, list[WeightedProduct]] = {kw: [] for kw in NEGATIVE_KEYWORDS}
+
+    for p in with_cs:
+        text = p.customer_says.lower()
+        for kw in POSITIVE_KEYWORDS:
+            if kw in text:
+                pos_counts[kw].append(p)
+        for kw in NEGATIVE_KEYWORDS:
+            if kw in text:
+                neg_counts[kw].append(p)
+
+    def _kw_stats(products_with_kw: list[WeightedProduct]) -> dict:
+        if not products_with_kw:
+            return {"count": 0, "avg_bsr": None, "avg_rating": None}
+        bsr_vals = [p.bsr_category for p in products_with_kw if p.bsr_category is not None]
+        return {
+            "count": len(products_with_kw),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_rating": round(
+                sum(p.rating for p in products_with_kw) / len(products_with_kw), 2
+            ),
+        }
+
+    sorted_by_bsr = sorted(
+        [p for p in with_cs if p.bsr_category is not None],
+        key=lambda p: p.bsr_category,
+    )
+    mid = len(sorted_by_bsr) // 2
+    top_half = sorted_by_bsr[:mid] if mid > 0 else []
+    bottom_half = sorted_by_bsr[mid:] if mid > 0 else []
+
+    def _group_keyword_freq(group: list[WeightedProduct], keywords: list[str]) -> dict[str, int]:
+        freq: dict[str, int] = {}
+        for kw in keywords:
+            count = sum(1 for p in group if kw in p.customer_says.lower())
+            if count > 0:
+                freq[kw] = count
+        return freq
+
+    return {
+        "total_with_customer_says": len(with_cs),
+        "positive_keywords": {
+            kw: _kw_stats(prods) for kw, prods in pos_counts.items() if prods
+        },
+        "negative_keywords": {
+            kw: _kw_stats(prods) for kw, prods in neg_counts.items() if prods
+        },
+        "bsr_top_half_positive": _group_keyword_freq(top_half, POSITIVE_KEYWORDS),
+        "bsr_top_half_negative": _group_keyword_freq(top_half, NEGATIVE_KEYWORDS),
+        "bsr_bottom_half_positive": _group_keyword_freq(bottom_half, POSITIVE_KEYWORDS),
+        "bsr_bottom_half_negative": _group_keyword_freq(bottom_half, NEGATIVE_KEYWORDS),
+    }
+
+
+def analyze_badges(products: list[WeightedProduct]) -> dict:
+    """badge 보유/미보유 제품 성과 비교 분석."""
+    with_badge = [p for p in products if p.badge]
+    without_badge = [p for p in products if not p.badge]
+
+    badge_types: Counter = Counter()
+    for p in with_badge:
+        badge_types[p.badge] += 1
+
+    def _group_metrics(group: list[WeightedProduct]) -> dict:
+        if not group:
+            return {"count": 0, "avg_bsr": None, "avg_price": None, "avg_reviews": None, "avg_rating": None}
+        bsr_vals = [p.bsr_category for p in group if p.bsr_category is not None]
+        prices = [p.price for p in group if p.price is not None]
+        return {
+            "count": len(group),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_price": round(sum(prices) / len(prices), 2) if prices else None,
+            "avg_reviews": round(sum(p.reviews for p in group) / len(group)),
+            "avg_rating": round(sum(p.rating for p in group) / len(group), 2),
+        }
+
+    threshold = {}
+    if with_badge:
+        reviews_list = [p.reviews for p in with_badge]
+        ratings_list = [p.rating for p in with_badge]
+        threshold = {
+            "min_reviews": min(reviews_list),
+            "median_reviews": sorted(reviews_list)[len(reviews_list) // 2],
+            "min_rating": min(ratings_list),
+            "median_rating": round(
+                sorted(ratings_list)[len(ratings_list) // 2], 1
+            ),
+        }
+
+    # V5 Phase 2: 통계 검증
+    badge_bsr = [float(p.bsr_category) for p in with_badge if p.bsr_category is not None]
+    no_badge_bsr = [float(p.bsr_category) for p in without_badge if p.bsr_category is not None]
+
+    return {
+        "total_products": len(products),
+        "with_badge": _group_metrics(with_badge),
+        "without_badge": _group_metrics(without_badge),
+        "badge_types": [
+            {"badge": b, "count": c} for b, c in badge_types.most_common()
+        ],
+        "acquisition_threshold": threshold,
+        "stat_test_bsr": _stat_compare(badge_bsr, no_badge_bsr),
+    }
+
+
+def analyze_discount_impact(products: list[WeightedProduct]) -> dict:
+    """할인율(initial_price vs final_price) 구간별 BSR/판매량 비교."""
+
+    def _discount_tier(pct: float) -> str:
+        if pct <= 0:
+            return "No Discount (0%)"
+        if pct <= 15:
+            return "Light (1-15%)"
+        if pct <= 30:
+            return "Medium (16-30%)"
+        return "Heavy (31%+)"
+
+    tiers: dict[str, list[WeightedProduct]] = defaultdict(list)
+
+    for p in products:
+        if p.initial_price is not None and p.price is not None and p.initial_price > 0:
+            discount_pct = (1 - p.price / p.initial_price) * 100
+            tier = _discount_tier(discount_pct)
+        else:
+            tier = "No Discount (0%)"
+        tiers[tier].append(p)
+
+    def _tier_metrics(group: list[WeightedProduct]) -> dict:
+        if not group:
+            return {"count": 0, "avg_bsr": None, "avg_bought": None, "avg_price": None}
+        bsr_vals = [p.bsr_category for p in group if p.bsr_category is not None]
+        bought_vals = [p.bought_past_month for p in group if p.bought_past_month is not None]
+        prices = [p.price for p in group if p.price is not None]
+        return {
+            "count": len(group),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_bought": round(sum(bought_vals) / len(bought_vals)) if bought_vals else None,
+            "avg_price": round(sum(prices) / len(prices), 2) if prices else None,
+        }
+
+    tier_order = ["No Discount (0%)", "Light (1-15%)", "Medium (16-30%)", "Heavy (31%+)"]
+
+    # V5 Phase 2: 통계 검증 (할인 vs 미할인)
+    discount_bsr = [
+        float(p.bsr_category) for p in products
+        if p.initial_price is not None and p.price is not None
+        and p.initial_price > p.price and p.bsr_category is not None
+    ]
+    no_discount_bsr = [
+        float(p.bsr_category) for p in products
+        if (p.initial_price is None or p.initial_price <= (p.price or 0))
+        and p.bsr_category is not None
+    ]
+
+    return {
+        "total_products": len(products),
+        "tiers": {
+            tier: _tier_metrics(tiers.get(tier, []))
+            for tier in tier_order
+        },
+        "stat_test_bsr": _stat_compare(discount_bsr, no_discount_bsr),
+    }
+
+
+def analyze_title_keywords(products: list[WeightedProduct]) -> dict:
+    """title 내 마케팅 키워드별 BSR/판매량 비교."""
+    MARKETING_KEYWORDS = [
+        "Organic", "Natural", "Korean", "Vegan", "Sulfate-Free",
+        "Dermatologist", "Clinical", "Hyaluronic", "Retinol", "Vitamin C",
+        "Collagen", "Niacinamide", "Salicylic", "SPF", "Cruelty-Free",
+        "Fragrance-Free", "Paraben-Free", "Gluten-Free", "Alcohol-Free",
+        "Sensitive", "Anti-Aging", "Moisturizing",
+    ]
+
+    keyword_products: dict[str, list[WeightedProduct]] = {kw: [] for kw in MARKETING_KEYWORDS}
+
+    for p in products:
+        title_lower = p.title.lower()
+        for kw in MARKETING_KEYWORDS:
+            if kw.lower() in title_lower:
+                keyword_products[kw].append(p)
+
+    def _kw_metrics(group: list[WeightedProduct]) -> dict:
+        if not group:
+            return {"count": 0, "avg_bsr": None, "avg_bought": None}
+        bsr_vals = [p.bsr_category for p in group if p.bsr_category is not None]
+        bought_vals = [p.bought_past_month for p in group if p.bought_past_month is not None]
+        return {
+            "count": len(group),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_bought": round(sum(bought_vals) / len(bought_vals)) if bought_vals else None,
+        }
+
+    results = {
+        kw: _kw_metrics(prods)
+        for kw, prods in keyword_products.items()
+        if prods
+    }
+
+    sorted_results = dict(
+        sorted(
+            results.items(),
+            key=lambda x: x[1].get("avg_bsr") or float("inf"),
+        )
+    )
+
+    return {
+        "total_products": len(products),
+        "keyword_analysis": sorted_results,
+    }
+
+
+# ── V5 Phase 2: Deep Analysis ────────────────────────────
+
+
+def _stat_compare(group_a: list[float], group_b: list[float]) -> dict:
+    """두 그룹 간 Mann-Whitney U test. p-value와 유의성 판정 반환."""
+    if len(group_a) < 5 or len(group_b) < 5:
+        return {"p_value": None, "significant": None, "note": "insufficient_sample"}
+    try:
+        from scipy.stats import mannwhitneyu
+        stat, p_value = mannwhitneyu(group_a, group_b, alternative="two-sided")
+        return {
+            "p_value": round(p_value, 4),
+            "significant": p_value < 0.05,
+            "u_statistic": round(stat, 2),
+        }
+    except Exception:
+        return {"p_value": None, "significant": None, "note": "test_failed"}
+
+
+def _parse_unit_price(unit_price_str: str) -> tuple[float | None, str | None]:
+    """'$0.36 / ounce' -> (0.36, 'ounce'). 파싱 실패 시 (None, None)."""
+    if not unit_price_str:
+        return None, None
+    m = re.match(r"\$?([\d.]+)\s*/\s*(.+)", unit_price_str.strip())
+    if m:
+        try:
+            return float(m.group(1)), m.group(2).strip().lower()
+        except ValueError:
+            return None, None
+    return None, None
+
+
+def analyze_unit_economics(products: list[WeightedProduct]) -> dict:
+    """unit_price 파싱 + 동일 단위 기준 단가 비교."""
+    unit_data: dict[str, list[dict]] = defaultdict(list)
+    parse_success = 0
+    parse_fail = 0
+
+    for p in products:
+        price_val, unit = _parse_unit_price(p.unit_price)
+        if price_val is not None and unit is not None:
+            parse_success += 1
+            unit_data[unit].append({
+                "asin": p.asin,
+                "title": p.title[:60],
+                "unit_price": price_val,
+                "final_price": p.price,
+                "bsr": p.bsr_category,
+                "bought": p.bought_past_month,
+            })
+        elif p.unit_price:
+            parse_fail += 1
+
+    unit_summaries = {}
+    for unit, items in unit_data.items():
+        if len(items) < 3:
+            continue
+        prices = [i["unit_price"] for i in items]
+        bsr_vals = [i["bsr"] for i in items if i["bsr"] is not None]
+        items_sorted = sorted(items, key=lambda x: x["unit_price"])
+        unit_summaries[unit] = {
+            "count": len(items),
+            "avg_unit_price": round(sum(prices) / len(prices), 3),
+            "min_unit_price": round(min(prices), 3),
+            "max_unit_price": round(max(prices), 3),
+            "cheapest": items_sorted[0],
+            "most_expensive": items_sorted[-1],
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+        }
+
+    return {
+        "parse_success": parse_success,
+        "parse_fail": parse_fail,
+        "parse_rate": round(parse_success / (parse_success + parse_fail) * 100, 1)
+            if (parse_success + parse_fail) > 0 else 0,
+        "units": unit_summaries,
+    }
+
+
+def analyze_manufacturer(
+    products: list[WeightedProduct],
+    details: list[ProductDetail],
+) -> dict:
+    """제조사(OEM)별 프로파일 분석."""
+    detail_map = {d.asin: d for d in details}
+    mfr_data: dict[str, dict] = defaultdict(lambda: {
+        "products": [],
+        "bsr_values": [],
+        "prices": [],
+        "ratings": [],
+        "bought_values": [],
+    })
+
+    for p in products:
+        mfr = p.manufacturer
+        if not mfr:
+            d = detail_map.get(p.asin)
+            mfr = d.manufacturer if d else ""
+        if not mfr or mfr.lower() in ("unknown", ""):
+            continue
+        md = mfr_data[mfr]
+        md["products"].append(p.asin)
+        if p.bsr_category is not None:
+            md["bsr_values"].append(p.bsr_category)
+        if p.price is not None:
+            md["prices"].append(p.price)
+        md["ratings"].append(p.rating)
+        if p.bought_past_month is not None:
+            md["bought_values"].append(p.bought_past_month)
+
+    K_BEAUTY_KEYWORDS = [
+        "medicube", "cosrx", "beauty of joseon", "laneige", "innisfree",
+        "missha", "etude", "tonymoly", "some by mi", "klairs",
+        "purito", "neogen", "banila co", "heimish", "dr.jart",
+    ]
+
+    results = []
+    for mfr, md in mfr_data.items():
+        if len(md["products"]) < 2:
+            continue
+        prices = md["prices"]
+        bsr_vals = md["bsr_values"]
+        bought_vals = md["bought_values"]
+        is_kbeauty = any(kw in mfr.lower() for kw in K_BEAUTY_KEYWORDS)
+        results.append({
+            "manufacturer": mfr,
+            "product_count": len(md["products"]),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_price": round(sum(prices) / len(prices), 2) if prices else None,
+            "avg_rating": round(sum(md["ratings"]) / len(md["ratings"]), 2),
+            "total_bought": sum(bought_vals) if bought_vals else None,
+            "is_kbeauty": is_kbeauty,
+        })
+
+    results.sort(key=lambda x: x["product_count"], reverse=True)
+
+    top10_count = sum(r["product_count"] for r in results[:10])
+    total = len([p for p in products if p.manufacturer])
+
+    return {
+        "total_manufacturers": len(results),
+        "top_manufacturers": results[:15],
+        "market_concentration": {
+            "top10_products": top10_count,
+            "total_products": total,
+            "top10_share_pct": round(top10_count / total * 100, 1) if total > 0 else 0,
+        },
+        "kbeauty_manufacturers": [r for r in results if r["is_kbeauty"]],
+    }
+
+
+def analyze_sku_strategy(products: list[WeightedProduct]) -> dict:
+    """variations_count(SKU 수) 구간별 BSR/판매량 비교."""
+
+    def _sku_tier(count: int) -> str:
+        if count == 0:
+            return "Single (0)"
+        if count <= 3:
+            return "Few (1-3)"
+        if count <= 10:
+            return "Medium (4-10)"
+        return "Many (11+)"
+
+    tiers: dict[str, list[WeightedProduct]] = defaultdict(list)
+    for p in products:
+        tier = _sku_tier(p.variations_count)
+        tiers[tier].append(p)
+
+    def _tier_metrics(group: list[WeightedProduct]) -> dict:
+        if not group:
+            return {"count": 0, "avg_bsr": None, "avg_bought": None}
+        bsr_vals = [p.bsr_category for p in group if p.bsr_category is not None]
+        bought_vals = [p.bought_past_month for p in group if p.bought_past_month is not None]
+        return {
+            "count": len(group),
+            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
+            "avg_bought": round(sum(bought_vals) / len(bought_vals)) if bought_vals else None,
+        }
+
+    tier_order = ["Single (0)", "Few (1-3)", "Medium (4-10)", "Many (11+)"]
+    return {
+        "total_products": len(products),
+        "tiers": {
+            tier: _tier_metrics(tiers.get(tier, []))
+            for tier in tier_order
+        },
+    }
+
+
 def build_market_analysis(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -445,6 +900,7 @@ def build_market_analysis(
     return {
         "keyword": keyword,
         "total_products": len(weighted_products),
+        # 기존 V4 분석 (7개)
         "price_tier_analysis": analyze_by_price_tier(weighted_products),
         "bsr_analysis": analyze_by_bsr(weighted_products),
         "brand_analysis": analyze_by_brand(weighted_products, details),
@@ -452,9 +908,17 @@ def build_market_analysis(
         "brand_positioning": analyze_brand_positioning(weighted_products, details),
         "rising_products": detect_rising_products(weighted_products, details),
         "rating_ingredients": analyze_rating_ingredients(weighted_products),
-        # V4 신규 분석
+        # V4 분석 (competition 제거)
         "sales_volume": analyze_sales_volume(weighted_products),
         "sns_pricing": analyze_sns_pricing(weighted_products),
-        "competition": analyze_competition(weighted_products),
         "promotions": analyze_promotions(weighted_products),
+        # V5 Phase 1 신규
+        "customer_voice": analyze_customer_voice(weighted_products),
+        "badges": analyze_badges(weighted_products),
+        "discount_impact": analyze_discount_impact(weighted_products),
+        "title_keywords": analyze_title_keywords(weighted_products),
+        # V5 Phase 2 신규
+        "unit_economics": analyze_unit_economics(weighted_products),
+        "manufacturer": analyze_manufacturer(weighted_products, details),
+        "sku_strategy": analyze_sku_strategy(weighted_products),
     }
