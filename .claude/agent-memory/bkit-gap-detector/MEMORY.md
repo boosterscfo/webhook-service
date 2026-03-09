@@ -46,6 +46,12 @@
   - 146 comparison items across 10 design sections, all matched
   - 3 impl improvements: defensive .get() access, type guard in ingredient join, Item# comment annotations
   - Note: V5 partial (URL col 20 not written) resolved in V6
+- `keyword-search-analysis`: 99% match rate (2026-03-09). 0 Critical/Major/Minor gaps.
+  - Analysis at: `docs/03-analysis/keyword-search-analysis.analysis.md`
+  - Scope: Keyword search via Bright Data discover_by=keyword, 9-sheet Excel, 2-layer ingredient enrichment
+  - 132 comparison items: 127 MATCH, 4 CHANGED (compatible), 0 MISSING, 0 PARTIAL
+  - 8 impl improvements: JSON parsing, Decimal->float, try/except guards, variations fallback, bought_past_month injection
+  - New methods: trigger_keyword_search, process_search_snapshot, get_keyword_cache, get_keyword_products, save/update_keyword_search_log, build_keyword_market_analysis, build_keyword_excel, run_keyword_analysis, _prepare_for_gemini, _adapt_search_for_analyzer
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)
