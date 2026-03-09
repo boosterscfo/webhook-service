@@ -235,8 +235,21 @@ class DataCollector:
             raw_brand = (raw.get("brand") or "")[:200]
             brand = _resolve_brand(raw_brand, title)
 
-            # customer_says / customers_say fallback
+            # customer_says / customers_say fallback — dict/list → JSON 문자열
             customer_says = raw.get("customer_says") or raw.get("customers_say") or ""
+            if isinstance(customer_says, (dict, list)):
+                customer_says = json.dumps(customer_says, ensure_ascii=False)
+
+            # description — dict/list → JSON 문자열
+            description = raw.get("description") or ""
+            if isinstance(description, (dict, list)):
+                description = json.dumps(description, ensure_ascii=False)
+
+            # coupon — dict/list → JSON 문자열
+            coupon = (raw.get("coupon") or "")
+            if isinstance(coupon, (dict, list)):
+                coupon = json.dumps(coupon, ensure_ascii=False)
+            coupon = str(coupon)[:200]
 
             rows.append({
                 "keyword": keyword,
@@ -255,7 +268,7 @@ class DataCollector:
                 "sponsored": 1 if raw.get("sponsored") else 0,
                 "badge": (raw.get("badge") or "")[:100],
                 "bought_past_month": raw.get("bought_past_month"),
-                "coupon": (raw.get("coupon") or "")[:200],
+                "coupon": coupon,
                 "customer_says": customer_says,
                 "plus_content": 1 if raw.get("plus_content") else 0,
                 "number_of_sellers": raw.get("number_of_sellers") or 1,
@@ -263,7 +276,7 @@ class DataCollector:
                 "image_url": (raw.get("image_url") or "")[:500],
                 "product_url": (raw.get("url") or "")[:500],
                 "features": json.dumps(raw.get("features") or [], ensure_ascii=False),
-                "description": raw.get("description") or "",
+                "description": description,
                 "categories": json.dumps(raw.get("categories") or [], ensure_ascii=False),
                 "searched_at": searched_at,
             })
