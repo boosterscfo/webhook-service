@@ -582,6 +582,19 @@ async def run_analysis(
 # ── V6: 키워드 검색 분석 파이프라인 ──────────────────────
 
 
+def _safe_num(val):
+    """pandas NaN / None → None 방어."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        if f != f:  # NaN check
+            return None
+        return f
+    except (ValueError, TypeError):
+        return None
+
+
 def _prepare_for_gemini(keyword_product: dict) -> dict:
     """키워드 검색 결과를 Gemini 성분 추출 입력으로 변환.
 
@@ -614,10 +627,10 @@ def _adapt_search_for_analyzer(
     details = []
 
     for row in keyword_products:
-        price = row.get("price")
-        if price is not None:
-            price = float(price)
+        price = _safe_num(row.get("price"))
         price_str = f"${price:.2f}" if price is not None else ""
+        bought = _safe_num(row.get("bought_past_month"))
+        bought_int = int(bought) if bought is not None else None
 
         search_products.append(SearchProduct(
             position=row.get("position", 0),
@@ -625,12 +638,12 @@ def _adapt_search_for_analyzer(
             asin=row["asin"],
             price=price,
             price_raw=price_str,
-            reviews=row.get("reviews_count", 0) or 0,
-            reviews_raw=str(row.get("reviews_count", 0) or 0),
-            rating=float(row.get("rating", 0) or 0),
+            reviews=int(_safe_num(row.get("reviews_count")) or 0),
+            reviews_raw=str(int(_safe_num(row.get("reviews_count")) or 0)),
+            rating=float(_safe_num(row.get("rating")) or 0),
             sponsored=bool(row.get("sponsored", 0)),
             product_link=row.get("product_url", ""),
-            bought_past_month=row.get("bought_past_month"),
+            bought_past_month=bought_int,
         ))
 
         # features: JSON string → list → dict 변환
@@ -644,7 +657,7 @@ def _adapt_search_for_analyzer(
             features_list = features_raw or []
         features_dict = {f"Feature {i+1}": f for i, f in enumerate(features_list)} if isinstance(features_list, list) else {}
 
-        bsr = row.get("bsr")
+        bsr = _safe_num(row.get("bsr"))
         if bsr is not None:
             bsr = int(bsr)
 
@@ -830,15 +843,16 @@ async def _run_keyword_analysis_pipeline(
         for wp in weighted_products:
             kp = kp_map.get(wp.asin)
             if kp:
-                wp.badge = kp.get("badge", "")
-                wp.initial_price = float(kp["initial_price"]) if kp.get("initial_price") is not None else None
-                wp.manufacturer = kp.get("manufacturer", "")
-                wp.variations_count = kp.get("variations_count", 0) or 0
-                wp.coupon = kp.get("coupon", "")
+                wp.badge = kp.get("badge", "") or ""
+                wp.initial_price = _safe_num(kp.get("initial_price"))
+                wp.manufacturer = kp.get("manufacturer", "") or ""
+                wp.variations_count = int(_safe_num(kp.get("variations_count")) or 0)
+                wp.coupon = str(kp.get("coupon", "") or "")
                 wp.plus_content = bool(kp.get("plus_content", 0))
-                wp.customer_says = kp.get("customer_says", "")
-                wp.number_of_sellers = kp.get("number_of_sellers", 1) or 1
-                wp.bought_past_month = kp.get("bought_past_month")
+                wp.customer_says = str(kp.get("customer_says", "") or "")
+                wp.number_of_sellers = int(_safe_num(kp.get("number_of_sellers")) or 1)
+                bpm = _safe_num(kp.get("bought_past_month"))
+                wp.bought_past_month = int(bpm) if bpm is not None else None
 
         # Step 3: 시장 분석 (BSR 의존 분석 제외)
         analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details)
