@@ -23,14 +23,20 @@ DATA_FONT = Font(name="Arial", size=10)
 WRAP_ALIGN = Alignment(wrap_text=True, vertical="top")
 DEFAULT_ALIGN = Alignment(vertical="center")
 
+# Item 1: Consolidated TAB_COLORS
 TAB_COLORS = {
+    "Market Insight": "E91E63",
+    "Consumer Voice": "FF9800",
+    "Badge Analysis": "673AB7",
+    "Sales & Pricing": "009688",
+    "Brand Positioning": "3F51B5",
+    "Marketing Keywords": "795548",
     "Ingredient Ranking": "1B2A4A",
     "Category Summary": "2E86AB",
+    "Rising Products": "00BCD4",
     "Product Detail": "4CAF50",
     "Raw - Search Results": "FF6B35",
     "Raw - Product Detail": "9B59B6",
-    "Rising Products": "00BCD4",
-    "Market Insight": "E91E63",
 }
 
 
@@ -238,6 +244,9 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         cs_cell = ws.cell(row=row, column=18, value=p.customer_says)
         cs_cell.alignment = WRAP_ALIGN
         ws.cell(row=row, column=19, value=ingredients_str)
+        # Item 2: Product Detail URL bug fix
+        url = f"https://www.amazon.com/dp/{p.asin}"
+        ws.cell(row=row, column=20, value=url)
 
     end_row = 4 + len(products)
     _style_data_rows(ws, 5, end_row, col_count)
@@ -419,12 +428,14 @@ def _build_market_insight(wb: Workbook, keyword: str, report_md: str):
     ws.freeze_panes = "A5"
 
 
+# Item 3: Consumer Voice with BSR section
 def _build_consumer_voice(wb: Workbook, customer_voice_data: dict):
     """customer_says 키워드 분석 결과 시트."""
     ws = wb.create_sheet("Consumer Voice")
-    ws.sheet_properties.tabColor = "FF9800"
+    # Item 1: Use TAB_COLORS instead of hardcoded value
+    ws.sheet_properties.tabColor = TAB_COLORS["Consumer Voice"]
 
-    col_count = 4
+    col_count = 5  # Expanded for BSR section (5 columns)
     _write_title(
         ws,
         "Consumer Voice Analysis — Keyword Sentiment",
@@ -435,7 +446,7 @@ def _build_consumer_voice(wb: Workbook, customer_voice_data: dict):
     headers = ["Keyword", "Count", "Avg BSR", "Avg Rating"]
     for c, h in enumerate(headers, 1):
         ws.cell(row=4, column=c, value=h)
-    _style_header_row(ws, 4, col_count)
+    _style_header_row(ws, 4, 4)
 
     row = 5
     # Positive keywords
@@ -464,15 +475,65 @@ def _build_consumer_voice(wb: Workbook, customer_voice_data: dict):
             ws.cell(row=row, column=4, value=stats["avg_rating"])
         row += 1
 
-    _style_data_rows(ws, 5, row - 1, col_count)
+    data_end_row = row - 1
+    _style_data_rows(ws, 5, data_end_row, 4)
+
+    # Item 3: BSR Correlation section
+    bsr_top_pos = customer_voice_data.get("bsr_top_half_positive")
+    bsr_top_neg = customer_voice_data.get("bsr_top_half_negative")
+    bsr_bot_pos = customer_voice_data.get("bsr_bottom_half_positive") or {}
+    bsr_bot_neg = customer_voice_data.get("bsr_bottom_half_negative") or {}
+
+    if bsr_top_pos or bsr_top_neg:
+        row += 2  # 2 blank rows
+        ws.cell(row=row, column=1, value="BSR Correlation: Top Half vs Bottom Half")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        bsr_headers = ["Keyword", "Type", "Top Half Count", "Bottom Half Count", "Difference"]
+        for c, h in enumerate(bsr_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 5)
+        row += 1
+        bsr_data_start = row
+
+        # Positive keywords
+        for kw, top_count in (bsr_top_pos or {}).items():
+            bot_count = bsr_bot_pos.get(kw, 0)
+            if top_count == 0 and bot_count == 0:
+                continue
+            ws.cell(row=row, column=1, value=kw)
+            ws.cell(row=row, column=2, value="Positive")
+            ws.cell(row=row, column=3, value=top_count)
+            ws.cell(row=row, column=4, value=bot_count)
+            ws.cell(row=row, column=5, value=top_count - bot_count)
+            row += 1
+
+        # Negative keywords
+        for kw, top_count in (bsr_top_neg or {}).items():
+            bot_count = bsr_bot_neg.get(kw, 0)
+            if top_count == 0 and bot_count == 0:
+                continue
+            ws.cell(row=row, column=1, value=kw)
+            ws.cell(row=row, column=2, value="Negative")
+            ws.cell(row=row, column=3, value=top_count)
+            ws.cell(row=row, column=4, value=bot_count)
+            ws.cell(row=row, column=5, value=top_count - bot_count)
+            row += 1
+
+        if row > bsr_data_start:
+            _style_data_rows(ws, bsr_data_start, row - 1, 5)
+
     ws.freeze_panes = "A5"
-    _set_column_widths(ws, {"A": 20, "B": 10, "C": 12, "D": 10})
+    _set_column_widths(ws, {"A": 20, "B": 10, "C": 16, "D": 18, "E": 12})
 
 
+# Item 4: Badge Analysis with stat test and threshold sections
 def _build_badge_analysis(wb: Workbook, badge_data: dict):
     """badge 보유/미보유 비교 시트."""
     ws = wb.create_sheet("Badge Analysis")
-    ws.sheet_properties.tabColor = "673AB7"
+    # Item 1: Use TAB_COLORS instead of hardcoded value
+    ws.sheet_properties.tabColor = TAB_COLORS["Badge Analysis"]
 
     col_count = 5
     _write_title(
@@ -510,10 +571,485 @@ def _build_badge_analysis(wb: Workbook, badge_data: dict):
         row += 1
 
     _style_data_rows(ws, 5, row - 1, col_count)
+
+    # Item 4 Section A: Statistical Test: Badge vs No-Badge BSR
+    stat_test = badge_data.get("stat_test_bsr")
+    if stat_test is not None:
+        row += 2  # 2 blank rows
+        ws.cell(row=row, column=1, value="Statistical Test: Badge vs No-Badge BSR")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        # Header row
+        ws.cell(row=row, column=1, value="Test")
+        ws.cell(row=row, column=2, value="Value")
+        _style_header_row(ws, row, 2)
+        row += 1
+        stat_data_start = row
+
+        # Method
+        ws.cell(row=row, column=1, value="Method")
+        ws.cell(row=row, column=2, value="Mann-Whitney U Test")
+        row += 1
+
+        # U Statistic
+        ws.cell(row=row, column=1, value="U Statistic")
+        if stat_test.get("u_statistic") is not None:
+            ws.cell(row=row, column=2, value=stat_test["u_statistic"])
+        row += 1
+
+        # p-value
+        note = stat_test.get("note", "")
+        ws.cell(row=row, column=1, value="p-value")
+        if note in ("insufficient_sample", "test_failed"):
+            ws.cell(row=row, column=2, value=note)
+        elif stat_test.get("p_value") is not None:
+            ws.cell(row=row, column=2, value=stat_test["p_value"]).number_format = "0.0000"
+        row += 1
+
+        # Significant
+        ws.cell(row=row, column=1, value="Significant (p < 0.05)")
+        if note in ("insufficient_sample", "test_failed"):
+            ws.cell(row=row, column=2, value="N/A")
+        elif stat_test.get("significant") is not None:
+            ws.cell(row=row, column=2, value="Yes" if stat_test["significant"] else "No")
+        else:
+            ws.cell(row=row, column=2, value="N/A")
+        row += 1
+
+        _style_data_rows(ws, stat_data_start, row - 1, 2)
+
+    # Item 4 Section B: Badge Acquisition Threshold
+    threshold = badge_data.get("acquisition_threshold") or {}
+    if threshold:
+        row += 2  # 2 blank rows
+        ws.cell(row=row, column=1, value="Badge Acquisition Threshold")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        ws.cell(row=row, column=1, value="Metric")
+        ws.cell(row=row, column=2, value="Value")
+        _style_header_row(ws, row, 2)
+        row += 1
+        threshold_data_start = row
+
+        ws.cell(row=row, column=1, value="Minimum Reviews")
+        if threshold.get("min_reviews") is not None:
+            ws.cell(row=row, column=2, value=threshold["min_reviews"]).number_format = "#,##0"
+        row += 1
+
+        ws.cell(row=row, column=1, value="Median Reviews")
+        if threshold.get("median_reviews") is not None:
+            ws.cell(row=row, column=2, value=threshold["median_reviews"]).number_format = "#,##0"
+        row += 1
+
+        ws.cell(row=row, column=1, value="Minimum Rating")
+        if threshold.get("min_rating") is not None:
+            ws.cell(row=row, column=2, value=threshold["min_rating"])
+        row += 1
+
+        ws.cell(row=row, column=1, value="Median Rating")
+        if threshold.get("median_rating") is not None:
+            ws.cell(row=row, column=2, value=threshold["median_rating"])
+        row += 1
+
+        _style_data_rows(ws, threshold_data_start, row - 1, 2)
+
     ws.freeze_panes = "A5"
     _set_column_widths(ws, {"A": 25, "B": 10, "C": 12, "D": 12, "E": 10})
 
 
+# Item 5: Sales & Pricing sheet
+def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
+    sales = analysis_data.get("sales_volume") or {}
+    sns = analysis_data.get("sns_pricing") or {}
+    discount = analysis_data.get("discount_impact") or {}
+    promos = analysis_data.get("promotions") or {}
+
+    # All 4 sources empty → no sheet
+    if not any([sales, sns, discount, promos]):
+        return
+
+    ws = wb.create_sheet("Sales & Pricing")
+    ws.sheet_properties.tabColor = TAB_COLORS["Sales & Pricing"]
+
+    col_count = 6
+    _write_title(
+        ws,
+        "Sales & Pricing — Revenue, Discounts & Promotions",
+        "판매량, SNS 할인, 쿠폰 분석 통합 뷰",
+        col_count,
+    )
+
+    row = 4
+
+    # Section A: Top Sellers
+    top_sellers = sales.get("top_sellers")
+    if top_sellers:
+        ws.cell(row=row, column=1, value="Top Sellers")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        a_headers = ["ASIN", "Brand", "Title", "Bought/Mo", "Price", "BSR"]
+        for c, h in enumerate(a_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 6)
+        row += 1
+        a_data_start = row
+
+        for ts in top_sellers:
+            ws.cell(row=row, column=1, value=ts.get("asin"))
+            ws.cell(row=row, column=2, value=ts.get("brand"))
+            ws.cell(row=row, column=3, value=ts.get("title"))
+            if ts.get("bought_past_month") is not None:
+                ws.cell(row=row, column=4, value=ts["bought_past_month"]).number_format = "#,##0"
+            if ts.get("price") is not None:
+                ws.cell(row=row, column=5, value=ts["price"]).number_format = "$#,##0.00"
+            if ts.get("bsr") is not None:
+                ws.cell(row=row, column=6, value=ts["bsr"]).number_format = "#,##0"
+            row += 1
+
+        _style_data_rows(ws, a_data_start, row - 1, 6)
+
+    # Section B: Sales by Price Tier
+    price_tiers = sales.get("sales_by_price_tier")
+    if price_tiers:
+        row += 2
+        ws.cell(row=row, column=1, value="Sales by Price Tier")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        b_headers = ["Price Tier", "Count", "Total Sales", "Avg Sales"]
+        for c, h in enumerate(b_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 4)
+        row += 1
+        b_data_start = row
+
+        tier_order = ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]
+        for tier_name in tier_order:
+            tier = price_tiers.get(tier_name)
+            if tier is None:
+                continue
+            ws.cell(row=row, column=1, value=tier_name)
+            if tier.get("count") is not None:
+                ws.cell(row=row, column=2, value=tier["count"]).number_format = "#,##0"
+            if tier.get("total_sales") is not None:
+                ws.cell(row=row, column=3, value=tier["total_sales"]).number_format = "#,##0"
+            if tier.get("avg_sales") is not None:
+                ws.cell(row=row, column=4, value=tier["avg_sales"]).number_format = "#,##0"
+            row += 1
+
+        if row > b_data_start:
+            _style_data_rows(ws, b_data_start, row - 1, 4)
+
+    # Section C: SNS Pricing Summary
+    if sns:
+        row += 2
+        ws.cell(row=row, column=1, value="Subscribe & Save Pricing")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        ws.cell(row=row, column=1, value="Metric")
+        ws.cell(row=row, column=2, value="Value")
+        _style_header_row(ws, row, 2)
+        row += 1
+        c_data_start = row
+
+        retention = sns.get("retention_signal") or {}
+
+        kv_rows = [
+            ("SNS Adoption Rate", f"{sns.get('sns_adoption_pct', '')}%", None),
+            ("Avg SNS Discount", f"{sns.get('avg_discount_pct', '')}%", None),
+            ("SNS Avg Bought/Mo", retention.get("sns_avg_bought"), "#,##0"),
+            ("No-SNS Avg Bought/Mo", retention.get("no_sns_avg_bought"), "#,##0"),
+            ("With SNS Count", sns.get("with_sns_count"), "#,##0"),
+            ("Without SNS Count", sns.get("without_sns_count"), "#,##0"),
+        ]
+        for label, value, fmt in kv_rows:
+            ws.cell(row=row, column=1, value=label)
+            if value is not None:
+                cell = ws.cell(row=row, column=2, value=value)
+                if fmt:
+                    cell.number_format = fmt
+            row += 1
+
+        _style_data_rows(ws, c_data_start, row - 1, 2)
+
+    # Section D: Discount Impact
+    discount_tiers = discount.get("tiers")
+    if discount_tiers:
+        row += 2
+        ws.cell(row=row, column=1, value="Discount Impact on BSR")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        d_headers = ["Discount Tier", "Count", "Avg BSR", "Avg Bought", "Avg Price"]
+        for c, h in enumerate(d_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 5)
+        row += 1
+        d_data_start = row
+
+        tier_order = ["No Discount (0%)", "Light (1-15%)", "Medium (16-30%)", "Heavy (31%+)"]
+        for tier_name in tier_order:
+            tier = discount_tiers.get(tier_name)
+            if tier is None:
+                continue
+            ws.cell(row=row, column=1, value=tier_name)
+            if tier.get("count") is not None:
+                ws.cell(row=row, column=2, value=tier["count"]).number_format = "#,##0"
+            if tier.get("avg_bsr") is not None:
+                ws.cell(row=row, column=3, value=tier["avg_bsr"]).number_format = "#,##0"
+            if tier.get("avg_bought") is not None:
+                ws.cell(row=row, column=4, value=tier["avg_bought"]).number_format = "#,##0"
+            if tier.get("avg_price") is not None:
+                ws.cell(row=row, column=5, value=tier["avg_price"]).number_format = "$#,##0.00"
+            row += 1
+
+        if row > d_data_start:
+            _style_data_rows(ws, d_data_start, row - 1, 5)
+
+    # Section E: Coupon Types
+    coupon_types = promos.get("coupon_types")
+    if coupon_types:
+        row += 2
+        ws.cell(row=row, column=1, value="Coupon Type Distribution")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        ws.cell(row=row, column=1, value="Coupon")
+        ws.cell(row=row, column=2, value="Count")
+        _style_header_row(ws, row, 2)
+        row += 1
+        e_data_start = row
+
+        for ct in coupon_types:
+            ws.cell(row=row, column=1, value=ct.get("coupon"))
+            if ct.get("count") is not None:
+                ws.cell(row=row, column=2, value=ct["count"]).number_format = "#,##0"
+            row += 1
+
+        if row > e_data_start:
+            _style_data_rows(ws, e_data_start, row - 1, 2)
+
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {
+        "A": 22, "B": 16, "C": 40, "D": 14, "E": 12, "F": 10,
+    })
+
+
+# Item 6: Brand Positioning sheet
+def _build_brand_positioning_sheet(wb: Workbook, analysis_data: dict) -> None:
+    positioning = analysis_data.get("brand_positioning")  # list[dict]
+    mfr = analysis_data.get("manufacturer") or {}
+
+    if not positioning and not mfr:
+        return
+
+    ws = wb.create_sheet("Brand Positioning")
+    ws.sheet_properties.tabColor = TAB_COLORS["Brand Positioning"]
+
+    col_count = 7
+    _write_title(
+        ws,
+        "Brand Positioning — Price vs BSR Analysis",
+        "브랜드/제조사별 가격 포지셔닝 및 시장 성과 비교",
+        col_count,
+    )
+
+    row = 4
+
+    # Section A: Brand Positioning
+    if positioning:
+        ws.cell(row=row, column=1, value="Brand Positioning")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        a_headers = ["Brand", "Products", "Avg Price", "Avg BSR", "Avg Rating", "Total Reviews", "Segment"]
+        for c, h in enumerate(a_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 7)
+        row += 1
+        a_data_start = row
+
+        for bp in positioning:
+            ws.cell(row=row, column=1, value=bp.get("brand"))
+            if bp.get("product_count") is not None:
+                ws.cell(row=row, column=2, value=bp["product_count"]).number_format = "#,##0"
+            if bp.get("avg_price") is not None:
+                ws.cell(row=row, column=3, value=bp["avg_price"]).number_format = "$#,##0.00"
+            if bp.get("avg_bsr") is not None:
+                ws.cell(row=row, column=4, value=bp["avg_bsr"]).number_format = "#,##0"
+            if bp.get("avg_rating") is not None:
+                ws.cell(row=row, column=5, value=bp["avg_rating"]).number_format = "0.00"
+            if bp.get("total_reviews") is not None:
+                ws.cell(row=row, column=6, value=bp["total_reviews"]).number_format = "#,##0"
+            ws.cell(row=row, column=7, value=bp.get("segment"))
+            row += 1
+
+        _style_data_rows(ws, a_data_start, row - 1, 7)
+
+    # Section B: Top Manufacturers
+    top_mfrs = mfr.get("top_manufacturers")
+    if top_mfrs:
+        row += 2
+        ws.cell(row=row, column=1, value="Top Manufacturers")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        b_headers = ["Manufacturer", "Products", "Avg BSR", "Avg Price", "Avg Rating", "Total Bought", "K-Beauty"]
+        for c, h in enumerate(b_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 7)
+        row += 1
+        b_data_start = row
+
+        for m in top_mfrs:
+            ws.cell(row=row, column=1, value=m.get("manufacturer"))
+            if m.get("product_count") is not None:
+                ws.cell(row=row, column=2, value=m["product_count"]).number_format = "#,##0"
+            if m.get("avg_bsr") is not None:
+                ws.cell(row=row, column=3, value=m["avg_bsr"]).number_format = "#,##0"
+            if m.get("avg_price") is not None:
+                ws.cell(row=row, column=4, value=m["avg_price"]).number_format = "$#,##0.00"
+            if m.get("avg_rating") is not None:
+                ws.cell(row=row, column=5, value=m["avg_rating"]).number_format = "0.00"
+            if m.get("total_bought") is not None:
+                ws.cell(row=row, column=6, value=m["total_bought"]).number_format = "#,##0"
+            ws.cell(row=row, column=7, value="Y" if m.get("is_kbeauty") else "")
+            row += 1
+
+        _style_data_rows(ws, b_data_start, row - 1, 7)
+
+    # Section C: Market Concentration
+    mc = mfr.get("market_concentration")
+    if mc:
+        row += 2
+        ws.cell(row=row, column=1, value="Market Concentration")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        ws.cell(row=row, column=1, value="Metric")
+        ws.cell(row=row, column=2, value="Value")
+        _style_header_row(ws, row, 2)
+        row += 1
+        c_data_start = row
+
+        ws.cell(row=row, column=1, value="Total Manufacturers")
+        if mfr.get("total_manufacturers") is not None:
+            ws.cell(row=row, column=2, value=mfr["total_manufacturers"]).number_format = "#,##0"
+        row += 1
+
+        ws.cell(row=row, column=1, value="Top 10 Products")
+        if mc.get("top10_products") is not None:
+            ws.cell(row=row, column=2, value=mc["top10_products"]).number_format = "#,##0"
+        row += 1
+
+        ws.cell(row=row, column=1, value="Total Products")
+        if mc.get("total_products") is not None:
+            ws.cell(row=row, column=2, value=mc["total_products"]).number_format = "#,##0"
+        row += 1
+
+        ws.cell(row=row, column=1, value="Top 10 Market Share")
+        if mc.get("top10_share_pct") is not None:
+            ws.cell(row=row, column=2, value=f"{mc['top10_share_pct']}%")
+        row += 1
+
+        _style_data_rows(ws, c_data_start, row - 1, 2)
+
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {
+        "A": 24, "B": 10, "C": 12, "D": 12, "E": 10, "F": 14, "G": 18,
+    })
+
+
+# Item 7: Marketing Keywords sheet
+def _build_marketing_keywords(wb: Workbook, analysis_data: dict) -> None:
+    kw_data = analysis_data.get("title_keywords") or {}
+    tier_data = analysis_data.get("price_tier_analysis") or {}
+
+    if not kw_data and not tier_data:
+        return
+
+    ws = wb.create_sheet("Marketing Keywords")
+    ws.sheet_properties.tabColor = TAB_COLORS["Marketing Keywords"]
+
+    col_count = 4
+    _write_title(
+        ws,
+        "Marketing Keywords — Title Keyword Performance",
+        "제품 타이틀 내 마케팅 키워드별 BSR/판매량 + 가격대별 Top 성분",
+        col_count,
+    )
+
+    row = 4
+
+    # Section A: Title Keyword Performance
+    keyword_analysis = kw_data.get("keyword_analysis")
+    if keyword_analysis:
+        ws.cell(row=row, column=1, value="Title Keyword Performance")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        a_headers = ["Keyword", "Count", "Avg BSR", "Avg Bought/Mo"]
+        for c, h in enumerate(a_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 4)
+        row += 1
+        a_data_start = row
+
+        for kw, metrics in keyword_analysis.items():
+            ws.cell(row=row, column=1, value=kw)
+            if metrics.get("count") is not None:
+                ws.cell(row=row, column=2, value=metrics["count"]).number_format = "#,##0"
+            if metrics.get("avg_bsr") is not None:
+                ws.cell(row=row, column=3, value=metrics["avg_bsr"]).number_format = "#,##0"
+            if metrics.get("avg_bought") is not None:
+                ws.cell(row=row, column=4, value=metrics["avg_bought"]).number_format = "#,##0"
+            row += 1
+
+        if row > a_data_start:
+            _style_data_rows(ws, a_data_start, row - 1, 4)
+
+    # Section B: Price Tier Top Ingredients
+    if tier_data:
+        row += 2
+        ws.cell(row=row, column=1, value="Price Tier Top Ingredients")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        b_headers = ["Price Tier", "Products", "Top Ingredients"]
+        for c, h in enumerate(b_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 3)
+        row += 1
+        b_data_start = row
+
+        tier_order = ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]
+        for tier_name in tier_order:
+            tier = tier_data.get(tier_name)
+            if tier is None:
+                continue
+            ws.cell(row=row, column=1, value=tier_name)
+            if tier.get("product_count") is not None:
+                ws.cell(row=row, column=2, value=tier["product_count"]).number_format = "#,##0"
+            top_ings = tier.get("top_ingredients") or []
+            ing_str = ", ".join(ing["name"] for ing in top_ings if isinstance(ing, dict) and "name" in ing)
+            ing_cell = ws.cell(row=row, column=3, value=ing_str)
+            ing_cell.alignment = WRAP_ALIGN
+            row += 1
+
+        if row > b_data_start:
+            _style_data_rows(ws, b_data_start, row - 1, 3)
+
+    ws.freeze_panes = "A5"
+    _set_column_widths(ws, {
+        "A": 22, "B": 10, "C": 14, "D": 14,
+    })
+
+
+# Item 8: Updated build_excel()
 def build_excel(
     keyword: str,
     weighted_products: list[WeightedProduct],
@@ -528,7 +1064,7 @@ def build_excel(
 ) -> bytes:
     wb = Workbook()
 
-    # === Insight tabs (앞쪽) ===
+    # === Insight tabs ===
     _build_ingredient_ranking(wb, keyword, rankings, len(weighted_products))
     if market_report:
         _build_market_insight(wb, keyword, market_report)
@@ -539,22 +1075,29 @@ def build_excel(
         badge_data = analysis_data.get("badges")
         if badge_data:
             _build_badge_analysis(wb, badge_data)
+        _build_sales_pricing(wb, analysis_data)
 
-    # === Analysis tabs (중간) ===
+    # === Analysis tabs ===
+    if analysis_data:
+        _build_brand_positioning_sheet(wb, analysis_data)
+        _build_marketing_keywords(wb, analysis_data)
     _build_category_summary(wb, categories)
     if rising_products:
         _build_rising_products(wb, rising_products)
     _build_product_detail(wb, weighted_products)
 
-    # === Raw tabs (뒤쪽) ===
+    # === Raw tabs ===
     _build_raw_search(wb, keyword, search_products)
     _build_raw_detail(wb, details)
 
-    # Reorder: Market Insight → Consumer Voice → Badge Analysis → Ingredient Ranking → ...
+    # Reorder sheets
     desired_order = [
         "Market Insight",
         "Consumer Voice",
         "Badge Analysis",
+        "Sales & Pricing",
+        "Brand Positioning",
+        "Marketing Keywords",
         "Ingredient Ranking",
         "Category Summary",
         "Rising Products",
