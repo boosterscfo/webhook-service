@@ -7,7 +7,7 @@
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
   "startedAt": "2026-03-09T05:10:44.250Z",
-  "lastUpdated": "2026-03-09T05:14:00.028Z",
+  "lastUpdated": "2026-03-09T05:16:56.855Z",
   "teammates": [
     {
       "name": "aa09d9ae4c3629583",
@@ -18,6 +18,16 @@
       "taskId": null,
       "startedAt": "2026-03-09T05:10:44.251Z",
       "lastActivityAt": "2026-03-09T05:14:00.027Z"
+    },
+    {
+      "name": "ab3cb0bc9ee15839a",
+      "role": "bkit:gap-detector",
+      "model": "sonnet",
+      "status": "completed",
+      "currentTask": null,
+      "taskId": null,
+      "startedAt": "2026-03-09T05:14:27.830Z",
+      "lastActivityAt": "2026-03-09T05:16:56.854Z"
     }
   ],
   "progress": {

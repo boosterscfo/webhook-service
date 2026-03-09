@@ -40,6 +40,12 @@
   - 25 comparison items: 23 MATCH, 2 PARTIAL, 0 MISSING
   - 2 impl improvements: stat_test early integration, run_research pipeline coverage
   - Partials: analyze_by_bsr() missing stat_test, Product Detail URL col 20 not written
+- `excel-report-v6`: 100% match rate (2026-03-09). 0 gaps.
+  - Analysis at: `docs/03-analysis/excel-report-v6.analysis.md`
+  - V6 scope: TAB_COLORS consolidation, Product Detail URL fix, Consumer Voice BSR section, Badge Analysis stat test + threshold, 3 new sheets (Sales & Pricing, Brand Positioning, Marketing Keywords), build_excel() desired_order update
+  - 146 comparison items across 10 design sections, all matched
+  - 3 impl improvements: defensive .get() access, type guard in ingredient join, Item# comment annotations
+  - Note: V5 partial (URL col 20 not written) resolved in V6
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)
