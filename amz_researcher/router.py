@@ -15,6 +15,123 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _build_help_response() -> dict:
+    """상세 도움말 Block Kit 응답 생성."""
+    return {
+        "response_type": "ephemeral",
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "Amazon BSR Analyzer — 상세 가이드"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "Amazon Best Sellers 카테고리별 Top 100 제품을 수집하고,\n"
+                        "Gemini AI로 성분을 추출·분석하여 시장 인사이트 리포트를 생성합니다.\n\n"
+                        "*전체 워크플로우:*\n"
+                        "1️⃣ 카테고리 등록 (`/amz add`) → 2️⃣ 데이터 수집 (`/amz refresh`) → 3️⃣ 분석 (`/amz {키워드}`)"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*📊 분석 실행*\n\n"
+                        "`/amz {키워드}`\n"
+                        "키워드와 매칭되는 카테고리를 검색하고, 선택하면 분석을 시작합니다.\n"
+                        "• 성분 추출 (Gemini Flash) → 가중치 랭킹 → 시장 리포트 → Excel 파일 생성\n"
+                        "• 결과는 Slack 메시지 + Excel 첨부로 전달됩니다.\n\n"
+                        "_예시:_\n"
+                        "• `/amz serum` — serum 관련 카테고리 검색\n"
+                        "• `/amz sunscreen` — 자외선 차단제 카테고리 검색\n"
+                        "• `/amz hair oil` — 여러 단어 키워드도 가능"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*📋 카테고리 관리*\n\n"
+                        "`/amz list`\n"
+                        "현재 등록된 모든 카테고리와 node_id를 표시합니다.\n\n"
+                        "`/amz add {카테고리명} {Amazon BSR URL}`\n"
+                        "새 카테고리를 등록합니다. URL은 Amazon Best Sellers 페이지 주소입니다.\n\n"
+                        "_예시:_\n"
+                        "• `/amz add Hair Oils https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281`\n"
+                        "• `/amz add Face Moisturizers https://www.amazon.com/Best-Sellers/zgbs/beauty/11062741`\n\n"
+                        "_카테고리명에 공백이 있어도 따옴표 없이 입력하세요. 마지막 인자가 URL로 인식됩니다._"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*🔄 데이터 수집*\n\n"
+                        "`/amz refresh`\n"
+                        "등록된 전체 카테고리의 BSR Top 100 데이터를 Bright Data로 수집합니다.\n"
+                        "수집이 완료되면 webhook으로 자동 DB 적재됩니다.\n\n"
+                        "`/amz refresh {키워드}`\n"
+                        "특정 카테고리만 선택적으로 수집합니다.\n\n"
+                        "_예시:_\n"
+                        "• `/amz refresh` — 전체 카테고리 수집 (수 분 소요)\n"
+                        "• `/amz refresh serum` — serum 카테고리만 수집"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*📈 분석 리포트 구성*\n\n"
+                        "Excel 파일에 포함되는 시트:\n"
+                        "• *V4 Raw* — 수집된 원본 제품 데이터\n"
+                        "• *Ingredient Rankings* — 성분별 가중치 점수 랭킹\n"
+                        "• *Market Insight* — AI 시장 분석 리포트\n\n"
+                        "_Score = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)_"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*💡 팁*\n\n"
+                        "• 데이터는 캐시되어 재분석 시 빠르게 처리됩니다.\n"
+                        "• 최신 데이터가 필요하면 `/amz refresh`로 먼저 수집하세요.\n"
+                        "• 분석 완료까지 보통 1~2분 소요됩니다.\n"
+                        "• `/amz` (인자 없음)으로 간단 요약을 볼 수 있습니다."
+                    ),
+                },
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "Powered by Bright Data + Gemini Flash | `/amz` 간단 요약 | `/amz help` 상세 가이드",
+                    },
+                ],
+            },
+        ],
+    }
+
+
 class ResearchRequest(BaseModel):
     keyword: str
     response_url: str = ""
@@ -114,6 +231,10 @@ async def slack_amz(
         }
 
     subcommand = parts[0].lower()
+
+    # /amz help — 상세 도움말
+    if subcommand == "help":
+        return _build_help_response()
 
     # /amz add {name} {url}
     if subcommand == "add":
