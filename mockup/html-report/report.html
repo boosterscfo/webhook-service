@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMZ Insight Report — rosehip oil</title>
+  <style>
+    /* ===== DESIGN TOKENS ===== */
+    :root {
+      --color-market-insight:    #E91E63;
+      --color-consumer-voice:    #FF9800;
+      --color-badge-analysis:    #673AB7;
+      --color-sales-pricing:     #009688;
+      --color-brand-positioning: #3F51B5;
+      --color-marketing-kw:      #795548;
+      --color-ingredient-rank:   #1B2A4A;
+      --color-ingredient-rank-light: #2E4A7A;
+      --color-category-summary:  #2E86AB;
+      --color-rising-products:   #00BCD4;
+      --color-product-detail:    #4CAF50;
+      --color-raw-search:        #FF6B35;
+      --color-raw-detail:        #9B59B6;
+
+      --color-bg-page:    #0F1117;
+      --color-bg-card:    #1A1D27;
+      --color-bg-sidebar: #13151F;
+      --color-bg-input:   #22253A;
+      --color-bg-row-alt: #1E2130;
+      --color-bg-hover:   #20233A;
+
+      --color-text-primary:   #F0F2F8;
+      --color-text-secondary: #8B92A5;
+      --color-text-muted:     #4D5468;
+      --color-positive:  #22C55E;
+      --color-negative:  #EF4444;
+      --color-border:    #2A2D3E;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "SF Mono", "Fira Code", monospace;
+
+      --sidebar-width: 220px;
+      --header-height: 56px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-full: 9999px;
+    }
+
+    /* ===== RESET ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--color-text-primary);
+      background: var(--color-bg-page);
+      min-height: 100vh;
+    }
+
+    /* ===== HEADER ===== */
+    .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--header-height);
+      background: var(--color-bg-sidebar);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      z-index: 100;
+      gap: 16px;
+    }
+    .header-logo {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-logo-dot {
+      width: 8px; height: 8px;
+      background: #E91E63;
+      border-radius: 50%;
+    }
+    .header-keyword {
+      background: rgba(233, 30, 99, 0.15);
+      color: #E91E63;
+      border: 1px solid rgba(233, 30, 99, 0.3);
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .header-meta {
+      color: var(--color-text-muted);
+      font-size: 12px;
+      margin-left: auto;
+    }
+    .back-to-top {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+      padding: 5px 12px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 12px;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .back-to-top:hover { color: var(--color-text-primary); border-color: #666; }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      position: fixed;
+      top: var(--header-height);
+      left: 0;
+      bottom: 0;
+      width: var(--sidebar-width);
+      background: var(--color-bg-sidebar);
+      border-right: 1px solid var(--color-border);
+      overflow-y: auto;
+      z-index: 50;
+      padding: 16px 0;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+    .nav-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      padding: 8px 16px 4px;
+      margin-top: 8px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 16px;
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      font-size: 13px;
+      text-decoration: none;
+      transition: all 0.15s;
+      border-left: 3px solid transparent;
+      position: relative;
+    }
+    .nav-item:hover { color: var(--color-text-primary); background: rgba(255,255,255,0.04); }
+    .nav-item.active { color: var(--color-text-primary); }
+    .nav-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      border: 1.5px solid currentColor;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .nav-item.active .nav-dot { border: none; }
+
+    /* ===== MAIN CONTENT ===== */
+    .main {
+      margin-left: var(--sidebar-width);
+      margin-top: var(--header-height);
+      padding: 0;
+    }
+
+    /* ===== SECTION ===== */
+    .section {
+      padding: 40px 32px 56px;
+      border-bottom: 1px solid var(--color-border);
+      max-width: 1200px;
+    }
+    .section-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 28px;
+      padding-left: 12px;
+      border-left: 3px solid var(--section-color, #666);
+    }
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+    }
+    .section-subtitle {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      margin-top: 3px;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+    }
+    .card-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .card-grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .card-grid-5 { grid-template-columns: repeat(5, 1fr); }
+
+    .kpi-card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary);
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      line-height: 1;
+    }
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin-top: 6px;
+    }
+
+    /* ===== RANK CARDS (Ingredient hero) ===== */
+    .rank-card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 20px 16px;
+      text-align: center;
+      position: relative;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .rank-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .rank-number {
+      position: absolute;
+      top: 10px; left: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-text-muted);
+    }
+    .rank-card.rank-1 { border-color: rgba(255,215,0,0.3); }
+    .rank-card.rank-1 .rank-number { color: #FFD700; }
+    .rank-card.rank-2 { border-color: rgba(192,192,192,0.3); }
+    .rank-card.rank-2 .rank-number { color: #C0C0C0; }
+    .rank-card.rank-3 { border-color: rgba(205,127,50,0.3); }
+    .rank-card.rank-3 .rank-number { color: #CD7F32; }
+
+    .rank-name {
+      font-size: 14px;
+      font-weight: 700;
+      margin: 8px 0 4px;
+    }
+    .rank-score {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--section-color, #666);
+      line-height: 1;
+    }
+    .rank-score-label { font-size: 10px; color: var(--color-text-muted); }
+    .rank-count { font-size: 12px; color: var(--color-text-secondary); margin-top: 6px; }
+
+    /* ===== TABLES ===== */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      background: rgba(255,255,255,0.04);
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-secondary);
+      border-bottom: 1px solid var(--color-border);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.15s;
+    }
+    thead th:hover { color: var(--color-text-primary); }
+    thead th .sort-icon { margin-left: 4px; opacity: 0.4; font-size: 10px; }
+    thead th.sorted .sort-icon { opacity: 1; }
+    tbody tr {
+      border-bottom: 1px solid var(--color-separator, #1E2130);
+      transition: background 0.1s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+    tbody tr:hover { background: var(--color-bg-hover); }
+    td {
+      padding: 9px 12px;
+      color: var(--color-text-primary);
+      vertical-align: middle;
+    }
+    td.muted { color: var(--color-text-secondary); }
+    td.mono { font-family: var(--font-mono); font-size: 12px; }
+
+    /* ===== BADGES / PILLS ===== */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.6;
+    }
+    .badge-positive { background: rgba(34,197,94,0.15); color: #22C55E; }
+    .badge-negative { background: rgba(239,68,68,0.15); color: #EF4444; }
+    .badge-budget   { background: rgba(100,116,139,0.2); color: #94A3B8; }
+    .badge-mid      { background: rgba(59,130,246,0.2); color: #60A5FA; }
+    .badge-premium  { background: rgba(168,85,247,0.2); color: #C084FC; }
+    .badge-luxury   { background: rgba(234,179,8,0.2); color: #FBBF24; }
+    .badge-kbeauty  { background: rgba(233,30,99,0.15); color: #F06292; }
+
+    /* ===== CHARTS ===== */
+    .chart-container {
+      position: relative;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+    }
+    canvas { max-width: 100%; }
+
+    /* ===== SUBSECTION ===== */
+    .subsection { margin-top: 32px; }
+    .subsection-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* ===== SEARCH INPUT ===== */
+    .search-input {
+      background: var(--color-bg-input);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 7px 12px;
+      font-size: 13px;
+      color: var(--color-text-primary);
+      font-family: var(--font-sans);
+      outline: none;
+      transition: border-color 0.15s;
+      width: 240px;
+    }
+    .search-input:focus { border-color: #555; }
+    .search-input::placeholder { color: var(--color-text-muted); }
+
+    /* ===== MARKDOWN RENDER ===== */
+    .markdown-body h1 { font-size: 20px; font-weight: 700; margin: 24px 0 12px; color: var(--color-text-primary); }
+    .markdown-body h2 { font-size: 16px; font-weight: 700; margin: 20px 0 10px; color: var(--color-text-primary); }
+    .markdown-body h3 { font-size: 14px; font-weight: 700; margin: 16px 0 8px; color: var(--color-text-primary); }
+    .markdown-body p { margin: 8px 0; color: var(--color-text-secondary); line-height: 1.7; }
+    .markdown-body ul, .markdown-body ol { padding-left: 20px; margin: 8px 0; }
+    .markdown-body li { margin: 4px 0; color: var(--color-text-secondary); line-height: 1.6; }
+    .markdown-body strong { color: var(--color-text-primary); font-weight: 600; }
+    .markdown-body hr { border: none; border-top: 1px solid var(--color-border); margin: 20px 0; }
+    .markdown-section {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .markdown-section summary {
+      padding: 14px 16px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      background: rgba(255,255,255,0.03);
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+    .markdown-section summary::-webkit-details-marker { display: none; }
+    .markdown-section summary::after { content: '▾'; font-size: 12px; color: var(--color-text-muted); }
+    .markdown-section[open] summary::after { content: '▴'; }
+    .markdown-section-body { padding: 0 16px 16px; }
+
+    /* ===== CONSUMER VOICE BARS ===== */
+    .kw-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .kw-bar-label {
+      width: 120px;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      flex-shrink: 0;
+    }
+    .kw-bar-track {
+      flex: 1;
+      height: 8px;
+      background: rgba(255,255,255,0.06);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+    .kw-bar-fill {
+      height: 100%;
+      border-radius: var(--radius-full);
+      transition: width 0.4s ease;
+    }
+    .kw-bar-count {
+      width: 32px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+    .kw-bar-bsr {
+      width: 60px;
+      text-align: right;
+      font-size: 11px;
+      color: var(--color-text-muted);
+    }
+
+    /* ===== RISING PRODUCT CARDS ===== */
+    .rising-card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .rising-card:hover {
+      border-color: rgba(0,188,212,0.4);
+      transform: translateY(-2px);
+    }
+    .rising-bsr {
+      font-size: 11px;
+      font-weight: 700;
+      color: #00BCD4;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .rising-brand {
+      font-size: 11px;
+      color: var(--color-text-muted);
+      margin-bottom: 4px;
+    }
+    .rising-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-primary);
+      margin-bottom: 8px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .rising-metrics {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+    .rising-ingredients {
+      font-size: 11px;
+      color: var(--color-text-muted);
+      margin-top: 8px;
+    }
+
+    /* ===== STAT BOX ===== */
+    .stat-box {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .stat-box-label { color: var(--color-text-secondary); }
+    .stat-box-value { font-weight: 600; color: var(--color-text-primary); }
+
+    /* ===== TWO COL LAYOUT ===== */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .two-col-left-wide {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    /* ===== SIGNIFICANT TAG ===== */
+    .sig-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .sig-tag.yes { background: rgba(34,197,94,0.15); color: #22C55E; }
+    .sig-tag.no { background: rgba(100,116,139,0.15); color: #94A3B8; }
+
+    /* ===== TOOLBAR ===== */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    /* ===== PAGINATION ===== */
+    .pagination {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      justify-content: flex-end;
+    }
+    .page-btn {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+      padding: 5px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.1s;
+    }
+    .page-btn:hover, .page-btn.active {
+      color: var(--color-text-primary);
+      border-color: #555;
+    }
+    .page-info {
+      font-size: 12px;
+      color: var(--color-text-muted);
+      padding: 0 8px;
+    }
+
+    /* ===== RAW SECTION ===== */
+    .raw-banner {
+      background: rgba(255,107,53,0.08);
+      border: 1px solid rgba(255,107,53,0.25);
+      border-radius: var(--radius-md);
+      padding: 10px 16px;
+      font-size: 12px;
+      color: rgba(255,107,53,0.9);
+      margin-bottom: 16px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1023px) {
+      .sidebar { transform: translateX(-100%); transition: transform 0.2s; }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; }
+      .card-grid-5 { grid-template-columns: repeat(3, 1fr); }
+      .card-grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .two-col, .two-col-left-wide { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 767px) {
+      .section { padding: 24px 16px 40px; }
+      .card-grid-5 { grid-template-columns: repeat(2, 1fr); }
+      .card-grid-3 { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-logo">
+    <div class="header-logo-dot"></div>
+    AMZ Insight
+  </div>
+  <span class="header-keyword">rosehip oil</span>
+  <span class="header-meta">2026-03-09 · 70 products analyzed</span>
+  <a href="#market-insight" class="back-to-top">↑ Top</a>
+</header>
+
+<!-- SIDEBAR -->
+<nav class="sidebar" id="sidebar">
+  <div class="nav-group-label">Story</div>
+  <a class="nav-item active" href="#market-insight" data-color="var(--color-market-insight)" style="border-left-color: var(--color-market-insight);">
+    <span class="nav-dot" style="background: var(--color-market-insight);"></span>
+    Market Insight
+  </a>
+  <a class="nav-item" href="#consumer-voice" data-color="var(--color-consumer-voice)">
+    <span class="nav-dot" style="border-color: var(--color-consumer-voice);"></span>
+    Consumer Voice
+  </a>
+  <a class="nav-item" href="#badge-analysis" data-color="var(--color-badge-analysis)">
+    <span class="nav-dot" style="border-color: var(--color-badge-analysis);"></span>
+    Badge Analysis
+  </a>
+
+  <div class="nav-group-label">Analysis</div>
+  <a class="nav-item" href="#sales-pricing" data-color="var(--color-sales-pricing)">
+    <span class="nav-dot" style="border-color: var(--color-sales-pricing);"></span>
+    Sales &amp; Pricing
+  </a>
+  <a class="nav-item" href="#brand-positioning" data-color="var(--color-brand-positioning)">
+    <span class="nav-dot" style="border-color: var(--color-brand-positioning);"></span>
+    Brand Positioning
+  </a>
+  <a class="nav-item" href="#marketing-keywords" data-color="var(--color-marketing-kw)">
+    <span class="nav-dot" style="border-color: var(--color-marketing-kw);"></span>
+    Marketing Keywords
+  </a>
+  <a class="nav-item" href="#ingredient-ranking" data-color="var(--color-ingredient-rank-light)">
+    <span class="nav-dot" style="border-color: var(--color-ingredient-rank-light);"></span>
+    Ingredient Ranking
+  </a>
+  <a class="nav-item" href="#category-summary" data-color="var(--color-category-summary)">
+    <span class="nav-dot" style="border-color: var(--color-category-summary);"></span>
+    Category Summary
+  </a>
+  <a class="nav-item" href="#rising-products" data-color="var(--color-rising-products)">
+    <span class="nav-dot" style="border-color: var(--color-rising-products);"></span>
+    Rising Products
+  </a>
+
+  <div class="nav-group-label">Data</div>
+  <a class="nav-item" href="#product-detail" data-color="var(--color-product-detail)">
+    <span class="nav-dot" style="border-color: var(--color-product-detail);"></span>
+    Product Detail
+  </a>
+  <a class="nav-item" href="#raw-search" data-color="var(--color-raw-search)">
+    <span class="nav-dot" style="border-color: var(--color-raw-search);"></span>
+    Raw - Search
+  </a>
+  <a class="nav-item" href="#raw-detail" data-color="var(--color-raw-detail)">
+    <span class="nav-dot" style="border-color: var(--color-raw-detail);"></span>
+    Raw - Detail
+  </a>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <!-- ==================== MARKET INSIGHT ==================== -->
+  <section class="section" id="market-insight" style="--section-color: var(--color-market-insight)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Market Insight</div>
+        <div class="section-subtitle">AI-generated market analysis · Powered by Gemini</div>
+      </div>
+    </div>
+
+    <div class="markdown-body">
+      <details class="markdown-section" open>
+        <summary>1. Market Overview</summary>
+        <div class="markdown-section-body">
+          <p>The <strong>rosehip oil</strong> market on Amazon shows a well-matured premium segment with strong bifurcation between budget and luxury tiers. Of 70 analyzed products, 44% fall in the Premium ($25–50) range, indicating consumers willingness to pay for perceived quality. The market is moderately competitive with 34 unique brands.</p>
+          <p><strong>BSR median: 8,234</strong> — moderate competition. Top sellers cluster tightly in the $18–35 range, where most purchase volume occurs.</p>
+        </div>
+      </details>
+
+      <details class="markdown-section" open>
+        <summary>2. Pricing &amp; Ingredient Strategy</summary>
+        <div class="markdown-section-body">
+          <p>Budget products ($0–10) rely on <strong>Jojoba Oil, Vitamin E</strong> as workhorses. Mid-tier ($10–25) adds <strong>Hyaluronic Acid</strong> and <strong>Niacinamide</strong> as differentiators. Premium ($25–50) brands consistently feature <strong>Bakuchiol</strong> and <strong>Squalane</strong> to justify price points.</p>
+          <ul>
+            <li><strong>Essential baseline</strong>: Rosehip Seed Oil, Vitamin E, Jojoba Oil</li>
+            <li><strong>Mid-tier differentiator</strong>: Hyaluronic Acid, Niacinamide (+$8–12 premium)</li>
+            <li><strong>Premium justifier</strong>: Bakuchiol, Squalane (+$20–30 premium)</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="markdown-section" open>
+        <summary>3. Winning Formula</summary>
+        <div class="markdown-section-body">
+          <p>BSR top-20% products share 3 ingredients absent from bottom-20%: <strong>Bakuchiol</strong>, <strong>Sea Buckthorn</strong>, and <strong>Pomegranate Seed Oil</strong>. High-rating products (4.5+) consistently feature <strong>Squalane</strong> and <strong>Ferulic Acid</strong>.</p>
+          <p><strong>Recommended formulation direction</strong>: Rosehip Seed Oil (base) + Vitamin E + Hyaluronic Acid + Niacinamide + Bakuchiol — targets the $28–38 price point with demonstrable differentiation.</p>
+        </div>
+      </details>
+
+      <details class="markdown-section">
+        <summary>4. Competitive Landscape</summary>
+        <div class="markdown-section-body">
+          <p>Three dominant brand archetypes: <strong>K-Beauty specialists</strong> (COSRX, Some By Mi) owning the Mid tier, <strong>Natural/Organic specialists</strong> (Trilogy, Kosmea) dominating Premium, and <strong>Mass market brands</strong> competing in Budget.</p>
+          <p>Market gap: No strong player in the $20–28 range combining K-Beauty formulation with clear "clean beauty" certification marketing.</p>
+        </div>
+      </details>
+
+      <details class="markdown-section">
+        <summary>5. Rising Products &amp; Trends</summary>
+        <div class="markdown-section-body">
+          <p>6 products identified with &lt;200 reviews but BSR &lt;5,000. All 6 feature <strong>Bakuchiol</strong> — a retinol alternative trend driving discovery purchases. Two are Korean OEMs with no English brand recognition, suggesting OEM white-labeling opportunity.</p>
+        </div>
+      </details>
+
+      <details class="markdown-section">
+        <summary>6. Sales &amp; Retention Strategy</summary>
+        <div class="markdown-section-body">
+          <p>Subscribe &amp; Save adoption at <strong>42%</strong> — higher than category average. SNS products sell <strong>39% more units/month</strong> on average. Heavy discount (31%+) products paradoxically show higher average BSR (worse ranking), suggesting discounting does not substitute for quality positioning.</p>
+        </div>
+      </details>
+
+      <details class="markdown-section">
+        <summary>7. Action Items</summary>
+        <div class="markdown-section-body">
+          <ul>
+            <li><strong>Target $28–35 price point</strong> with Bakuchiol + Hyaluronic Acid formulation — largest BSR gap between supply and demand</li>
+            <li><strong>Lead with "retinol alternative" messaging</strong> — Bakuchiol keyword shows BSR avg 3,200 vs 9,100 without it</li>
+            <li><strong>Enable Subscribe &amp; Save from launch</strong> — 39% higher monthly volume, drives BSR velocity</li>
+            <li><strong>Get Amazon's Choice early</strong> — badge products show avg BSR of 3,421 vs 12,890 without. Requires: reviews &gt;342, rating &gt;4.2</li>
+            <li><strong>Avoid heavy discounting</strong> — 31%+ discount tier shows worst average BSR (15,600). Compete on value, not price</li>
+          </ul>
+        </div>
+      </details>
+
+      <details class="markdown-section">
+        <summary>8. Risks</summary>
+        <div class="markdown-section-body">
+          <ul>
+            <li><strong>Budget segment oversaturated</strong>: &lt;$10 products show avg BSR 18,000+. Avoid.</li>
+            <li><strong>Generic "natural" positioning insufficient</strong>: 23 products use "natural" with poor BSR correlation. Specificity beats category claims.</li>
+            <li><strong>Bakuchiol trend may peak</strong>: 6 rising products using it — market may saturate in 12–18 months.</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ==================== CONSUMER VOICE ==================== -->
+  <section class="section" id="consumer-voice" style="--section-color: var(--color-consumer-voice)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Consumer Voice</div>
+        <div class="section-subtitle">Keyword frequency from Amazon AI review summaries (customer_says field)</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div class="subsection-title">Positive Keywords</div>
+        <div id="positive-bars"></div>
+      </div>
+      <div>
+        <div class="subsection-title">Negative Keywords</div>
+        <div id="negative-bars"></div>
+      </div>
+    </div>
+
+    <div class="subsection">
+      <div class="subsection-title">BSR Correlation — Top Half vs Bottom Half</div>
+      <div class="chart-container" style="height: 280px;">
+        <canvas id="bsr-correlation-chart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== BADGE ANALYSIS ==================== -->
+  <section class="section" id="badge-analysis" style="--section-color: var(--color-badge-analysis)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Badge Analysis</div>
+        <div class="section-subtitle">Amazon's Choice &amp; Best Seller impact on market performance</div>
+      </div>
+    </div>
+
+    <div class="two-col-left-wide">
+      <div>
+        <div class="card-grid card-grid-2" style="margin-bottom: 20px;">
+          <div class="kpi-card" style="border-top: 2px solid var(--color-badge-analysis);">
+            <div class="kpi-label">With Badge</div>
+            <div class="kpi-value">23</div>
+            <div class="kpi-sub">products</div>
+            <div style="margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><div class="kpi-label" style="font-size: 10px;">Avg BSR</div><div style="font-size: 18px; font-weight: 700; color: #C084FC;">3,421</div></div>
+              <div><div class="kpi-label" style="font-size: 10px;">Avg Price</div><div style="font-size: 18px; font-weight: 700; color: #C084FC;">$28.40</div></div>
+              <div><div class="kpi-label" style="font-size: 10px;">Avg Rating</div><div style="font-size: 18px; font-weight: 700; color: #C084FC;">4.5</div></div>
+              <div><div class="kpi-label" style="font-size: 10px;">Avg Reviews</div><div style="font-size: 18px; font-weight: 700; color: #C084FC;">4,230</div></div>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Without Badge</div>
+            <div class="kpi-value" style="color: var(--color-text-secondary);">47</div>
+            <div class="kpi-sub">products</div>
+            <div style="margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><div class="kpi-label" style="font-size: 10px;">Avg BSR</div><div style="font-size: 18px; font-weight: 700;">12,890</div></div>
+              <div><div class="kpi-label" style="font-size: 10px;">Avg Price</div><div style="font-size: 18px; font-weight: 700;">$22.10</div></div>
+              <div><div class="kpi-label" style="font-size: 10px;">Avg Rating</div><div style="font-size: 18px; font-weight: 700;">4.3</div></div>
+              <div><div class="kpi-label" style="font-size: 10px;">Avg Reviews</div><div style="font-size: 18px; font-weight: 700;">1,840</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection-title">Acquisition Threshold</div>
+        <div style="display: grid; gap: 6px;">
+          <div class="stat-box"><span class="stat-box-label">Min Reviews</span><span class="stat-box-value">342</span></div>
+          <div class="stat-box"><span class="stat-box-label">Median Reviews</span><span class="stat-box-value">1,204</span></div>
+          <div class="stat-box"><span class="stat-box-label">Min Rating</span><span class="stat-box-value">4.2</span></div>
+          <div class="stat-box"><span class="stat-box-label">Median Rating</span><span class="stat-box-value">4.5</span></div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 14px 16px; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+          <div style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 6px;">STATISTICAL TEST (Mann-Whitney U)</div>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="font-size: 13px; color: var(--color-text-secondary);">p-value: <strong style="color: var(--color-text-primary);">0.0023</strong></span>
+            <span class="sig-tag yes">✓ Significant (p &lt; 0.05)</span>
+          </div>
+          <div style="font-size: 12px; color: var(--color-text-muted); margin-top: 6px;">Badge holders have statistically significantly better BSR rankings.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="subsection-title">Badge Type Distribution</div>
+        <div class="chart-container" style="padding-top: 12px;">
+          <canvas id="badge-donut-chart" height="200"></canvas>
+        </div>
+        <div style="margin-top: 12px; display: grid; gap: 6px;">
+          <div class="stat-box"><span class="stat-box-label">Amazon's Choice</span><span class="stat-box-value" style="color: #C084FC;">18</span></div>
+          <div class="stat-box"><span class="stat-box-label">#1 Best Seller</span><span class="stat-box-value" style="color: #FBBF24;">5</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SALES & PRICING ==================== -->
+  <section class="section" id="sales-pricing" style="--section-color: var(--color-sales-pricing)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Sales &amp; Pricing</div>
+        <div class="section-subtitle">Revenue patterns, discount mechanics &amp; promotions analysis</div>
+      </div>
+    </div>
+
+    <div class="subsection-title">Top Sellers by Monthly Volume</div>
+    <div class="table-wrapper" style="margin-bottom: 32px;">
+      <table>
+        <thead>
+          <tr>
+            <th>ASIN</th><th>Brand</th><th>Title</th><th>Bought/Mo ↓</th><th>Price</th><th>BSR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">B08XK2RS3Y</td><td>Kosmea</td><td>Kosmea Certified Organic Rosehip Oil 60ml</td><td><strong>3,200+</strong></td><td>$34.99</td><td>1,234</td></tr>
+          <tr><td class="mono">B07GDMNC12</td><td>Trilogy</td><td>Trilogy Certified Organic Rosehip Oil</td><td><strong>2,800+</strong></td><td>$29.99</td><td>1,890</td></tr>
+          <tr><td class="mono">B01MXF3GTK</td><td>InstaNatural</td><td>Rosehip Seed Oil - 100% Pure &amp; Organic</td><td><strong>1,900+</strong></td><td>$12.95</td><td>2,341</td></tr>
+          <tr><td class="mono">B07RNB8XJL</td><td>PURA D'OR</td><td>Rosehip Seed Oil with Jojoba Oil</td><td><strong>1,600+</strong></td><td>$18.99</td><td>3,102</td></tr>
+          <tr><td class="mono">B09HK3L2MN</td><td>The Ordinary</td><td>100% Organic Cold-Pressed Rose Hip Seed Oil</td><td><strong>1,400+</strong></td><td>$11.90</td><td>3,890</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div class="subsection-title">Sales by Price Tier</div>
+        <div class="chart-container" style="height: 220px;">
+          <canvas id="price-tier-chart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div class="subsection-title">Subscribe &amp; Save Adoption</div>
+        <div style="display: grid; gap: 8px;">
+          <div class="kpi-card" style="border-top: 2px solid var(--color-sales-pricing);">
+            <div class="kpi-label">SNS Adoption Rate</div>
+            <div class="kpi-value">42%</div>
+          </div>
+          <div class="stat-box"><span class="stat-box-label">Avg SNS Discount</span><span class="stat-box-value">6.3%</span></div>
+          <div class="stat-box"><span class="stat-box-label">SNS Avg Bought/Mo</span><span class="stat-box-value" style="color: #22C55E;">1,240</span></div>
+          <div class="stat-box"><span class="stat-box-label">No-SNS Avg Bought/Mo</span><span class="stat-box-value">890</span></div>
+          <div class="stat-box"><span class="stat-box-label">With SNS Count</span><span class="stat-box-value">29</span></div>
+          <div class="stat-box"><span class="stat-box-label">Without SNS Count</span><span class="stat-box-value">41</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection">
+      <div class="subsection-title">Discount Impact on BSR</div>
+      <div class="chart-container" style="height: 240px;">
+        <canvas id="discount-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="subsection">
+      <div class="subsection-title">Coupon Distribution</div>
+      <div class="table-wrapper" style="max-width: 400px;">
+        <table>
+          <thead><tr><th>Coupon Type</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr><td>Save 5%</td><td>12</td></tr>
+            <tr><td>Save 10%</td><td>8</td></tr>
+            <tr><td>Save $2.00</td><td>5</td></tr>
+            <tr><td>Save 15%</td><td>3</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== BRAND POSITIONING ==================== -->
+  <section class="section" id="brand-positioning" style="--section-color: var(--color-brand-positioning)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Brand Positioning</div>
+        <div class="section-subtitle">Price vs BSR analysis &amp; competitive segmentation</div>
+      </div>
+    </div>
+
+    <div class="two-col-left-wide">
+      <div>
+        <div class="subsection-title">Brand Performance</div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Brand</th><th>Products</th><th>Avg Price</th><th>Avg BSR ↑</th><th>Avg Rating</th><th>Segment</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Kosmea</td><td>3</td><td>$33.20</td><td>2,104</td><td>4.6</td><td><span class="badge badge-premium">Premium</span></td></tr>
+              <tr><td>Trilogy</td><td>4</td><td>$29.99</td><td>3,240</td><td>4.5</td><td><span class="badge badge-premium">Premium</span></td></tr>
+              <tr><td>COSRX</td><td>2</td><td>$18.50</td><td>4,100</td><td>4.4</td><td><span class="badge badge-mid">Mid</span></td></tr>
+              <tr><td>InstaNatural</td><td>5</td><td>$13.40</td><td>5,890</td><td>4.3</td><td><span class="badge badge-mid">Mid</span></td></tr>
+              <tr><td>The Ordinary</td><td>2</td><td>$11.90</td><td>6,200</td><td>4.2</td><td><span class="badge badge-mid">Mid</span></td></tr>
+              <tr><td>Plant Therapy</td><td>3</td><td>$8.99</td><td>9,400</td><td>4.1</td><td><span class="badge badge-budget">Budget</span></td></tr>
+              <tr><td>NOW Foods</td><td>4</td><td>$7.50</td><td>11,200</td><td>4.0</td><td><span class="badge badge-budget">Budget</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="subsection-title">Market Concentration</div>
+        <div class="chart-container">
+          <canvas id="concentration-chart" height="180"></canvas>
+        </div>
+        <div style="margin-top: 12px; display: grid; gap: 6px;">
+          <div class="stat-box"><span class="stat-box-label">Total Brands</span><span class="stat-box-value">34</span></div>
+          <div class="stat-box"><span class="stat-box-label">Top 10 Market Share</span><span class="stat-box-value" style="color: #818CF8;">68%</span></div>
+          <div class="stat-box"><span class="stat-box-label">K-Beauty Brands</span><span class="stat-box-value"><span class="badge badge-kbeauty">4</span></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== MARKETING KEYWORDS ==================== -->
+  <section class="section" id="marketing-keywords" style="--section-color: var(--color-marketing-kw)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Marketing Keywords</div>
+        <div class="section-subtitle">Title keywords correlated with BSR performance</div>
+      </div>
+    </div>
+
+    <div class="subsection-title">Keyword Performance (sorted by Avg BSR — lower is better)</div>
+    <div class="chart-container" style="height: 320px;">
+      <canvas id="keywords-chart"></canvas>
+    </div>
+
+    <div class="subsection">
+      <div class="subsection-title">Price Tier Top Ingredients</div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Price Tier</th><th>Products</th><th>Top Ingredients</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge badge-budget">Budget (&lt;$10)</span></td><td>8</td><td class="muted">Jojoba Oil, Vitamin E, Aloe Vera, Argan Oil, Glycerin</td></tr>
+            <tr><td><span class="badge badge-mid">Mid ($10–25)</span></td><td>23</td><td class="muted">Hyaluronic Acid, Niacinamide, Vitamin C, Jojoba Oil, Vitamin E</td></tr>
+            <tr><td><span class="badge badge-premium">Premium ($25–50)</span></td><td>31</td><td class="muted">Bakuchiol, Squalane, Ferulic Acid, Sea Buckthorn, Pomegranate</td></tr>
+            <tr><td><span class="badge badge-luxury">Luxury ($50+)</span></td><td>8</td><td class="muted">Retinol, Peptides, Vitamin C, Bakuchiol, Gold Extract</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== INGREDIENT RANKING ==================== -->
+  <section class="section" id="ingredient-ranking" style="--section-color: var(--color-ingredient-rank-light)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Ingredient Ranking</div>
+        <div class="section-subtitle">Weighted Score = Bought/Mo(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%)</div>
+      </div>
+    </div>
+
+    <!-- Top 5 Hero Cards -->
+    <div class="card-grid card-grid-5" style="margin-bottom: 32px;">
+      <div class="rank-card rank-1">
+        <div class="rank-number">#1</div>
+        <div class="rank-name">Jojoba Oil</div>
+        <div class="rank-score">42.3</div>
+        <div class="rank-score-label">weighted score</div>
+        <div class="rank-count">34 products</div>
+        <div style="margin-top: 8px;"><span class="badge badge-mid">Natural Oil</span></div>
+        <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 8px;">Backbone of premium formulations</div>
+      </div>
+      <div class="rank-card rank-2">
+        <div class="rank-number">#2</div>
+        <div class="rank-name">Hyaluronic Acid</div>
+        <div class="rank-score">38.1</div>
+        <div class="rank-score-label">weighted score</div>
+        <div class="rank-count">28 products</div>
+        <div style="margin-top: 8px;"><span class="badge badge-mid">Humectant</span></div>
+        <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 8px;">Top mid-tier differentiator</div>
+      </div>
+      <div class="rank-card rank-3">
+        <div class="rank-number">#3</div>
+        <div class="rank-name">Bakuchiol</div>
+        <div class="rank-score">29.7</div>
+        <div class="rank-score-label">weighted score</div>
+        <div class="rank-count">14 products</div>
+        <div style="margin-top: 8px;"><span class="badge badge-premium">Retinol Alt</span></div>
+        <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 8px;">Rising — high avg weight</div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-number">#4</div>
+        <div class="rank-name">Vitamin E</div>
+        <div class="rank-score">24.2</div>
+        <div class="rank-score-label">weighted score</div>
+        <div class="rank-count">41 products</div>
+        <div style="margin-top: 8px;"><span class="badge badge-mid">Antioxidant</span></div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-number">#5</div>
+        <div class="rank-name">Squalane</div>
+        <div class="rank-score">21.8</div>
+        <div class="rank-score-label">weighted score</div>
+        <div class="rank-count">12 products</div>
+        <div style="margin-top: 8px;"><span class="badge badge-premium">Emollient</span></div>
+      </div>
+    </div>
+
+    <!-- Search + Filter toolbar -->
+    <div class="toolbar">
+      <input class="search-input" type="text" id="ing-search" placeholder="Search ingredient...">
+      <select class="search-input" id="cat-filter" style="width: auto; cursor: pointer;">
+        <option value="">All categories</option>
+        <option>Natural Oil</option>
+        <option>Humectant</option>
+        <option>Antioxidant</option>
+        <option>Emollient</option>
+        <option>Retinol Alt</option>
+        <option>Vitamin</option>
+        <option>Botanical</option>
+      </select>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="ingredient-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Ingredient <span class="sort-icon">↕</span></th>
+            <th>Weighted Score <span class="sort-icon sorted">↓</span></th>
+            <th># Products <span class="sort-icon">↕</span></th>
+            <th>Avg Weight <span class="sort-icon">↕</span></th>
+            <th>Category</th>
+            <th>Avg Price <span class="sort-icon">↕</span></th>
+            <th>Key Insight</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><strong>Jojoba Oil</strong></td><td>42.300</td><td>34</td><td>1.244</td><td><span class="badge badge-mid">Natural Oil</span></td><td>$22.40</td><td class="muted">Backbone of premium formulations; universal carrier</td></tr>
+          <tr><td>2</td><td><strong>Hyaluronic Acid</strong></td><td>38.100</td><td>28</td><td>1.361</td><td><span class="badge badge-mid">Humectant</span></td><td>$26.10</td><td class="muted">Top mid-tier differentiator; drives "moisturizing" mentions</td></tr>
+          <tr><td>3</td><td><strong>Bakuchiol</strong></td><td>29.700</td><td>14</td><td>2.121</td><td><span class="badge badge-premium">Retinol Alt</span></td><td>$34.20</td><td class="muted">Rising fast; 14 products but very high avg weight — used by top performers</td></tr>
+          <tr><td>4</td><td><strong>Vitamin E</strong></td><td>24.200</td><td>41</td><td>0.590</td><td><span class="badge badge-mid">Antioxidant</span></td><td>$18.30</td><td class="muted">Ubiquitous baseline; low differentiation value</td></tr>
+          <tr><td>5</td><td><strong>Squalane</strong></td><td>21.800</td><td>12</td><td>1.817</td><td><span class="badge badge-premium">Emollient</span></td><td>$31.50</td><td class="muted">Premium signal; high avg weight means top products use it</td></tr>
+          <tr><td>6</td><td><strong>Niacinamide</strong></td><td>18.400</td><td>16</td><td>1.150</td><td><span class="badge badge-mid">Vitamin</span></td><td>$24.80</td><td class="muted">Strong with "brightening" customer voice mentions</td></tr>
+          <tr><td>7</td><td><strong>Sea Buckthorn</strong></td><td>15.200</td><td>9</td><td>1.689</td><td><span class="badge badge-mid">Botanical</span></td><td>$28.90</td><td class="muted">BSR-top exclusive — absent from bottom performers</td></tr>
+          <tr><td>8</td><td><strong>Argan Oil</strong></td><td>13.100</td><td>18</td><td>0.728</td><td><span class="badge badge-mid">Natural Oil</span></td><td>$19.70</td><td class="muted">Popular but diluted by many mid-performers</td></tr>
+          <tr><td>9</td><td><strong>Ferulic Acid</strong></td><td>11.600</td><td>8</td><td>1.450</td><td><span class="badge badge-premium">Antioxidant</span></td><td>$33.10</td><td class="muted">High avg weight; associated with 4.5+ rating products</td></tr>
+          <tr><td>10</td><td><strong>Pomegranate Seed</strong></td><td>9.800</td><td>7</td><td>1.400</td><td><span class="badge badge-premium">Botanical</span></td><td>$30.20</td><td class="muted">BSR-top exclusive — strong premium differentiator</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== CATEGORY SUMMARY ==================== -->
+  <section class="section" id="category-summary" style="--section-color: var(--color-category-summary)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Category Summary</div>
+        <div class="section-subtitle">Ingredient functional categories ranked by total market weight</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div class="chart-container" style="height: 280px;">
+          <canvas id="category-chart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Category</th><th>Score ↓</th><th># Types</th><th># Mentions</th><th>Avg Price</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Natural Oil</td><td>156.4</td><td>8</td><td>142</td><td>$21.30</td></tr>
+              <tr><td>Humectant</td><td>89.2</td><td>4</td><td>78</td><td>$27.40</td></tr>
+              <tr><td>Antioxidant</td><td>67.8</td><td>6</td><td>64</td><td>$29.10</td></tr>
+              <tr><td>Vitamin</td><td>54.3</td><td>5</td><td>89</td><td>$22.80</td></tr>
+              <tr><td>Botanical</td><td>48.1</td><td>11</td><td>56</td><td>$26.50</td></tr>
+              <tr><td>Emollient</td><td>38.9</td><td>3</td><td>28</td><td>$32.10</td></tr>
+              <tr><td>Retinol Alt</td><td>29.7</td><td>2</td><td>14</td><td>$34.20</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== RISING PRODUCTS ==================== -->
+  <section class="section" id="rising-products" style="--section-color: var(--color-rising-products)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Rising Products</div>
+        <div class="section-subtitle">Low reviews (&lt; median) with BSR &lt; 10,000 — new entrants &amp; rapid growth candidates</div>
+      </div>
+    </div>
+
+    <div class="card-grid card-grid-2">
+      <div class="rising-card">
+        <div class="rising-bsr">BSR #2,341</div>
+        <div class="rising-brand">InstaNatural</div>
+        <div class="rising-title">Rosehip Seed Oil with Bakuchiol — Organic Cold-Pressed Formula for Anti-Aging</div>
+        <div class="rising-metrics">
+          <span>$24.99</span>
+          <span>★ 4.5</span>
+          <span>89 reviews</span>
+        </div>
+        <div class="rising-ingredients">Ingredients: Bakuchiol, Jojoba Oil, Vitamin E</div>
+      </div>
+      <div class="rising-card">
+        <div class="rising-bsr">BSR #3,890</div>
+        <div class="rising-brand">K-Beauty Lab</div>
+        <div class="rising-title">Korean Rosehip Oil with Centella Asiatica and Niacinamide</div>
+        <div class="rising-metrics">
+          <span>$18.99</span>
+          <span>★ 4.3</span>
+          <span>124 reviews</span>
+        </div>
+        <div class="rising-ingredients">Ingredients: Niacinamide, Centella Asiatica, Squalane</div>
+      </div>
+      <div class="rising-card">
+        <div class="rising-bsr">BSR #4,210</div>
+        <div class="rising-brand">Verdant Naturals</div>
+        <div class="rising-title">Pure Rosehip Oil with Sea Buckthorn and Pomegranate Seed Oil</div>
+        <div class="rising-metrics">
+          <span>$29.99</span>
+          <span>★ 4.6</span>
+          <span>67 reviews</span>
+        </div>
+        <div class="rising-ingredients">Ingredients: Sea Buckthorn, Pomegranate Seed Oil, Ferulic Acid</div>
+      </div>
+      <div class="rising-card">
+        <div class="rising-bsr">BSR #5,640</div>
+        <div class="rising-brand">Skin Harmony</div>
+        <div class="rising-title">Bakuchiol Rosehip Facial Oil — Retinol Alternative for Sensitive Skin</div>
+        <div class="rising-metrics">
+          <span>$32.00</span>
+          <span>★ 4.4</span>
+          <span>42 reviews</span>
+        </div>
+        <div class="rising-ingredients">Ingredients: Bakuchiol, Squalane, Vitamin C</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PRODUCT DETAIL ==================== -->
+  <section class="section" id="product-detail" style="--section-color: var(--color-product-detail)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Product Detail</div>
+        <div class="section-subtitle">All 70 products with full market performance metrics</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input class="search-input" type="text" placeholder="Search by title or ASIN...">
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>ASIN</th><th>Brand</th><th>Title</th><th>Price</th><th>SNS</th>
+            <th>Bought/Mo ↓</th><th>Reviews</th><th>Rating</th><th>BSR</th>
+            <th>Weight</th><th>Badge</th><th>Discount%</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">B08XK2RS3Y</td><td>Kosmea</td><td>Certified Organic Rosehip Oil 60ml</td><td>$34.99</td><td>$31.99</td><td>3,200+</td><td>5,840</td><td>4.6</td><td>1,234</td><td>2.104</td><td><span class="badge badge-premium">AC</span></td><td>—</td></tr>
+          <tr><td class="mono">B07GDMNC12</td><td>Trilogy</td><td>Certified Organic Rosehip Oil</td><td>$29.99</td><td>$26.99</td><td>2,800+</td><td>4,230</td><td>4.5</td><td>1,890</td><td>1.940</td><td><span class="badge badge-premium">AC</span></td><td>—</td></tr>
+          <tr><td class="mono">B01MXF3GTK</td><td>InstaNatural</td><td>Rosehip Seed Oil - 100% Pure</td><td>$12.95</td><td>—</td><td>1,900+</td><td>3,100</td><td>4.3</td><td>2,341</td><td>1.620</td><td>—</td><td>—</td></tr>
+          <tr><td class="mono">B07RNB8XJL</td><td>PURA D'OR</td><td>Rosehip Seed Oil with Jojoba</td><td>$18.99</td><td>$17.09</td><td>1,600+</td><td>2,840</td><td>4.4</td><td>3,102</td><td>1.480</td><td>—</td><td>10%</td></tr>
+          <tr><td class="mono">B09HK3L2MN</td><td>The Ordinary</td><td>100% Organic Cold-Pressed Rose Hip</td><td>$11.90</td><td>—</td><td>1,400+</td><td>6,200</td><td>4.2</td><td>3,890</td><td>1.280</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span class="page-info">Showing 1–5 of 70</span>
+      <button class="page-btn active">1</button>
+      <button class="page-btn">2</button>
+      <button class="page-btn">3</button>
+      <button class="page-btn">…</button>
+      <button class="page-btn">14</button>
+    </div>
+  </section>
+
+  <!-- ==================== RAW SEARCH ==================== -->
+  <section class="section" id="raw-search" style="--section-color: var(--color-raw-search)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Raw — Search Results</div>
+        <div class="section-subtitle">Original Amazon search crawl data · 70 products</div>
+      </div>
+    </div>
+    <div class="raw-banner">Raw data — unprocessed search result snapshot. For reference only.</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Position</th><th>Title</th><th>ASIN</th><th>Price</th><th>Reviews</th><th>Rating</th><th>Sponsored</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Kosmea Certified Organic Rosehip Oil 60ml</td><td class="mono">B08XK2RS3Y</td><td>$34.99</td><td>5,840</td><td>4.6</td><td>—</td></tr>
+          <tr><td>2</td><td>Trilogy Certified Organic Rosehip Oil</td><td class="mono">B07GDMNC12</td><td>$29.99</td><td>4,230</td><td>4.5</td><td>—</td></tr>
+          <tr><td>3</td><td>Sponsored Product Example</td><td class="mono">B00XXXXXX1</td><td>$24.99</td><td>1,200</td><td>4.1</td><td><span class="badge badge-premium">Sponsored</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== RAW DETAIL ==================== -->
+  <section class="section" id="raw-detail" style="--section-color: var(--color-raw-detail)">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Raw — Product Detail</div>
+        <div class="section-subtitle">Parsed product page data · ingredients, features, measurements</div>
+      </div>
+    </div>
+    <div class="raw-banner" style="background: rgba(155,89,182,0.08); border-color: rgba(155,89,182,0.25); color: rgba(192,132,252,0.9);">Raw data — parsed from product detail pages. Ingredients shown as original INCI text.</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>ASIN</th><th>Brand</th><th>BSR Category</th><th>Rating</th><th>Reviews</th><th>Ingredients (raw)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">B08XK2RS3Y</td><td>Kosmea</td><td>#1,234 in Face Oils</td><td>4.6</td><td>5,840</td>
+            <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-text-muted);">Rosa Canina Fruit Oil, Simmondsia Chinensis (Jojoba) Seed Oil, Tocopherol...</td>
+          </tr>
+          <tr>
+            <td class="mono">B07GDMNC12</td><td>Trilogy</td><td>#1,890 in Face Oils</td><td>4.5</td><td>4,230</td>
+            <td style="max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-text-muted);">Rosa Canina Seed Oil, Helianthus Annuus (Sunflower) Seed Oil, Tocopherol...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- Chart.js (minified inline would go here — using CDN for mockup only) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+  // ===== SAMPLE DATA =====
+  const REPORT_DATA = {
+    keyword: "rosehip oil",
+    date: "2026-03-09",
+    total_products: 70,
+  };
+
+  // ===== CHART.JS DEFAULTS =====
+  Chart.defaults.color = '#8B92A5';
+  Chart.defaults.borderColor = '#2A2D3E';
+  Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  Chart.defaults.font.size = 12;
+
+  const tooltipStyle = {
+    backgroundColor: '#1A1D27',
+    borderColor: '#2A2D3E',
+    borderWidth: 1,
+    padding: 10,
+    titleColor: '#F0F2F8',
+    bodyColor: '#8B92A5',
+  };
+
+  // ===== BSR CORRELATION CHART =====
+  new Chart(document.getElementById('bsr-correlation-chart'), {
+    type: 'bar',
+    data: {
+      labels: ['moisturizing', 'effective', 'hydrating', 'gentle', 'lightweight', 'sticky', 'greasy', 'strong smell'],
+      datasets: [
+        {
+          label: 'Top BSR Half',
+          data: [22, 18, 16, 14, 12, 4, 3, 5],
+          backgroundColor: 'rgba(34, 197, 94, 0.6)',
+          borderColor: 'rgba(34, 197, 94, 0.9)',
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+        {
+          label: 'Bottom BSR Half',
+          data: [12, 10, 8, 6, 5, 8, 7, 9],
+          backgroundColor: 'rgba(239, 68, 68, 0.6)',
+          borderColor: 'rgba(239, 68, 68, 0.9)',
+          borderWidth: 1,
+          borderRadius: 3,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: tooltipStyle, legend: { position: 'top' } },
+      scales: {
+        x: { grid: { color: '#2A2D3E' } },
+        y: { grid: { color: '#2A2D3E' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // ===== BADGE DONUT =====
+  new Chart(document.getElementById('badge-donut-chart'), {
+    type: 'doughnut',
+    data: {
+      labels: ["Amazon's Choice", '#1 Best Seller', 'No Badge'],
+      datasets: [{
+        data: [18, 5, 47],
+        backgroundColor: ['rgba(192,132,252,0.7)', 'rgba(251,191,36,0.7)', 'rgba(75,85,99,0.4)'],
+        borderColor: ['#673AB7', '#B45309', '#374151'],
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: tooltipStyle,
+        legend: { position: 'bottom', labels: { padding: 12, boxWidth: 12 } }
+      },
+      cutout: '65%',
+    }
+  });
+
+  // ===== PRICE TIER CHART =====
+  new Chart(document.getElementById('price-tier-chart'), {
+    type: 'bar',
+    data: {
+      labels: ['Budget (<$10)', 'Mid ($10-25)', 'Premium ($25-50)', 'Luxury ($50+)'],
+      datasets: [{
+        label: 'Products',
+        data: [8, 23, 31, 8],
+        backgroundColor: [
+          'rgba(100,116,139,0.6)',
+          'rgba(96,165,250,0.6)',
+          'rgba(192,132,252,0.6)',
+          'rgba(251,191,36,0.6)',
+        ],
+        borderColor: ['#64748B', '#3B82F6', '#A855F7', '#F59E0B'],
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: tooltipStyle, legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#2A2D3E' } },
+        y: { grid: { color: '#2A2D3E' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // ===== DISCOUNT CHART =====
+  new Chart(document.getElementById('discount-chart'), {
+    type: 'bar',
+    data: {
+      labels: ['No Discount', 'Light (1-15%)', 'Medium (16-30%)', 'Heavy (31%+)'],
+      datasets: [
+        {
+          label: 'Avg BSR (lower = better)',
+          data: [7200, 5800, 9400, 15600],
+          backgroundColor: 'rgba(0,150,136,0.5)',
+          borderColor: '#009688',
+          borderWidth: 1,
+          borderRadius: 3,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Avg Bought/Mo',
+          data: [890, 1100, 780, 420],
+          backgroundColor: 'rgba(34,197,94,0.4)',
+          borderColor: '#22C55E',
+          borderWidth: 1,
+          borderRadius: 3,
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: tooltipStyle, legend: { position: 'top' } },
+      scales: {
+        x: { grid: { color: '#2A2D3E' } },
+        y: { grid: { color: '#2A2D3E' }, title: { display: true, text: 'Avg BSR' } },
+        y1: {
+          position: 'right',
+          grid: { display: false },
+          title: { display: true, text: 'Avg Bought/Mo' }
+        }
+      }
+    }
+  });
+
+  // ===== MARKET CONCENTRATION DONUT =====
+  new Chart(document.getElementById('concentration-chart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Top 10 brands', 'Others (24 brands)'],
+      datasets: [{
+        data: [68, 32],
+        backgroundColor: ['rgba(99,102,241,0.6)', 'rgba(75,85,99,0.3)'],
+        borderColor: ['#6366F1', '#374151'],
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: tooltipStyle,
+        legend: { position: 'bottom', labels: { padding: 10, boxWidth: 10 } }
+      },
+      cutout: '60%',
+    }
+  });
+
+  // ===== KEYWORDS CHART =====
+  new Chart(document.getElementById('keywords-chart'), {
+    type: 'bar',
+    data: {
+      labels: ['Korean', 'Organic', 'Bakuchiol', 'Retinol', 'Hyaluronic', 'Vegan', 'Natural', 'Vitamin C', 'Niacinamide', 'Anti-Aging'],
+      datasets: [{
+        label: 'Avg BSR (lower = better)',
+        data: [3200, 4100, 4800, 5200, 6100, 6800, 8200, 8900, 9400, 10200],
+        backgroundColor: 'rgba(121,85,72,0.6)',
+        borderColor: '#795548',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: tooltipStyle,
+        legend: { display: false }
+      },
+      scales: {
+        x: { grid: { color: '#2A2D3E' }, title: { display: true, text: 'Average BSR (lower is better)' } },
+        y: { grid: { color: '#2A2D3E' } }
+      }
+    }
+  });
+
+  // ===== CATEGORY CHART =====
+  new Chart(document.getElementById('category-chart'), {
+    type: 'bar',
+    data: {
+      labels: ['Natural Oil', 'Humectant', 'Antioxidant', 'Vitamin', 'Botanical', 'Emollient', 'Retinol Alt'],
+      datasets: [{
+        label: 'Total Weighted Score',
+        data: [156.4, 89.2, 67.8, 54.3, 48.1, 38.9, 29.7],
+        backgroundColor: 'rgba(46,134,171,0.6)',
+        borderColor: '#2E86AB',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { tooltip: tooltipStyle, legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#2A2D3E' } },
+        y: { grid: { color: '#2A2D3E' } }
+      }
+    }
+  });
+
+  // ===== CONSUMER VOICE BARS =====
+  function renderKeywordBars(containerId, keywords, color) {
+    const container = document.getElementById(containerId);
+    const max = Math.max(...keywords.map(k => k.count));
+    container.innerHTML = keywords.map(kw => `
+      <div class="kw-bar-row">
+        <div class="kw-bar-label">${kw.keyword}</div>
+        <div class="kw-bar-track">
+          <div class="kw-bar-fill" style="width: ${(kw.count / max * 100)}%; background: ${color};"></div>
+        </div>
+        <div class="kw-bar-count">${kw.count}</div>
+        <div class="kw-bar-bsr">${kw.avg_bsr ? kw.avg_bsr.toLocaleString() : '—'}</div>
+      </div>
+    `).join('');
+  }
+
+  renderKeywordBars('positive-bars', [
+    { keyword: 'moisturizing', count: 34, avg_bsr: 5200 },
+    { keyword: 'effective', count: 28, avg_bsr: 5800 },
+    { keyword: 'hydrating', count: 22, avg_bsr: 6100 },
+    { keyword: 'gentle', count: 18, avg_bsr: 7200 },
+    { keyword: 'lightweight', count: 15, avg_bsr: 7900 },
+    { keyword: 'absorbs quickly', count: 12, avg_bsr: 6400 },
+    { keyword: 'soft', count: 10, avg_bsr: 8100 },
+    { keyword: 'works well', count: 8, avg_bsr: 7600 },
+  ], '#22C55E');
+
+  renderKeywordBars('negative-bars', [
+    { keyword: 'sticky', count: 12, avg_bsr: 14200 },
+    { keyword: 'strong smell', count: 8, avg_bsr: 16800 },
+    { keyword: 'greasy', count: 7, avg_bsr: 15400 },
+    { keyword: 'breakout', count: 5, avg_bsr: 18900 },
+    { keyword: 'irritation', count: 4, avg_bsr: 17200 },
+    { keyword: 'drying', count: 3, avg_bsr: 19400 },
+  ], '#EF4444');
+
+  // ===== SIDEBAR INTERSECTION OBSERVER =====
+  const sections = document.querySelectorAll('.section');
+  const navItems = document.querySelectorAll('.nav-item');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navItems.forEach(item => {
+          const active = item.getAttribute('href') === '#' + id;
+          item.classList.toggle('active', active);
+          const dot = item.querySelector('.nav-dot');
+          const color = item.dataset.color;
+          if (active) {
+            item.style.borderLeftColor = color;
+            dot.style.background = color;
+            dot.style.border = 'none';
+          } else {
+            item.style.borderLeftColor = 'transparent';
+            dot.style.background = '';
+            dot.style.borderColor = color;
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+
+  // ===== NAV CLICK SMOOTH =====
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = document.querySelector(item.getAttribute('href'));
+      if (target) {
+        const top = target.getBoundingClientRect().top + window.scrollY - 72;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    });
+  });
+</script>
+</body>
+</html>
