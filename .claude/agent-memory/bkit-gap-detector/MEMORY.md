@@ -33,6 +33,12 @@
   - 247 comparison items: 242 matched, 11 improvements, 3 partial, 3 added, 1 changed
   - Key: adapter pattern instead of modifying analyzer.py, V3 backward compat added
   - New files: bright_data.py, data_collector.py, product_db.py, collect.py, v4_bright_data.py migration
+- `amazon-researcher-v5`: 98% match rate (2026-03-09). 0 Critical gaps, 2 Partial (Minor).
+  - Analysis at: `docs/03-analysis/amazon-researcher-v5.analysis.md`
+  - V5 scope: Dead code cleanup, 7 new analysis functions, statistical testing, Excel expansion
+  - 25 comparison items: 23 MATCH, 2 PARTIAL, 0 MISSING
+  - 2 impl improvements: stat_test early integration, run_research pipeline coverage
+  - Partials: analyze_by_bsr() missing stat_test, Product Detail URL col 20 not written
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)
