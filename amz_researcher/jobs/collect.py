@@ -13,6 +13,7 @@ from app.config import settings
 from amz_researcher.services.bright_data import BrightDataService, BrightDataError
 from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.product_db import ProductDBService
+from amz_researcher.services.slack_sender import SlackSender
 from lib.mysql_connector import MysqlConnector
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ async def run_collection(
         api_token=settings.BRIGHT_DATA_API_TOKEN,
         dataset_id=settings.BRIGHT_DATA_DATASET_ID,
     )
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
 
     try:
         if category_node_ids:
@@ -57,9 +59,16 @@ async def run_collection(
             # Polling 방식: trigger → poll → DB 적재
             logger.info("Starting SYNC collection for %d categories", len(urls))
             products = await bright_data.collect_categories(urls)
-            collector = DataCollector("CFO")
-            count = collector.process_snapshot(products)
-            logger.info("Collection complete: %d products processed", count)
+            try:
+                collector = DataCollector("CFO")
+                count = collector.process_snapshot(products)
+                logger.info("Collection complete: %d products processed", count)
+            except Exception as db_err:
+                logger.exception("DB ingestion failed after collection")
+                await slack.send_dm(
+                    settings.AMZ_ADMIN_SLACK_ID,
+                    f"[AMZ] DB ingestion failed: {db_err}",
+                )
         else:
             # Async 방식: trigger만 보내고 종료 (webhook으로 수신)
             notify_url = f"{settings.WEBHOOK_BASE_URL}/webhook/brightdata"
@@ -73,10 +82,15 @@ async def run_collection(
 
     except (BrightDataError, TimeoutError) as e:
         logger.error("Collection failed: %s", e)
+        await slack.send_dm(
+            settings.AMZ_ADMIN_SLACK_ID,
+            f"[AMZ] Collection failed: {e}",
+        )
     except Exception:
         logger.exception("Unexpected error during collection")
     finally:
         await bright_data.close()
+        await slack.close()
 
 
 if __name__ == "__main__":

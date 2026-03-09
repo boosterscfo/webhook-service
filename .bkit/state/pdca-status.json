@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-09T03:06:40.380Z",
+  "lastUpdated": "2026-03-09T05:04:47.455Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
@@ -25,9 +25,10 @@
     "migrations",
     "bright_data.py",
     "data_collector.py",
-    "product_db.py"
+    "product_db.py",
+    "excel-report-v6"
   ],
-  "primaryFeature": "amazon-researcher-v4",
+  "primaryFeature": "excel-report-v6",
   "features": {
     "webhook-service": {
       "phase": "do",
@@ -67,9 +68,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-02-13T14:40:45.188Z",
-        "lastUpdated": "2026-03-08T12:05:29.915Z"
+        "lastUpdated": "2026-03-09T05:04:47.455Z"
       },
-      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/jobs/collect.py"
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/jobs/collect.py"
     },
     "meta-ads-webhook": {
       "phase": "design",
@@ -315,9 +316,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-08T11:39:48.450Z",
-        "lastUpdated": "2026-03-08T12:04:53.145Z"
+        "lastUpdated": "2026-03-09T05:04:24.179Z"
       },
-      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/bright_data.py"
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/bright_data.py"
     },
     "data_collector.py": {
       "phase": "do",
@@ -344,6 +345,18 @@
         "lastUpdated": "2026-03-08T14:38:02.521Z"
       },
       "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/product_db.py"
+    },
+    "excel-report-v6": {
+      "phase": "design",
+      "phaseNumber": 2,
+      "matchRate": null,
+      "iterationCount": 0,
+      "planPath": "docs/01-plan/features/excel-report-v6.plan.md",
+      "designPath": "docs/02-design/features/excel-report-v6.design.md",
+      "timestamps": {
+        "started": "2026-03-09T12:00:00.000Z",
+        "lastUpdated": "2026-03-09T13:00:00.000Z"
+      }
     }
   },
   "pipeline": {
@@ -359,7 +372,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-03-09T03:06:40.380Z"
+    "lastActivity": "2026-03-09T05:04:47.455Z"
   },
   "history": [
     {
@@ -1866,6 +1879,30 @@
     {
       "timestamp": "2026-03-09T03:06:40.380Z",
       "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T05:04:24.179Z",
+      "feature": "bright_data.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T05:04:29.347Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T05:04:33.117Z",
+      "feature": "jobs",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T05:04:47.455Z",
+      "feature": "jobs",
       "phase": "do",
       "action": "updated"
     }

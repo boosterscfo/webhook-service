@@ -4,7 +4,7 @@
 >
 > **Project**: webhook-service
 > **Analyst**: gap-detector
-> **Date**: 2026-03-09 (v2, supersedes 2026-03-08 v1)
+> **Date**: 2026-03-09 (v3, supersedes v2 2026-03-09)
 > **Design Doc**: [amazon-researcher-v4.design.md](../02-design/features/amazon-researcher-v4.design.md)
 
 ---
@@ -14,7 +14,7 @@
 ### 1.1 Analysis Purpose
 
 Design 문서(Bright Data 전환 + 데이터 파이프라인)와 실제 구현 코드 간의 Gap을 식별하고, Match Rate를 산출한다.
-V1 분석(2026-03-08) 이후 구현이 진화하여 재분석 수행.
+V2 분석(2026-03-09) 이후 에러 처리 3건 수정 완료. 수정 검증을 위한 재분석 수행.
 
 ### 1.2 Analysis Scope
 
@@ -265,14 +265,14 @@ All 31 field mappings verified in `DataCollector._map_product()`. One enhancemen
 
 | Scenario | Design | Implementation | Status |
 |----------|--------|---------------|--------|
-| Bright Data API 호출 실패 | 재시도 1회 + 관리자 Slack DM | `BrightDataError` raised, no retry, no DM in collect | Partial |
-| 폴링 타임아웃 (5분) | TimeoutError + 관리자 알림 | `TimeoutError` raised, no admin alert in collect | Partial |
-| DB 적재 실패 | 로깅 + 관리자 알림 | MysqlConnector handles internally | Partial |
+| Bright Data API 호출 실패 | 재시도 1회 + 관리자 Slack DM | `for attempt in range(2)` retry in `trigger_collection()` (L46-60) + `slack.send_dm()` in `collect.py` (L85-88) | Match |
+| 폴링 타임아웃 (5분) | TimeoutError + 관리자 알림 | `TimeoutError` raised + `slack.send_dm(AMZ_ADMIN_SLACK_ID)` in `collect.py` (L83-88) | Match |
+| DB 적재 실패 | 로깅 + 관리자 알림 | `try/except` around `process_snapshot()` + `slack.send_dm()` in `collect.py` (L62-71) | Match |
 | 카테고리 검색 0건 | Message + list 안내 | Same format | Match |
 | 제품 0건 (미수집 카테고리) | Message + refresh 안내 | Same (with `/amz refresh` tip) | Match |
 | Gemini 추출 실패 | V3 동일 (캐시 + 재시도) | Warning log + continue with available | Match |
 
-**Error Handling: 3/6 fully matched, 3 partially matched**
+**Error Handling: 6/6 fully matched**
 
 ---
 
@@ -295,8 +295,8 @@ All 31 field mappings verified in `DataCollector._map_product()`. One enhancemen
 | Category Seeding | 5 | 1 | 4 | 0 | 9 |
 | Environment Variables | 2 | 2 | 0 | 0 | 1 |
 | Field Mapping | 31 | 31 | 0 | 0 | 0 |
-| Error Handling | 6 | 3 | 0 | 3 | 0 |
-| **Total** | **228** | **212** | **10** | **3** | **30** |
+| Error Handling | 6 | 6 | 0 | 0 | 0 |
+| **Total** | **228** | **215** | **10** | **0** | **30** |
 
 > File Deletion items excluded from match rate (deferred to Phase 3, intentional).
 
@@ -304,16 +304,16 @@ All 31 field mappings verified in `DataCollector._map_product()`. One enhancemen
 
 ```
 +-----------------------------------------------+
-|  Overall Match Rate: 98%                       |
+|  Overall Match Rate: 99%                       |
 +-----------------------------------------------+
 |  Design Items:   228                           |
-|  Matched:        212 items (93.0%)             |
+|  Matched:        215 items (94.3%)             |
 |  Changed:         10 items (compatible)        |
-|  Partial:          3 items (error handling)     |
+|  Partial:          0 items                     |
 |  Missing:          0 items                     |
 |  Added (impl):    30 items (enhancements)      |
 +-----------------------------------------------+
-|  Effective Match: 222/228 = 97.4%              |
+|  Effective Match: 225/228 = 98.7%              |
 |  (Changed items counted as match when           |
 |   functionally equivalent or improved)          |
 +-----------------------------------------------+
@@ -329,11 +329,12 @@ None. All design requirements are implemented.
 
 ### 4.2 Partially Implemented (Design O, Partial Implementation)
 
-| # | Item | Design Location | Description | Severity |
-|---|------|-----------------|-------------|----------|
-| 1 | API retry 1회 | Section 10 | 설계에는 API 호출 실패 시 1회 재시도 명시, 미구현 | Minor |
-| 2 | 수집 실패 관리자 Slack DM | Section 10 | collect.py에서 실패 시 관리자 DM 미구현 (run_analysis에는 구현됨) | Minor |
-| 3 | DB 적재 실패 관리자 알림 | Section 10 | MysqlConnector 내부 처리, 별도 알림 없음 | Minor |
+None. All previously partial items resolved in v3 (see v2 -> v3 changelog below).
+
+> **v2 -> v3 resolved items:**
+> 1. API retry 1x: `bright_data.py:46-60` -- `for attempt in range(2)` with warning log on first failure
+> 2. Admin Slack DM on collection failure: `collect.py:83-88` -- `BrightDataError`/`TimeoutError` triggers `slack.send_dm(AMZ_ADMIN_SLACK_ID)`
+> 3. DB ingestion failure admin alert: `collect.py:62-71` -- `try/except` around `process_snapshot()` sends admin DM
 
 ### 4.3 Changed Features (Design != Implementation)
 
@@ -443,16 +444,16 @@ All files follow: stdlib -> third-party -> project imports. No violations.
 
 | Category | Score | Status |
 |----------|:-----:|:------:|
-| Design Match | 98% | Pass |
+| Design Match | 99% | Pass |
 | Architecture Compliance | 100% | Pass |
 | Convention Compliance | 100% | Pass |
-| **Overall** | **98%** | **Pass** |
+| **Overall** | **99%** | **Pass** |
 
 ```
 +-----------------------------------------------+
-|  Overall Score: 98/100                         |
+|  Overall Score: 99/100                         |
 +-----------------------------------------------+
-|  Design Match:          98%                    |
+|  Design Match:          99%                    |
 |  Architecture:         100%                    |
 |  Convention:           100%                    |
 +-----------------------------------------------+
@@ -464,10 +465,7 @@ All files follow: stdlib -> third-party -> project imports. No violations.
 
 ### 8.1 Optional Improvements (Low Priority)
 
-| # | Item | File | Description |
-|---|------|------|-------------|
-| 1 | Bright Data API 재시도 | `bright_data.py` | Design에 명시된 1회 재시도 로직 추가 (현재는 즉시 실패) |
-| 2 | 수집 실패 시 관리자 알림 | `collect.py` | `run_analysis`처럼 admin Slack DM 발송 추가 |
+None. All previously identified gaps have been resolved.
 
 ### 8.2 Design Document Updates Needed
 
@@ -480,18 +478,19 @@ All files follow: stdlib -> third-party -> project imports. No violations.
 - [ ] Section 6.6: `/amz help`, `/amz add`, 선택적 refresh, V3 compat, webhook endpoint 추가
 - [ ] Section 6.7: sync/async 모드 분리, webhook 기반 default 반영
 - [ ] Section 8: `WEBHOOK_BASE_URL` 환경 변수 추가
-- [ ] Section 10: 에러 처리 현실화 (재시도 미구현 명시 또는 구현)
+- [x] ~~Section 10: 에러 처리~~ (v3: 재시도, 관리자 알림 모두 구현 완료)
 
 ---
 
 ## 9. Conclusion
 
-Design 문서와 구현 코드의 Match Rate는 **98%**로, 설계와 구현이 매우 높은 수준으로 일치한다.
+Design 문서와 구현 코드의 Match Rate는 **99%**로, 설계와 구현이 거의 완벽하게 일치한다.
 
-**V1 분석(2026-03-08) 대비 변화:**
-- 구현에 30개의 추가 기능이 확인됨 (webhook 패턴, 브랜드 보정, 카테고리 관리, 상세 도움말 등)
-- 6개의 설계 변경이 확인됨 (모두 운영 개선 또는 더 나은 아키텍처 방향)
-- 에러 처리 3건은 여전히 부분 구현 상태 (Phase 4 운영 안정화 예정)
+**V2 -> V3 변화 (에러 처리 3건 수정 완료):**
+- Bright Data API 1회 재시도: `bright_data.py:46-60` `for attempt in range(2)` 루프 구현
+- 수집 실패 관리자 알림: `collect.py:83-88` BrightDataError/TimeoutError 시 admin Slack DM
+- DB 적재 실패 관리자 알림: `collect.py:62-71` process_snapshot 실패 시 admin Slack DM
+- Partial 항목 3건 -> 0건으로 감소, Match Rate 98% -> 99%
 
 **핵심 아키텍처 결정:**
 1. **Webhook 패턴 도입**: 설계의 동기 polling 대신 Bright Data notify webhook을 기본으로 채택하여 리소스 효율성 향상
@@ -507,3 +506,4 @@ Design 문서와 구현 코드의 Match Rate는 **98%**로, 설계와 구현이 
 |---------|------|---------|--------|
 | 1.0 | 2026-03-08 | Initial gap analysis (247 items compared) | gap-detector |
 | 2.0 | 2026-03-09 | Re-analysis reflecting implementation evolution (228 design items, 30 additions) | gap-detector |
+| 3.0 | 2026-03-09 | Re-verify 3 error handling fixes: retry, admin DM, DB alert. Match Rate 98% -> 99% | gap-detector |

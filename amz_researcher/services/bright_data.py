@@ -42,15 +42,22 @@ class BrightDataService:
 
         body = [{"category_url": cat_url} for cat_url in category_urls]
 
-        resp = await self.client.post(url, headers=self._headers(), json=body)
-        if resp.status_code != 200:
-            raise BrightDataError(f"Trigger failed: {resp.status_code} {resp.text[:300]}")
-
-        data = resp.json()
-        snapshot_id = data.get("snapshot_id")
-        if not snapshot_id:
-            raise BrightDataError(f"No snapshot_id in response: {data}")
-        return snapshot_id
+        last_error: Exception | None = None
+        for attempt in range(2):  # 최초 1회 + 재시도 1회
+            try:
+                resp = await self.client.post(url, headers=self._headers(), json=body)
+                if resp.status_code != 200:
+                    raise BrightDataError(f"Trigger failed: {resp.status_code} {resp.text[:300]}")
+                data = resp.json()
+                snapshot_id = data.get("snapshot_id")
+                if not snapshot_id:
+                    raise BrightDataError(f"No snapshot_id in response: {data}")
+                return snapshot_id
+            except BrightDataError as e:
+                last_error = e
+                if attempt == 0:
+                    logger.warning("trigger_collection attempt %d failed, retrying: %s", attempt + 1, e)
+        raise last_error  # type: ignore[misc]
 
     async def fetch_snapshot(self, snapshot_id: str) -> list[dict]:
         """완료된 스냅샷 데이터를 가져온다."""

@@ -27,12 +27,13 @@
   - 190 comparison items across 12 design sections, all matched
   - 6 implementation improvements (error handling, guard clauses, dict filter, prompt refinement)
   - 1 minor: beautifulsoup4 missing version pin in pyproject.toml
-- `amazon-researcher-v4`: 98% match rate (2026-03-08). 0 Critical gaps, 3 Partial (error handling).
+- `amazon-researcher-v4`: 99% match rate (2026-03-09 v3). 0 Critical/Partial gaps.
   - Analysis at: `docs/03-analysis/amazon-researcher-v4.analysis.md`
   - V4 scope: Browse.ai -> Bright Data API, batch collection, category-based analysis, DB pipeline
-  - 247 comparison items: 242 matched, 11 improvements, 3 partial, 3 added, 1 changed
+  - 228 design items: 215 matched, 10 changed (compatible), 0 partial, 30 added
   - Key: adapter pattern instead of modifying analyzer.py, V3 backward compat added
   - New files: bright_data.py, data_collector.py, product_db.py, collect.py, v4_bright_data.py migration
+  - v3 fix: retry 1x in trigger_collection, admin Slack DM on collection/DB failure
 - `amazon-researcher-v5`: 98% match rate (2026-03-09). 0 Critical gaps, 2 Partial (Minor).
   - Analysis at: `docs/03-analysis/amazon-researcher-v5.analysis.md`
   - V5 scope: Dead code cleanup, 7 new analysis functions, statistical testing, Excel expansion
