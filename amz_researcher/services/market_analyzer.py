@@ -713,9 +713,9 @@ def _stat_compare(group_a: list[float], group_b: list[float]) -> dict:
         from scipy.stats import mannwhitneyu
         stat, p_value = mannwhitneyu(group_a, group_b, alternative="two-sided")
         return {
-            "p_value": round(p_value, 4),
-            "significant": p_value < 0.05,
-            "u_statistic": round(stat, 2),
+            "p_value": round(float(p_value), 4),
+            "significant": bool(p_value < 0.05),
+            "u_statistic": round(float(stat), 2),
         }
     except Exception:
         return {"p_value": None, "significant": None, "note": "test_failed"}
