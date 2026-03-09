@@ -23,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_action_items_section(report_md: str) -> str:
-    """시장 리포트 마크다운에서 '7. 액션 아이템' 섹션만 추출 (다음 8. 또는 ## 전까지)."""
+    """시장 리포트 마크다운에서 '액션 아이템' 섹션만 추출 (다음 번호 섹션 또는 ## 전까지)."""
     if not report_md or not report_md.strip():
         return ""
-    # "7. **액션 아이템 (Action Items)**" 또는 "## 7." 형식 → 다음 "8." / "## 8" / 끝까지
+    # "N. **액션 아이템 (Action Items)**" 형식 → 다음 번호 섹션 / ## / 끝까지
     m = re.search(
-        r"(?:^|\n)(?:##\s*)?7\.\s*(?:\*\*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?8\.|\n##\s|\Z)",
+        r"(?:^|\n)(?:##\s*)?\d+\.\s*(?:\*\*)?액션\s*아이템.*?\n(.*?)(?=\n(?:##\s*)?\d+\.|\n##\s|\Z)",
         report_md,
         re.DOTALL | re.IGNORECASE,
     )

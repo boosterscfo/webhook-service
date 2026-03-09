@@ -115,11 +115,17 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 ### 10. 쿠폰/프로모션 분석
 {promotions_json}
 
+### 11. 소비자 리뷰 키워드 분석 (Consumer Voice)
+{customer_voice_json}
+
+### 12. 배지 보유/미보유 성과 비교 (Badge Analysis)
+{badges_json}
+
 ---
 
 위 데이터를 바탕으로 시장 분석 리포트를 작성하라.
 
-반드시 아래 8개 섹션을 포함:
+반드시 아래 9개 섹션을 포함:
 
 1. **시장 요약 (Market Overview)**
    - 가격대 분포와 성분 트렌드 한줄 요약
@@ -149,12 +155,18 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
    - SNS(Subscribe & Save) 채택 현황과 재구매 유도 효과
    - 쿠폰/프로모션 사용 현황과 BSR 영향
 
-7. **액션 아이템 (Action Items)**
+7. **소비자 인식 & 배지 효과 (Consumer Voice & Badge Impact)**
+   - 긍정/부정 리뷰 키워드 Top 5와 BSR 상관관계
+   - 소비자가 실제로 중시하는 속성(향, 효과, 질감 등)
+   - Badge(Amazon's Choice/Best Seller) 보유 제품의 성과 차이
+   - Badge 획득 전략 제안
+
+8. **액션 아이템 (Action Items)**
    - 바로 실행할 수 있는 3-5개 구체적 제안
    - 각 제안에 근거 데이터 명시
    - 타겟 가격대 명시
 
-8. **리스크 & 주의사항 (Risks)**
+9. **리스크 & 주의사항 (Risks)**
    - 과포화 세그먼트 경고
    - 피해야 할 포지셔닝
 
@@ -273,6 +285,8 @@ class GeminiService:
             sales_volume_json=_dump("sales_volume"),
             sns_pricing_json=_dump("sns_pricing"),
             promotions_json=_dump("promotions"),
+            customer_voice_json=_dump("customer_voice"),
+            badges_json=_dump("badges"),
         )
 
         max_retries = 2
