@@ -335,7 +335,6 @@ def _build_raw_detail(wb: Workbook, details: list[ProductDetail]):
         add_cell = ws.cell(row=row, column=10, value=_dict_to_text(d.additional_details))
         add_cell.alignment = WRAP_ALIGN
 
-        ws.row_dimensions[row].height = 80
 
     end_row = 3 + len(details)
     _style_data_rows(ws, 4, end_row, col_count)
@@ -529,17 +528,10 @@ def build_excel(
 ) -> bytes:
     wb = Workbook()
 
+    # === Insight tabs (앞쪽) ===
     _build_ingredient_ranking(wb, keyword, rankings, len(weighted_products))
-    _build_category_summary(wb, categories)
-    _build_product_detail(wb, weighted_products)
-    if rising_products:
-        _build_rising_products(wb, rising_products)
-    _build_raw_search(wb, keyword, search_products)
-    _build_raw_detail(wb, details)
     if market_report:
         _build_market_insight(wb, keyword, market_report)
-
-    # V5: 신규 시트
     if analysis_data:
         customer_voice = analysis_data.get("customer_voice")
         if customer_voice:
@@ -548,10 +540,33 @@ def build_excel(
         if badge_data:
             _build_badge_analysis(wb, badge_data)
 
-    # Move Market Insight to front (first sheet)
-    if market_report and "Market Insight" in wb.sheetnames:
-        idx = wb.sheetnames.index("Market Insight")
-        wb.move_sheet("Market Insight", offset=-idx)
+    # === Analysis tabs (중간) ===
+    _build_category_summary(wb, categories)
+    if rising_products:
+        _build_rising_products(wb, rising_products)
+    _build_product_detail(wb, weighted_products)
+
+    # === Raw tabs (뒤쪽) ===
+    _build_raw_search(wb, keyword, search_products)
+    _build_raw_detail(wb, details)
+
+    # Reorder: Market Insight → Consumer Voice → Badge Analysis → Ingredient Ranking → ...
+    desired_order = [
+        "Market Insight",
+        "Consumer Voice",
+        "Badge Analysis",
+        "Ingredient Ranking",
+        "Category Summary",
+        "Rising Products",
+        "Product Detail",
+        "Raw - Search Results",
+        "Raw - Product Detail",
+    ]
+    # Filter to only existing sheets, preserve any unlisted sheets at the end
+    existing = wb.sheetnames
+    ordered = [s for s in desired_order if s in existing]
+    ordered += [s for s in existing if s not in ordered]
+    wb._sheets = [wb[s] for s in ordered]
 
     buf = BytesIO()
     wb.save(buf)
