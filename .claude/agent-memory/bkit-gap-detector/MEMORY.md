@@ -52,6 +52,13 @@
   - 132 comparison items: 127 MATCH, 4 CHANGED (compatible), 0 MISSING, 0 PARTIAL
   - 8 impl improvements: JSON parsing, Decimal->float, try/except guards, variations fallback, bought_past_month injection
   - New methods: trigger_keyword_search, process_search_snapshot, get_keyword_cache, get_keyword_products, save/update_keyword_search_log, build_keyword_market_analysis, build_keyword_excel, run_keyword_analysis, _prepare_for_gemini, _adapt_search_for_analyzer
+- `html-insight-report`: 96% match rate (2026-03-09 v2). 0 Critical gaps, 0 Partial (Medium+).
+  - Analysis at: `docs/03-analysis/html-insight-report.analysis.md`
+  - Scope: Single-file HTML report with Chart.js, 12-section category / 9-section keyword
+  - 90 comparison items: 80 MATCH, 9 CHANGED, 1 PARTIAL, 0 MISSING (Medium+)
+  - Iteration 2 resolved: Chart.js CDN->inline bundle, hamburger button, Brand Positioning scatter chart
+  - Remaining backlog (all Low/a11y): column toggle, focus states, th scope, reduced-motion, light mode, sticky pills
+  - Implementation at: `amz_researcher/services/html_report_builder.py` (all-in-one)
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)

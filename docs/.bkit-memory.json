@@ -1,16 +1,15 @@
 {
-  "sessionCount": 45,
+  "sessionCount": 51,
   "lastSession": {
-    "startedAt": "2026-03-09T12:15:39.032Z",
+    "startedAt": "2026-03-09T14:22:32.093Z",
     "platform": "claude",
     "level": "Enterprise"
   },
-  "currentFeature": "amazon-researcher-v5",
+  "currentFeature": "html-insight-report",
   "pdca": {
-    "phase": "check",
-    "feature": "amazon-researcher-v5",
-    "planPath": "docs/01-plan/features/amazon-researcher-v5.plan.md",
-    "designPath": "docs/02-design/features/amazon-researcher-v5.design.md",
+    "phase": "plan",
+    "feature": "html-insight-report",
+    "planPath": "docs/01-plan/features/html-insight-report.plan.md",
     "updatedAt": "2026-03-09"
   }
 }

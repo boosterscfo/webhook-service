@@ -2,12 +2,12 @@
   "version": "1.0",
   "enabled": false,
   "teamName": "",
-  "feature": "market_analyzer.py",
-  "pdcaPhase": "do",
+  "feature": "html-insight-report",
+  "pdcaPhase": "plan",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
-  "startedAt": "2026-03-09T11:55:48.941Z",
-  "lastUpdated": "2026-03-09T12:15:38.577Z",
+  "startedAt": "2026-03-09T14:13:38.483Z",
+  "lastUpdated": "2026-03-09T14:22:31.620Z",
   "teammates": [],
   "progress": {
     "totalTasks": 0,
@@ -17,5 +17,5 @@
     "pendingTasks": 0
   },
   "recentMessages": [],
-  "sessionId": "c7c6ac37-9887-4c16-b9bf-63f09f18890c"
+  "sessionId": "96579497-cc3d-4118-b849-00d76d1e974f"
 }

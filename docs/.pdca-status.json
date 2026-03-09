@@ -1,7 +1,8 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-09T12:17:47.509Z",
+  "lastUpdated": "2026-03-09T14:00:44.033Z",
   "activeFeatures": [
+    "html-insight-report",
     "market_analyzer.py",
     "amz_researcher",
     "gemini.py",
@@ -11,8 +12,35 @@
     "data_collector.py",
     "product_db.py"
   ],
-  "primaryFeature": "market_analyzer.py",
+  "primaryFeature": "html-insight-report",
   "features": {
+    "html-insight-report": {
+      "phase": "plan",
+      "phaseNumber": 1,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [
+        "FR-01",
+        "FR-02",
+        "FR-03",
+        "FR-04",
+        "FR-05",
+        "FR-06",
+        "FR-07",
+        "FR-08"
+      ],
+      "documents": {
+        "plan": "docs/01-plan/features/html-insight-report.plan.md",
+        "design": "docs/02-design/html-report/ux-spec.md",
+        "design-component-map": "docs/02-design/html-report/component-map.md",
+        "mockup": "mockup/html-report/report.html"
+      },
+      "timestamps": {
+        "started": "2026-03-09T14:00:00.000Z",
+        "lastUpdated": "2026-03-09T15:00:00.000Z"
+      },
+      "lastFile": "docs/01-plan/features/html-insight-report.plan.md"
+    },
     "market_analyzer.py": {
       "phase": "do",
       "phaseNumber": 3,
@@ -35,9 +63,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T01:22:15.287Z",
-        "lastUpdated": "2026-03-09T12:17:47.509Z"
+        "lastUpdated": "2026-03-09T14:00:44.032Z"
       },
-      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/router.py"
+      "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/orchestrator.py"
     },
     "gemini.py": {
       "phase": "do",
@@ -100,7 +128,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-09T11:53:02.115Z",
-        "lastUpdated": "2026-03-09T11:53:02.115Z"
+        "lastUpdated": "2026-03-09T12:36:32.394Z"
       },
       "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/data_collector.py"
     },
@@ -126,7 +154,7 @@
   "session": {
     "startedAt": "2026-03-09T01:17:14.754Z",
     "onboardingCompleted": false,
-    "lastActivity": "2026-03-09T12:17:47.509Z"
+    "lastActivity": "2026-03-09T14:00:44.033Z"
   },
   "history": [
     {
@@ -347,6 +375,54 @@
     },
     {
       "timestamp": "2026-03-09T12:17:47.509Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T12:36:32.394Z",
+      "feature": "data_collector.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T12:39:42.411Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T12:40:45.669Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T12:40:54.053Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T12:41:04.239Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T14:00:12.198Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T14:00:27.237Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-09T14:00:44.032Z",
       "feature": "amz_researcher",
       "phase": "do",
       "action": "updated"

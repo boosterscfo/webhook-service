@@ -1,0 +1,435 @@
+{
+  "timestamp": "2026-03-09T14:21:04.336Z",
+  "reason": "compaction",
+  "status": {
+    "version": "2.0",
+    "lastUpdated": "2026-03-09T14:00:44.033Z",
+    "activeFeatures": [
+      "html-insight-report",
+      "market_analyzer.py",
+      "amz_researcher",
+      "gemini.py",
+      "webhooks",
+      "migrations",
+      "bright_data.py",
+      "data_collector.py",
+      "product_db.py"
+    ],
+    "primaryFeature": "html-insight-report",
+    "features": {
+      "html-insight-report": {
+        "phase": "plan",
+        "phaseNumber": 1,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [
+          "FR-01",
+          "FR-02",
+          "FR-03",
+          "FR-04",
+          "FR-05",
+          "FR-06",
+          "FR-07",
+          "FR-08"
+        ],
+        "documents": {
+          "plan": "docs/01-plan/features/html-insight-report.plan.md",
+          "design": "docs/02-design/html-report/ux-spec.md",
+          "design-component-map": "docs/02-design/html-report/component-map.md",
+          "mockup": "mockup/html-report/report.html"
+        },
+        "timestamps": {
+          "started": "2026-03-09T14:00:00.000Z",
+          "lastUpdated": "2026-03-09T15:00:00.000Z"
+        },
+        "lastFile": "docs/01-plan/features/html-insight-report.plan.md"
+      },
+      "market_analyzer.py": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T01:21:56.092Z",
+          "lastUpdated": "2026-03-09T11:53:29.827Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/market_analyzer.py"
+      },
+      "amz_researcher": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T01:22:15.287Z",
+          "lastUpdated": "2026-03-09T14:00:44.032Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/orchestrator.py"
+      },
+      "gemini.py": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T01:22:54.487Z",
+          "lastUpdated": "2026-03-09T01:23:07.311Z"
+        },
+        "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/gemini.py"
+      },
+      "webhooks": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T11:52:23.119Z",
+          "lastUpdated": "2026-03-09T11:52:23.119Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/app/config.py"
+      },
+      "migrations": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T11:52:35.434Z",
+          "lastUpdated": "2026-03-09T12:14:02.370Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/migrations/v6_keyword_search.py"
+      },
+      "bright_data.py": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T11:52:47.017Z",
+          "lastUpdated": "2026-03-09T12:13:48.135Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/bright_data.py"
+      },
+      "data_collector.py": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T11:53:02.115Z",
+          "lastUpdated": "2026-03-09T12:36:32.394Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/data_collector.py"
+      },
+      "product_db.py": {
+        "phase": "do",
+        "phaseNumber": 3,
+        "matchRate": null,
+        "iterationCount": 0,
+        "requirements": [],
+        "documents": {},
+        "timestamps": {
+          "started": "2026-03-09T11:53:18.374Z",
+          "lastUpdated": "2026-03-09T12:14:19.700Z"
+        },
+        "lastFile": "/home/yonkim/dev/webhooks/amz_researcher/services/product_db.py"
+      }
+    },
+    "pipeline": {
+      "currentPhase": 1,
+      "level": "Dynamic",
+      "phaseHistory": []
+    },
+    "session": {
+      "startedAt": "2026-03-09T01:17:14.754Z",
+      "onboardingCompleted": false,
+      "lastActivity": "2026-03-09T14:00:44.033Z"
+    },
+    "history": [
+      {
+        "timestamp": "2026-03-09T01:21:56.092Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:22:06.349Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:22:10.622Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:22:15.287Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:22:23.250Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:22:54.487Z",
+        "feature": "gemini.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:23:07.311Z",
+        "feature": "gemini.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:23:16.556Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:23:22.166Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:24:37.752Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:25:00.279Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:26:08.875Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:26:13.268Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:29:48.906Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:45:54.241Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T01:46:48.313Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:52:23.119Z",
+        "feature": "webhooks",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:52:35.434Z",
+        "feature": "migrations",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:52:47.017Z",
+        "feature": "bright_data.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:53:02.115Z",
+        "feature": "data_collector.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:53:18.374Z",
+        "feature": "product_db.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:53:29.827Z",
+        "feature": "market_analyzer.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:54:10.335Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:55:06.573Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:55:11.324Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:55:20.722Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T11:55:29.998Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:06:23.168Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:13:48.135Z",
+        "feature": "bright_data.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:14:02.370Z",
+        "feature": "migrations",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:14:13.342Z",
+        "feature": "product_db.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:14:19.700Z",
+        "feature": "product_db.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:17:08.280Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:17:12.930Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:17:19.733Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:17:41.523Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:17:47.509Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:36:32.394Z",
+        "feature": "data_collector.py",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:39:42.411Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:40:45.669Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:40:54.053Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T12:41:04.239Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T14:00:12.198Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T14:00:27.237Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      },
+      {
+        "timestamp": "2026-03-09T14:00:44.032Z",
+        "feature": "amz_researcher",
+        "phase": "do",
+        "action": "updated"
+      }
+    ]
+  }
+}
