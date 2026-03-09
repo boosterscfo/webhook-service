@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS amz_keyword_search_log (
     keyword VARCHAR(255) NOT NULL,
     product_count INT DEFAULT 0,
     snapshot_id VARCHAR(100) DEFAULT '',
+    response_url VARCHAR(500) DEFAULT '',
+    channel_id VARCHAR(50) DEFAULT '',
     status ENUM('collecting', 'completed', 'failed') NOT NULL DEFAULT 'collecting',
     searched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

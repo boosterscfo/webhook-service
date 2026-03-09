@@ -106,6 +106,7 @@ class BrightDataService:
         self,
         keyword: str,
         limit_per_input: int = 100,
+        notify_url: str = "",
     ) -> str:
         """키워드 검색 트리거 → snapshot_id 반환.
 
@@ -118,6 +119,8 @@ class BrightDataService:
             f"&discover_by=keyword"
             f"&limit_per_input={limit_per_input}"
         )
+        if notify_url:
+            url += f"&notify={notify_url}"
 
         body = [{"keyword": keyword}]
 

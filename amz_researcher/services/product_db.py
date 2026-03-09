@@ -141,6 +141,7 @@ class ProductDBService:
 
     def save_keyword_search_log(
         self, keyword: str, snapshot_id: str = "",
+        response_url: str = "", channel_id: str = "",
     ):
         """검색 로그 INSERT (status='collecting'). searched_at 반환."""
         from datetime import datetime
@@ -148,17 +149,37 @@ class ProductDBService:
         normalized = " ".join(keyword.lower().split())
         searched_at = datetime.now()
         query = """
-            INSERT INTO amz_keyword_search_log (keyword, snapshot_id, status, searched_at)
-            VALUES (%s, %s, 'collecting', %s)
+            INSERT INTO amz_keyword_search_log
+                (keyword, snapshot_id, response_url, channel_id, status, searched_at)
+            VALUES (%s, %s, %s, %s, 'collecting', %s)
         """
         try:
             with MysqlConnector(self._env) as conn:
-                conn.cursor.execute(query, (normalized, snapshot_id, searched_at))
+                conn.cursor.execute(query, (normalized, snapshot_id, response_url, channel_id, searched_at))
                 conn.connection.commit()
         except Exception:
             logger.exception("Failed to save keyword search log for %s", keyword)
             raise
         return searched_at
+
+    def get_keyword_search_by_snapshot(self, snapshot_id: str) -> dict | None:
+        """snapshot_id로 키워드 검색 로그 조회 (webhook 콜백용)."""
+        query = """
+            SELECT keyword, snapshot_id, response_url, channel_id, status, searched_at
+            FROM amz_keyword_search_log
+            WHERE snapshot_id = %s
+            ORDER BY searched_at DESC
+            LIMIT 1
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (snapshot_id,))
+        except Exception:
+            logger.exception("Failed to get keyword search by snapshot %s", snapshot_id)
+            return None
+        if df.empty:
+            return None
+        return df.iloc[0].to_dict()
 
     def update_keyword_search_log(
         self, keyword: str, searched_at, status: str, product_count: int = 0,

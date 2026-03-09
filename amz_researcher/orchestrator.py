@@ -671,16 +671,9 @@ async def run_keyword_analysis(
     response_url: str,
     channel_id: str,
 ):
-    """V6 키워드 검색 기반 분석 파이프라인."""
+    """V6 키워드 검색: 캐시 HIT → 즉시 분석, MISS → Bright Data 트리거 후 종료 (webhook 콜백 대기)."""
     product_db = ProductDBService("CFO")
-    bright_data = BrightDataService(
-        api_token=settings.BRIGHT_DATA_API_TOKEN,
-        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
-    )
-    gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
-    cache = AmzCacheService("CFO")
-    collector = DataCollector("CFO")
 
     normalized_keyword = " ".join(keyword.lower().split())
 
@@ -706,7 +699,7 @@ async def run_keyword_analysis(
         searched_at = None
 
         if cached and cached.get("status") == "completed":
-            # 캐시 HIT
+            # 캐시 HIT → 즉시 분석 파이프라인
             searched_at = cached["searched_at"]
             keyword_products = product_db.get_keyword_products(normalized_keyword, searched_at)
             if keyword_products:
@@ -717,36 +710,75 @@ async def run_keyword_analysis(
                     ephemeral=True,
                 )
 
-        if not keyword_products:
-            # 캐시 MISS → Bright Data 수집
-            await _msg(f"📡 *\"{keyword}\"* Bright Data 수집 시작... (1-3분 소요)", ephemeral=True)
-
-            searched_at = product_db.save_keyword_search_log(normalized_keyword)
-
-            try:
-                snapshot_id = await bright_data.trigger_keyword_search(normalized_keyword)
-                products_raw = await bright_data.poll_snapshot(snapshot_id)
-
-                if not products_raw:
-                    product_db.update_keyword_search_log(normalized_keyword, searched_at, "failed")
-                    await _msg(f"⚠️ *\"{keyword}\"* 검색 결과가 없습니다.", ephemeral=True)
-                    return
-
-                count = collector.process_search_snapshot(products_raw, normalized_keyword, searched_at)
-                product_db.update_keyword_search_log(normalized_keyword, searched_at, "completed", count)
-
-                keyword_products = product_db.get_keyword_products(normalized_keyword, searched_at)
-                await _msg(f"📦 {len(keyword_products)}개 제품 수집 완료. 성분 분석 중...", ephemeral=True)
-
-            except Exception as e:
-                product_db.update_keyword_search_log(normalized_keyword, searched_at, "failed")
-                raise
-
-        if not keyword_products:
-            await _msg(f"⚠️ *\"{keyword}\"* 검색 결과가 없습니다.", ephemeral=True)
+        if keyword_products:
+            # 캐시 HIT → 분석 파이프라인 즉시 실행
+            await _run_keyword_analysis_pipeline(keyword, keyword_products, response_url, channel_id)
             return
 
-        # Step 2: 성분 보완 (2-Layer)
+        # 캐시 MISS → Bright Data 트리거 (비동기, webhook 콜백 대기)
+        bright_data = BrightDataService(
+            api_token=settings.BRIGHT_DATA_API_TOKEN,
+            dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+        )
+        try:
+            notify_url = f"{settings.WEBHOOK_BASE_URL}/webhook/brightdata"
+            snapshot_id = await bright_data.trigger_keyword_search(
+                normalized_keyword, notify_url=notify_url,
+            )
+            searched_at = product_db.save_keyword_search_log(
+                normalized_keyword,
+                snapshot_id=snapshot_id,
+                response_url=response_url,
+                channel_id=channel_id,
+            )
+            await _msg(
+                f"📡 *\"{keyword}\"* Bright Data 수집 시작... 완료 시 자동으로 분석 결과를 보내드립니다.",
+                ephemeral=True,
+            )
+            logger.info(
+                "Keyword search triggered (async): keyword=%s, snapshot_id=%s, notify=%s",
+                normalized_keyword, snapshot_id, notify_url,
+            )
+        except Exception:
+            if searched_at:
+                product_db.update_keyword_search_log(normalized_keyword, searched_at, "failed")
+            raise
+        finally:
+            await bright_data.close()
+
+    except Exception as e:
+        logger.exception("Keyword analysis trigger failed for keyword=%s", keyword)
+        await _msg(f"❌ *\"{keyword}\"* 검색 분석 실패: {e!s}", ephemeral=True)
+        admin_id = settings.AMZ_ADMIN_SLACK_ID
+        if admin_id:
+            await slack.send_dm(
+                admin_id,
+                f"🚨 AMZ Keyword Analysis 에러\n키워드: {keyword}\n에러: {e!s}",
+            )
+    finally:
+        try:
+            await slack.close()
+        except Exception:
+            logger.warning("Failed to close SlackSender")
+
+
+async def _run_keyword_analysis_pipeline(
+    keyword: str,
+    keyword_products: list[dict],
+    response_url: str,
+    channel_id: str,
+):
+    """키워드 검색 분석 파이프라인 (수집 완료 후). 캐시 HIT 또는 webhook 콜백에서 호출."""
+    normalized_keyword = " ".join(keyword.lower().split())
+    gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+    cache = AmzCacheService("CFO")
+
+    async def _msg(text: str, ephemeral: bool = False):
+        await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
+
+    try:
+        # Step 1: 성분 보완 (2-Layer)
         asins = [p["asin"] for p in keyword_products]
         cached_ingredients = cache.get_ingredient_cache(asins)
         uncached_asins = [a for a in asins if a not in cached_ingredients]
@@ -787,7 +819,7 @@ async def run_keyword_analysis(
                 for asin, ings in cached_ingredients.items()
             ]
 
-        # Step 3: 가중치 계산
+        # Step 2: 가중치 계산
         search_products, all_details = _adapt_search_for_analyzer(keyword_products)
         weighted_products, rankings, categories = calculate_weights(
             search_products, all_details, gemini_results,
@@ -808,14 +840,13 @@ async def run_keyword_analysis(
                 wp.number_of_sellers = kp.get("number_of_sellers", 1) or 1
                 wp.bought_past_month = kp.get("bought_past_month")
 
-        # Step 4: 시장 분석 (BSR 의존 분석 제외)
+        # Step 3: 시장 분석 (BSR 의존 분석 제외)
         analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details)
 
-        # V1: market report 캐시 비활성화
         await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
         market_report = await gemini.generate_market_report(analysis_data)
 
-        # Step 5: Excel 생성 (9시트)
+        # Step 4: Excel 생성 (9시트)
         excel_bytes = build_keyword_excel(
             keyword, weighted_products, rankings, categories,
             search_products, all_details,
@@ -823,7 +854,7 @@ async def run_keyword_analysis(
             analysis_data=analysis_data,
         )
 
-        # Step 6: Slack 요약
+        # Step 5: Slack 요약
         fallback_text, summary_blocks = _build_summary_blocks(
             keyword, len(weighted_products), rankings[:10], market_report,
         )
@@ -833,7 +864,7 @@ async def run_keyword_analysis(
             blocks=summary_blocks,
         )
 
-        # Step 7: 파일 업로드
+        # Step 6: 파일 업로드
         filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(
             channel_id, excel_bytes, filename,
@@ -842,7 +873,7 @@ async def run_keyword_analysis(
         logger.info("Keyword analysis completed for keyword=%s (%d products)", keyword, len(keyword_products))
 
     except Exception as e:
-        logger.exception("Keyword analysis failed for keyword=%s", keyword)
+        logger.exception("Keyword analysis pipeline failed for keyword=%s", keyword)
         await _msg(f"❌ *\"{keyword}\"* 검색 분석 실패: {e!s}", ephemeral=True)
         admin_id = settings.AMZ_ADMIN_SLACK_ID
         if admin_id:
@@ -851,7 +882,7 @@ async def run_keyword_analysis(
                 f"🚨 AMZ Keyword Analysis 에러\n키워드: {keyword}\n에러: {e!s}",
             )
     finally:
-        for client in (bright_data, gemini, slack):
+        for client in (gemini, slack):
             try:
                 await client.close()
             except Exception:

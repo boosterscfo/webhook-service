@@ -5,7 +5,12 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Form, Request
 from pydantic import BaseModel
 
-from amz_researcher.orchestrator import run_analysis, run_keyword_analysis, run_research
+from amz_researcher.orchestrator import (
+    run_analysis,
+    run_keyword_analysis,
+    run_research,
+    _run_keyword_analysis_pipeline,
+)
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.product_db import ProductDBService
@@ -201,7 +206,8 @@ async def slack_amz(
             "response_type": "ephemeral",
             "text": (
                 "*Amazon BSR Analyzer*\n\n"
-                "`/amz {키워드}` — 분석 실행 (예: `/amz serum`)\n"
+                "`/amz {키워드}` — 카테고리 분석 (예: `/amz serum`)\n"
+                "`/amz search {키워드}` — 키워드 검색 분석 (예: `/amz search vitamin c serum`)\n"
                 "`/amz list` — 카테고리 목록\n"
                 "`/amz refresh` — 데이터 수집\n"
                 "`/amz help` — 상세 가이드"
@@ -278,7 +284,7 @@ async def slack_amz(
         background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id)
         return {
             "response_type": "in_channel",
-            "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... (1-3분 소요)",
+            "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... 완료 시 자동 알림됩니다.",
         }
 
     # /amz prod {keyword} — V3 하위 호환
@@ -421,7 +427,19 @@ async def brightdata_webhook(
         logger.info("Bright Data webhook: snapshot %s status=%s (not ready)", snapshot_id, status)
         return {"status": "ignored", "reason": f"status={status}"}
 
-    logger.info("Bright Data webhook: snapshot %s ready, starting ingestion", snapshot_id)
+    # 키워드 검색 snapshot인지 확인
+    product_db = ProductDBService("CFO")
+    keyword_log = product_db.get_keyword_search_by_snapshot(snapshot_id)
+
+    if keyword_log:
+        logger.info(
+            "Bright Data webhook: keyword search snapshot %s ready (keyword=%s)",
+            snapshot_id, keyword_log["keyword"],
+        )
+        background_tasks.add_task(_ingest_keyword_snapshot, snapshot_id, keyword_log)
+        return {"status": "accepted", "snapshot_id": snapshot_id, "type": "keyword_search"}
+
+    logger.info("Bright Data webhook: snapshot %s ready, starting BSR ingestion", snapshot_id)
     background_tasks.add_task(_ingest_snapshot, snapshot_id)
     return {"status": "accepted", "snapshot_id": snapshot_id}
 
@@ -455,5 +473,49 @@ async def _ingest_snapshot(snapshot_id: str):
         logger.warning("Webhook ingestion cancelled: snapshot=%s", snapshot_id)
     except Exception:
         logger.exception("Webhook ingestion failed: snapshot=%s", snapshot_id)
+    finally:
+        await bright_data.close()
+
+
+async def _ingest_keyword_snapshot(snapshot_id: str, keyword_log: dict):
+    """키워드 검색 snapshot fetch → DB 적재 → 분석 파이프라인 실행."""
+    keyword = keyword_log["keyword"]
+    searched_at = keyword_log["searched_at"]
+    response_url = keyword_log.get("response_url", "")
+    channel_id = keyword_log.get("channel_id", "")
+
+    bright_data = BrightDataService(
+        api_token=settings.BRIGHT_DATA_API_TOKEN,
+        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+    )
+    collector = DataCollector("CFO")
+    product_db = ProductDBService("CFO")
+
+    try:
+        # Step 1: snapshot fetch → DB 적재
+        products_raw = await bright_data.fetch_snapshot(snapshot_id)
+        if not products_raw:
+            product_db.update_keyword_search_log(keyword, searched_at, "failed")
+            logger.warning("Keyword snapshot %s returned empty for keyword=%s", snapshot_id, keyword)
+            return
+
+        count = collector.process_search_snapshot(products_raw, keyword, searched_at)
+        product_db.update_keyword_search_log(keyword, searched_at, "completed", count)
+        logger.info(
+            "Keyword snapshot ingested: snapshot=%s, keyword=%s, %d products",
+            snapshot_id, keyword, count,
+        )
+
+        # Step 2: 분석 파이프라인 실행
+        keyword_products = product_db.get_keyword_products(keyword, searched_at)
+        if not keyword_products:
+            logger.warning("No keyword products after ingestion for keyword=%s", keyword)
+            return
+
+        await _run_keyword_analysis_pipeline(keyword, keyword_products, response_url, channel_id)
+
+    except Exception:
+        product_db.update_keyword_search_log(keyword, searched_at, "failed")
+        logger.exception("Keyword snapshot ingestion failed: snapshot=%s, keyword=%s", snapshot_id, keyword)
     finally:
         await bright_data.close()
