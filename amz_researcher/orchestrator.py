@@ -18,6 +18,7 @@ from amz_researcher.services.analyzer import calculate_weights
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.excel_builder import build_excel, build_keyword_excel
+from amz_researcher.services.html_report_builder import build_html, build_keyword_html
 from amz_researcher.services.market_analyzer import build_market_analysis, build_keyword_market_analysis
 from amz_researcher.services.slack_sender import SlackSender
 
@@ -535,8 +536,15 @@ async def run_analysis(
             market_report = await gemini.generate_market_report(analysis_data)
             cache.save_market_report_cache(category_name, market_report, len(weighted_products))
 
-        # Step 5: Excel
+        # Step 5: Excel + HTML
         excel_bytes = build_excel(
+            category_name, weighted_products, rankings, categories,
+            search_products, all_details,
+            market_report=market_report,
+            rising_products=analysis_data.get("rising_products"),
+            analysis_data=analysis_data,
+        )
+        html_bytes = build_html(
             category_name, weighted_products, rankings, categories,
             search_products, all_details,
             market_report=market_report,
@@ -554,11 +562,16 @@ async def run_analysis(
             blocks=summary_blocks,
         )
 
-        # Step 7: 파일 업로드
-        filename = f"{category_name.replace(' ', '_')}_analysis.xlsx"
+        # Step 7: 파일 업로드 (HTML primary + Excel secondary)
+        html_filename = f"{category_name.replace(' ', '_')}_insight.html"
         await slack.upload_file(
-            channel_id, excel_bytes, filename,
-            comment="📊 상세 분석 엑셀 파일",
+            channel_id, html_bytes, html_filename,
+            comment="📊 인터랙티브 인사이트 리포트 (브라우저에서 열기)",
+        )
+        excel_filename = f"{category_name.replace(' ', '_')}_analysis.xlsx"
+        await slack.upload_file(
+            channel_id, excel_bytes, excel_filename,
+            comment="📋 원본 데이터 엑셀",
         )
         logger.info("Analysis completed for category=%s (%d products)", category_name, len(products))
 
@@ -860,8 +873,14 @@ async def _run_keyword_analysis_pipeline(
         await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
         market_report = await gemini.generate_market_report(analysis_data)
 
-        # Step 4: Excel 생성 (9시트)
+        # Step 4: Excel + HTML 생성
         excel_bytes = build_keyword_excel(
+            keyword, weighted_products, rankings, categories,
+            search_products, all_details,
+            market_report=market_report,
+            analysis_data=analysis_data,
+        )
+        html_bytes = build_keyword_html(
             keyword, weighted_products, rankings, categories,
             search_products, all_details,
             market_report=market_report,
@@ -878,11 +897,16 @@ async def _run_keyword_analysis_pipeline(
             blocks=summary_blocks,
         )
 
-        # Step 6: 파일 업로드
-        filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
+        # Step 6: 파일 업로드 (HTML primary + Excel secondary)
+        html_filename = f"keyword_{keyword.replace(' ', '_')}_insight.html"
         await slack.upload_file(
-            channel_id, excel_bytes, filename,
-            comment="📊 키워드 검색 분석 엑셀 파일",
+            channel_id, html_bytes, html_filename,
+            comment="📊 인터랙티브 인사이트 리포트 (브라우저에서 열기)",
+        )
+        excel_filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
+        await slack.upload_file(
+            channel_id, excel_bytes, excel_filename,
+            comment="📋 원본 데이터 엑셀",
         )
         logger.info("Keyword analysis completed for keyword=%s (%d products)", keyword, len(keyword_products))
 
