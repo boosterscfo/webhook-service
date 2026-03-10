@@ -32,17 +32,20 @@ _report_store = ReportStore(
 
 
 def _extract_executive_summary(report_md: str) -> str:
-    """시장 리포트 마크다운에서 Executive Summary 섹션만 추출."""
+    """시장 리포트 마크다운에서 Executive Summary 도입부만 추출.
+
+    ## Executive Summary 이후 첫 번째 ### / --- / 번호 섹션 전까지만 가져온다.
+    """
     if not report_md or not report_md.strip():
         return ""
     m = re.search(
-        r"(?:^|\n)##\s*Executive\s*Summary\s*\n(.*?)(?=\n##\s|\Z)",
+        r"(?:^|\n)##\s*Executive\s*Summary\s*\n(.*?)(?=\n###\s|\n---|\n\d+\.\s|\n##\s|\Z)",
         report_md,
         re.DOTALL | re.IGNORECASE,
     )
     if m:
         text = m.group(1).strip()
-        return text[:2000] if len(text) > 2000 else text
+        return text[:1500] if len(text) > 1500 else text
     return ""
 
 
