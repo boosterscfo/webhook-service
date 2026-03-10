@@ -394,6 +394,87 @@ def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
     }
 
 
+def analyze_listing_tactics(products: list[WeightedProduct]) -> dict:
+    """키워드 검색 리스팅 전술 분석 — Sponsored, Coupon, A+ Content, Strikethrough 등."""
+    if not products:
+        return {}
+
+    total = len(products)
+
+    # --- Ad Pressure ---
+    sponsored_products = [p for p in products if getattr(p, "sponsored", False)]
+    sponsored_count = len(sponsored_products)
+
+    # Position-group breakdown for sponsored ads
+    pos_groups = [
+        ("Top 10", 1, 10),
+        ("11-20", 11, 20),
+        ("21-30", 21, 30),
+        ("31+", 31, 9999),
+    ]
+    ad_by_position = {}
+    for label, lo, hi in pos_groups:
+        in_range = [p for p in products if lo <= p.position <= hi]
+        sp_in_range = [p for p in in_range if getattr(p, "sponsored", False)]
+        if in_range:
+            ad_by_position[label] = {
+                "total": len(in_range),
+                "sponsored": len(sp_in_range),
+                "sponsored_pct": round(len(sp_in_range) / len(in_range) * 100, 1),
+            }
+
+    # --- Coupon & Discount ---
+    with_coupon = [p for p in products if p.coupon]
+    with_strikethrough = [
+        p for p in products
+        if p.initial_price is not None and p.price is not None and p.initial_price > p.price
+    ]
+
+    coupon_types: Counter = Counter()
+    for p in with_coupon:
+        coupon_types[p.coupon] += 1
+
+    # Performance: coupon vs no-coupon avg bought
+    coupon_bought = [p.bought_past_month for p in with_coupon if p.bought_past_month]
+    no_coupon_bought = [p.bought_past_month for p in products if not p.coupon and p.bought_past_month]
+
+    # --- Content Quality ---
+    with_plus = [p for p in products if p.plus_content]
+    reviews_list = [p.reviews for p in products if p.reviews > 0]
+    ratings_list = [p.rating for p in products if p.rating > 0]
+
+    return {
+        "total_products": total,
+        "ad_pressure": {
+            "sponsored_count": sponsored_count,
+            "sponsored_pct": round(sponsored_count / total * 100, 1),
+            "by_position": ad_by_position,
+        },
+        "coupon_discount": {
+            "coupon_count": len(with_coupon),
+            "coupon_pct": round(len(with_coupon) / total * 100, 1),
+            "strikethrough_count": len(with_strikethrough),
+            "strikethrough_pct": round(len(with_strikethrough) / total * 100, 1),
+            "top_coupons": [
+                {"coupon": c, "count": n} for c, n in coupon_types.most_common(5)
+            ],
+            "avg_bought_with_coupon": (
+                round(sum(coupon_bought) / len(coupon_bought)) if coupon_bought else None
+            ),
+            "avg_bought_without_coupon": (
+                round(sum(no_coupon_bought) / len(no_coupon_bought)) if no_coupon_bought else None
+            ),
+        },
+        "content_quality": {
+            "plus_content_count": len(with_plus),
+            "plus_content_pct": round(len(with_plus) / total * 100, 1),
+            "avg_reviews": round(sum(reviews_list) / len(reviews_list)) if reviews_list else 0,
+            "median_reviews": sorted(reviews_list)[len(reviews_list) // 2] if reviews_list else 0,
+            "avg_rating": round(sum(ratings_list) / len(ratings_list), 2) if ratings_list else 0,
+        },
+    }
+
+
 def analyze_promotions(products: list[WeightedProduct]) -> dict:
     """쿠폰/프로모션 분석."""
     with_coupon = [p for p in products if p.coupon]
@@ -896,10 +977,9 @@ def build_keyword_market_analysis(
     weighted_products: list[WeightedProduct],
     details: list[ProductDetail],
 ) -> dict:
-    """키워드 검색 전용 시장 분석. BSR 의존 분석 3개 제외.
+    """키워드 검색 전용 시장 분석. BSR 의존 분석 2개 제외.
 
     제외 항목:
-    - brand_positioning: 크로스 카테고리 BSR 비교 오해 유발
     - rising_products: BSR < 10,000 로직 무의미
     - badges: Mann-Whitney U 검정 무의미
     """
@@ -909,9 +989,11 @@ def build_keyword_market_analysis(
         "price_tier_analysis": analyze_by_price_tier(weighted_products),
         "bsr_analysis": analyze_by_bsr(weighted_products),
         "brand_analysis": analyze_by_brand(weighted_products, details),
+        "brand_positioning": analyze_brand_positioning(weighted_products, details),
         "cooccurrence_analysis": analyze_cooccurrence(weighted_products),
         "rating_ingredients": analyze_rating_ingredients(weighted_products),
         "sales_volume": analyze_sales_volume(weighted_products),
+        "listing_tactics": analyze_listing_tactics(weighted_products),
         "sns_pricing": analyze_sns_pricing(weighted_products),
         "promotions": analyze_promotions(weighted_products),
         "customer_voice": analyze_customer_voice(weighted_products),

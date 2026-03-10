@@ -165,7 +165,7 @@ def build_keyword_html(
     market_report: str = "",
     analysis_data: dict | None = None,
 ) -> bytes:
-    """Keyword search analysis -> 9-section HTML report (no Badge, Brand Positioning, Rising Products)."""
+    """Keyword search analysis -> 10-section HTML report (no Badge, Rising Products)."""
     report_data = _serialize_report_data(
         keyword, weighted_products, rankings, categories,
         search_products, details, market_report,
@@ -1174,7 +1174,8 @@ function renderSalesPricing(data) {
   const sns = data.analysis && data.analysis.sns_pricing;
   const disc = data.analysis && data.analysis.discount_impact;
   const promo = data.analysis && data.analysis.promotions;
-  if (!sv && !sns && !disc) { el.style.display = 'none'; return; }
+  const lt = data.analysis && data.analysis.listing_tactics;
+  if (!sv && !sns && !disc && !lt) { el.style.display = 'none'; return; }
 
   // Top Sellers table
   const tsEl = el.querySelector('#top-sellers-tbody');
@@ -1214,28 +1215,64 @@ function renderSalesPricing(data) {
     });
   }
 
-  // SNS stats
-  const snsEl = el.querySelector('#sns-stats');
-  if (snsEl && sns) {
-    // Field names: sns_adoption_pct (0-100), avg_discount_pct (0-100), retention_signal.sns_avg_bought
-    const adoptPct = sns.sns_adoption_pct != null ? sns.sns_adoption_pct : (sns.adoption_rate != null ? sns.adoption_rate * 100 : null);
-    const discPct = sns.avg_discount_pct != null ? sns.avg_discount_pct : (sns.avg_discount != null ? sns.avg_discount * 100 : null);
-    const ret = sns.retention_signal || {};
-    const items = [
-      ['SNS Adoption Rate', adoptPct != null ? Math.round(adoptPct) + '%' : '-'],
-      ['Avg SNS Discount', discPct != null ? discPct.toFixed(1) + '%' : '-'],
-      ['SNS Avg Bought/Mo', ret.sns_avg_bought || sns.sns_avg_bought],
-      ['No-SNS Avg Bought/Mo', ret.no_sns_avg_bought || sns.no_sns_avg_bought],
-      ['With SNS Count', sns.with_sns_count],
-      ['Without SNS Count', sns.without_sns_count],
+  // Listing Tactics (keyword reports) or SNS stats (BSR reports)
+  const ltEl = el.querySelector('#listing-tactics');
+  const lt = data.analysis && data.analysis.listing_tactics;
+  if (ltEl && lt) {
+    const ad = lt.ad_pressure || {};
+    const cd = lt.coupon_discount || {};
+    const cq = lt.content_quality || {};
+    const kpis = [
+      ['Sponsored Ads', ad.sponsored_pct != null ? ad.sponsored_pct + '%' : '-', ad.sponsored_count + ' of ' + lt.total_products],
+      ['Coupon Usage', cd.coupon_pct != null ? cd.coupon_pct + '%' : '-', cd.coupon_count + ' products'],
+      ['Strikethrough Price', cd.strikethrough_pct != null ? cd.strikethrough_pct + '%' : '-', cd.strikethrough_count + ' products'],
+      ['A+ Content', cq.plus_content_pct != null ? cq.plus_content_pct + '%' : '-', cq.plus_content_count + ' products'],
+      ['Avg Reviews', cq.avg_reviews != null ? fmt(cq.avg_reviews) : '-', 'median ' + fmt(cq.median_reviews || 0)],
+      ['Avg Rating', cq.avg_rating != null ? cq.avg_rating.toFixed(2) : '-', ''],
     ];
-    const adoptEl = snsEl.querySelector('#sns-adoption-value');
-    if (adoptEl) adoptEl.textContent = adoptPct != null ? Math.round(adoptPct) + '%' : '-';
-    const listEl = snsEl.querySelector('#sns-stat-list');
-    if (listEl) {
-      listEl.innerHTML = items.slice(1).map(([label, val]) =>
-        `<div class="stat-box"><span class="stat-box-label">${esc(label)}</span><span class="stat-box-value"${label.includes('SNS Avg') ? ' style="color:#22C55E"' : ''}>${esc(val)}</span></div>`
+    const kpiGrid = ltEl.querySelector('#lt-kpi-grid');
+    if (kpiGrid) {
+      kpiGrid.innerHTML = kpis.map(([label, value, sub]) =>
+        `<div class="kpi-card" style="border-top:2px solid var(--color-sales-pricing)">
+          <div class="kpi-label">${esc(label)}</div>
+          <div class="kpi-value">${esc(value)}</div>
+          ${sub ? '<div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">' + esc(sub) + '</div>' : ''}
+        </div>`
       ).join('');
+    }
+    // Ad by position table
+    const adTbody = ltEl.querySelector('#lt-ad-position-tbody');
+    if (adTbody && ad.by_position) {
+      adTbody.innerHTML = Object.entries(ad.by_position).map(([pos, d]) =>
+        `<tr><td>${esc(pos)}</td><td>${d.total}</td><td>${d.sponsored}</td><td><strong>${d.sponsored_pct}%</strong></td></tr>`
+      ).join('');
+    }
+  } else if (ltEl) {
+    // BSR report: show SNS stats in same container
+    if (sns && sns.sns_adoption_pct > 0) {
+      const adoptPct = sns.sns_adoption_pct;
+      const discPct = sns.avg_discount_pct;
+      const ret = sns.retention_signal || {};
+      ltEl.querySelector('.subsection-title').textContent = 'Subscribe & Save Adoption';
+      const kpiGrid = ltEl.querySelector('#lt-kpi-grid');
+      if (kpiGrid) {
+        const items = [
+          ['SNS Adoption', Math.round(adoptPct) + '%', sns.with_sns_count + ' of ' + sns.total_products],
+          ['Avg Discount', discPct ? discPct.toFixed(1) + '%' : '-', ''],
+          ['SNS Avg Bought/Mo', ret.sns_avg_bought ? fmt(ret.sns_avg_bought) : '-', ''],
+          ['No-SNS Avg Bought/Mo', ret.no_sns_avg_bought ? fmt(ret.no_sns_avg_bought) : '-', ''],
+        ];
+        kpiGrid.innerHTML = items.map(([label, value, sub]) =>
+          `<div class="kpi-card" style="border-top:2px solid var(--color-sales-pricing)">
+            <div class="kpi-label">${esc(label)}</div>
+            <div class="kpi-value">${esc(value)}</div>
+            ${sub ? '<div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">' + esc(sub) + '</div>' : ''}
+          </div>`
+        ).join('');
+      }
+      ltEl.querySelector('#lt-ad-position-tbody')?.closest('div[style]')?.remove();
+    } else {
+      ltEl.style.display = 'none';
     }
   }
 
@@ -1900,14 +1937,17 @@ function buildSectionsHTML() {
           </table>
         </div>
       </div>
-      <div id="sns-stats">
-        <div class="subsection-title">Subscribe &amp; Save Adoption</div>
-        <div style="display:grid;gap:8px">
-          <div class="kpi-card" style="border-top:2px solid var(--color-sales-pricing)">
-            <div class="kpi-label">SNS Adoption Rate</div>
-            <div class="kpi-value" id="sns-adoption-value">-</div>
+      <div id="listing-tactics">
+        <div class="subsection-title">Listing Tactics</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px" id="lt-kpi-grid"></div>
+        <div style="margin-top:12px">
+          <div class="subsection-title" style="font-size:12px">Sponsored Ads by Position</div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Position</th><th>Total</th><th>Sponsored</th><th>Ad Rate</th></tr></thead>
+              <tbody id="lt-ad-position-tbody"></tbody>
+            </table>
           </div>
-          <div id="sns-stat-list" style="display:grid;gap:6px"></div>
         </div>
       </div>
     </div>
