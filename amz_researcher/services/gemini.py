@@ -327,5 +327,47 @@ class GeminiService:
         logger.error("Market report generation failed after %d attempts", max_retries)
         return ""
 
+    async def generate_category_keywords(self, category_name: str) -> str:
+        """카테고리명으로 검색용 키워드(한/영 별칭) 생성. 쉼표 구분 문자열 반환."""
+        prompt = (
+            f"Task: Generate search keywords for Amazon category.\n"
+            f"Output format: english1, english2, english3, 한글1, 한글2, 한글3\n"
+            f"IMPORTANT: You MUST include both English AND Korean (한글) keywords.\n\n"
+            f"Facial Serums → facial serum, serum, ampoule, essence, 세럼, 앰플, 에센스, 페이셜세럼\n"
+            f"Sun Skin Care → sunscreen, sunblock, SPF, UV protection, 선크림, 자외선차단, 선케어, 선블록\n"
+            f"Lip Balms & Moisturizers → lip balm, lip care, chapstick, 립밤, 립케어, 립크림, 입술보습\n"
+            f"{category_name} →"
+        )
+        try:
+            resp = await self.client.post(
+                self.url,
+                params={"key": self.api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.4,
+                        "maxOutputTokens": 512,
+                    },
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            text = (
+                data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text", "")
+            ).strip()
+            # 후처리: "Category → keywords" 형식에서 화살표 이후만 추출
+            if "→" in text:
+                text = text.split("→", 1)[1].strip()
+            # 잘린 키워드 제거 (한글 2자 이하, 영어 2자 이하)
+            parts = [p.strip().rstrip(",") for p in text.split(",")]
+            cleaned = [p for p in parts if p and len(p) > 2]
+            return ", ".join(cleaned)
+        except Exception:
+            logger.exception("Category keyword generation failed for '%s'", category_name)
+            return ""
+
     async def close(self):
         await self.client.aclose()

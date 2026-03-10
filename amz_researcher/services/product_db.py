@@ -219,3 +219,17 @@ class ProductDBService:
             logger.exception("Failed to add category %s", name)
             return {"ok": False, "error": "DB 저장 실패"}
         return {"ok": True, "node_id": node_id, "name": name}
+
+    def update_category_keywords(self, node_id: str, keywords: str) -> bool:
+        """카테고리 검색 키워드 업데이트."""
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(
+                    "UPDATE amz_categories SET keywords = %s WHERE node_id = %s",
+                    (keywords[:500], node_id),
+                )
+                conn.connection.commit()
+            return True
+        except Exception:
+            logger.exception("Failed to update keywords for node_id=%s", node_id)
+            return False
