@@ -219,6 +219,7 @@ def calculate_weights(
             ingredients=ingredients,
             bought_past_month=sp.bought_past_month,
             brand=detail.brand if detail else "",
+            sponsored=sp.sponsored,
         ))
 
     weighted_products.sort(key=lambda p: p.composite_weight, reverse=True)

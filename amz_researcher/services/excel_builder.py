@@ -669,11 +669,12 @@ def _build_badge_analysis(wb: Workbook, badge_data: dict):
 def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
     sales = analysis_data.get("sales_volume") or {}
     sns = analysis_data.get("sns_pricing") or {}
+    lt = analysis_data.get("listing_tactics") or {}
     discount = analysis_data.get("discount_impact") or {}
     promos = analysis_data.get("promotions") or {}
 
-    # All 4 sources empty → no sheet
-    if not any([sales, sns, discount, promos]):
+    # All sources empty → no sheet
+    if not any([sales, sns, lt, discount, promos]):
         return
 
     ws = wb.create_sheet("Sales & Pricing")
@@ -683,7 +684,7 @@ def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
     _write_title(
         ws,
         "Sales & Pricing — Revenue, Discounts & Promotions",
-        "판매량, SNS 할인, 쿠폰 분석 통합 뷰",
+        "판매량, 리스팅 전술, 할인, 쿠폰 분석 통합 뷰",
         col_count,
     )
 
@@ -749,8 +750,60 @@ def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
         if row > b_data_start:
             _style_data_rows(ws, b_data_start, row - 1, 4)
 
-    # Section C: SNS Pricing Summary
-    if sns:
+    # Section C: Listing Tactics (keyword) or SNS Pricing (BSR)
+    if lt:
+        row += 2
+        ws.cell(row=row, column=1, value="Listing Tactics")
+        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
+        row += 1
+
+        ws.cell(row=row, column=1, value="Metric")
+        ws.cell(row=row, column=2, value="Value")
+        ws.cell(row=row, column=3, value="Detail")
+        _style_header_row(ws, row, 3)
+        row += 1
+        c_data_start = row
+
+        ad = lt.get("ad_pressure") or {}
+        cd = lt.get("coupon_discount") or {}
+        cq = lt.get("content_quality") or {}
+
+        kv_rows = [
+            ("Sponsored Ads", f"{ad.get('sponsored_pct', '')}%", f"{ad.get('sponsored_count', 0)} of {lt.get('total_products', 0)}"),
+            ("Coupon Usage", f"{cd.get('coupon_pct', '')}%", f"{cd.get('coupon_count', 0)} products"),
+            ("Strikethrough Price", f"{cd.get('strikethrough_pct', '')}%", f"{cd.get('strikethrough_count', 0)} products"),
+            ("A+ Content", f"{cq.get('plus_content_pct', '')}%", f"{cq.get('plus_content_count', 0)} products"),
+            ("Avg Reviews", cq.get("avg_reviews"), f"median {cq.get('median_reviews', 0)}"),
+            ("Avg Rating", cq.get("avg_rating"), ""),
+        ]
+        for label, value, detail in kv_rows:
+            ws.cell(row=row, column=1, value=label)
+            if value is not None:
+                ws.cell(row=row, column=2, value=value)
+            if detail:
+                ws.cell(row=row, column=3, value=detail)
+            row += 1
+
+        # Sponsored by position sub-table
+        by_pos = ad.get("by_position") or {}
+        if by_pos:
+            row += 1
+            ws.cell(row=row, column=1, value="Sponsored by Position")
+            ws.cell(row=row, column=1).font = Font(bold=True, size=10)
+            row += 1
+            for c, h in enumerate(["Position", "Total", "Sponsored", "Ad Rate"], 1):
+                ws.cell(row=row, column=c, value=h)
+            _style_header_row(ws, row, 4)
+            row += 1
+            for pos, d in by_pos.items():
+                ws.cell(row=row, column=1, value=pos)
+                ws.cell(row=row, column=2, value=d.get("total"))
+                ws.cell(row=row, column=3, value=d.get("sponsored"))
+                ws.cell(row=row, column=4, value=f"{d.get('sponsored_pct', 0)}%")
+                row += 1
+
+        _style_data_rows(ws, c_data_start, row - 1, 4)
+    elif sns:
         row += 2
         ws.cell(row=row, column=1, value="Subscribe & Save Pricing")
         ws.cell(row=row, column=1).font = Font(bold=True, size=11)

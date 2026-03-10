@@ -104,6 +104,7 @@ class WeightedProduct(BaseModel):
     coupon: str = ""
     plus_content: bool = False
     customer_says: str = ""
+    sponsored: bool = False
     # V5 신규 필드
     badge: str = ""
     initial_price: float | None = None
