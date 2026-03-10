@@ -2067,13 +2067,14 @@ function buildSectionsHTML() {
     </div>
     <div data-tc="1" id="product-detail-table-wrap">
       <div class="table-wrapper">
-        <table>
+        <table style="min-width:1400px">
           <thead>
             <tr>
               <th>ASIN <span class="sort-icon">&#8597;</span></th>
               <th>Brand <span class="sort-icon">&#8597;</span></th>
               <th>Title</th>
               <th>Price <span class="sort-icon">&#8597;</span></th>
+              <th>Customer Says</th>
               <th>SNS Price <span class="sort-icon">&#8597;</span></th>
               <th>Bought/Mo <span class="sort-icon">&#8597;</span></th>
               <th>Reviews <span class="sort-icon">&#8597;</span></th>
@@ -2085,7 +2086,6 @@ function buildSectionsHTML() {
               <th>Badge</th>
               <th>A+</th>
               <th>Vars <span class="sort-icon">&#8597;</span></th>
-              <th>Customer Says</th>
             </tr>
           </thead>
           <tbody></tbody>
