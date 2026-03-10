@@ -1286,7 +1286,6 @@ function renderSalesPricing(data) {
 function renderBrandPositioning(data) {
   const el = document.getElementById('brand-positioning');
   if (!el) return;
-  if (data.report_type === 'keyword') { el.style.display = 'none'; return; }
   const rawBp = data.analysis && data.analysis.brand_positioning;
   const mfr = data.analysis && data.analysis.manufacturer;
   if (!rawBp) { el.style.display = 'none'; return; }
@@ -1322,29 +1321,6 @@ function renderBrandPositioning(data) {
     const scatterChart = new Chart(scatterCtx, {
       type: 'bubble',
       data: { datasets },
-      plugins: [{
-        id: 'bubbleLabels',
-        afterDatasetsDraw(chart) {
-          const { ctx: c } = chart;
-          c.save();
-          chart.data.datasets.forEach((ds, di) => {
-            const meta = chart.getDatasetMeta(di);
-            meta.data.forEach((el, i) => {
-              const lbl = ds.pointLabels && ds.pointLabels[i] || '';
-              const cnt = ds.pointCounts && ds.pointCounts[i] || '';
-              if (!lbl) return;
-              c.fillStyle = '#C8CDD8';
-              c.font = '10px -apple-system, sans-serif';
-              c.textAlign = 'center';
-              c.fillText(lbl, el.x, el.y - el.options.radius - 6);
-              c.fillStyle = '#8B92A5';
-              c.font = '9px -apple-system, sans-serif';
-              c.fillText(cnt + 'ea', el.x, el.y + 3);
-            });
-          });
-          c.restore();
-        }
-      }],
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: {
