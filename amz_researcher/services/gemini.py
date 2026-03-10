@@ -109,8 +109,8 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 ### 8. 월간 판매량 분석
 {sales_volume_json}
 
-### 9. Subscribe & Save 가격 분석
-{sns_pricing_json}
+### 9. {section9_title}
+{section9_json}
 
 ### 10. 쿠폰/프로모션 분석
 {promotions_json}
@@ -155,9 +155,9 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
    - 신규 브랜드/K-뷰티 등 트렌드 시그널
    - 이 제품들이 성공하는 이유 추론
 
-6. **판매량 & 재구매 전략 (Sales & Retention)**
+6. **판매량 & 경쟁 전략 (Sales & Competitive Tactics)**
    - 가격대별 판매량 차이와 전략적 의미
-   - SNS(Subscribe & Save) 채택 현황과 재구매 유도 효과
+   - {section6_guidance}
    - 쿠폰/프로모션 사용 현황과 BSR 영향
 
 7. **소비자 인식 & 배지 효과 (Consumer Voice & Badge Impact)**
@@ -277,6 +277,17 @@ class GeminiService:
         def _dump(key: str) -> str:
             return json.dumps(analysis_data.get(key, {}), ensure_ascii=False, indent=2)
 
+        # 키워드 검색: listing_tactics 사용, BSR 분석: sns_pricing 사용
+        has_listing_tactics = bool(analysis_data.get("listing_tactics"))
+        if has_listing_tactics:
+            section9_title = "리스팅 전술 분석 (Listing Tactics: Sponsored, Coupon, A+ Content)"
+            section9_json = _dump("listing_tactics")
+            section6_guidance = "Sponsored 광고 비율, 쿠폰/할인 전략, A+ Content 채택률 등 리스팅 전술 분석"
+        else:
+            section9_title = "Subscribe & Save 가격 분석"
+            section9_json = _dump("sns_pricing")
+            section6_guidance = "SNS(Subscribe & Save) 채택 현황과 재구매 유도 효과"
+
         prompt = MARKET_REPORT_PROMPT.format(
             keyword=analysis_data["keyword"],
             total_products=analysis_data["total_products"],
@@ -287,9 +298,10 @@ class GeminiService:
             brand_positioning_json=_dump("brand_positioning"),
             rising_products_json=_dump("rising_products"),
             rating_ingredients_json=_dump("rating_ingredients"),
-            # V5 추가
             sales_volume_json=_dump("sales_volume"),
-            sns_pricing_json=_dump("sns_pricing"),
+            section9_title=section9_title,
+            section9_json=section9_json,
+            section6_guidance=section6_guidance,
             promotions_json=_dump("promotions"),
             customer_voice_json=_dump("customer_voice"),
             badges_json=_dump("badges"),
