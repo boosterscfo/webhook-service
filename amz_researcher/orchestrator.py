@@ -555,6 +555,69 @@ def _adapt_for_analyzer(
     return search_products, details
 
 
+# ── 원샷 카테고리 수집 → 분석 콜백 저장소 ──────────────
+# snapshot_id → {node_id, name, response_url, channel_id, user_id}
+_category_collection_callbacks: dict[str, dict] = {}
+
+
+async def _trigger_category_collection(
+    node_id: str,
+    name: str,
+    response_url: str,
+    channel_id: str,
+    user_id: str = "",
+):
+    """미수집 카테고리의 Bright Data 수집을 트리거하고 콜백 정보를 저장."""
+    product_db = ProductDBService("CFO")
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+
+    url = product_db.get_category_url(node_id)
+    if not url:
+        await slack.send_message(
+            response_url,
+            f"❌ *{name}* 카테고리 URL을 찾을 수 없습니다.",
+            ephemeral=True, channel_id=channel_id,
+        )
+        await slack.close()
+        return
+
+    bright_data = BrightDataService(
+        api_token=settings.BRIGHT_DATA_API_TOKEN,
+        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+    )
+    try:
+        notify_url = f"{settings.WEBHOOK_BASE_URL}/webhook/brightdata"
+        snapshot_id = await bright_data.trigger_collection(
+            [url], notify_url=notify_url,
+        )
+        # 콜백 정보 저장 (webhook 수신 시 자동 분석용)
+        _category_collection_callbacks[snapshot_id] = {
+            "node_id": node_id,
+            "name": name,
+            "response_url": response_url,
+            "channel_id": channel_id,
+            "user_id": user_id,
+        }
+        # is_active 전환
+        product_db.activate_category(node_id)
+
+        await slack.send_message(
+            response_url,
+            f"📡 *{name}* 데이터 수집 시작... 완료 시 자동으로 분석 결과를 보내드립니다.",
+            ephemeral=True, channel_id=channel_id,
+        )
+    except Exception:
+        logger.exception("Category collection trigger failed for %s", name)
+        await slack.send_message(
+            response_url,
+            f"❌ *{name}* 수집 트리거 실패",
+            ephemeral=True, channel_id=channel_id,
+        )
+    finally:
+        await bright_data.close()
+        await slack.close()
+
+
 async def run_analysis(
     category_node_id: str,
     category_name: str,
@@ -576,7 +639,11 @@ async def run_analysis(
         # Step 1: DB에서 제품 조회
         raw_products = product_db.get_products_by_category(category_node_id)
         if not raw_products:
-            await _msg(f"⚠️ *{category_name}* 카테고리에 수집된 제품이 없습니다. `/amz refresh`로 수집을 시작하세요.")
+            # 미수집 카테고리 → Bright Data 원샷 수집 트리거
+            await _trigger_category_collection(
+                category_node_id, category_name,
+                response_url, channel_id, user_id,
+            )
             return
 
         products = [BrightDataProduct(**_parse_db_row(r)) for r in raw_products]

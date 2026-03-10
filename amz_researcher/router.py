@@ -11,6 +11,7 @@ from amz_researcher.orchestrator import (
     run_keyword_analysis,
     run_research,
     _run_keyword_analysis_pipeline,
+    _category_collection_callbacks,
 )
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
@@ -55,7 +56,7 @@ def _build_help_response() -> dict:
                         "Amazon Best Sellers 카테고리별 Top 100 제품을 수집하고,\n"
                         "Gemini AI로 성분을 추출·분석하여 시장 인사이트 리포트를 생성합니다.\n\n"
                         "*전체 워크플로우:*\n"
-                        "1️⃣ 카테고리 등록 (`/amz add`) → 2️⃣ 데이터 수집 (`/amz refresh`) → 3️⃣ 분석 (`/amz {키워드}`)"
+                        "1️⃣ 카테고리 검색 (`/amz {키워드}`) → 2️⃣ 자동 수집 & 분석 → 3️⃣ 리포트 생성"
                     ),
                 },
             },
@@ -102,13 +103,9 @@ def _build_help_response() -> dict:
                     "text": (
                         "*📋 카테고리 관리*\n\n"
                         "`/amz list`\n"
-                        "현재 등록된 모든 카테고리와 node_id를 표시합니다.\n\n"
-                        "`/amz add {카테고리명} {Amazon BSR URL}`\n"
-                        "새 카테고리를 등록합니다. URL은 Amazon Best Sellers 페이지 주소입니다.\n\n"
-                        "_예시:_\n"
-                        "• `/amz add Hair Oils https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281`\n"
-                        "• `/amz add Face Moisturizers https://www.amazon.com/Best-Sellers/zgbs/beauty/11062741`\n\n"
-                        "_카테고리명에 공백이 있어도 따옴표 없이 입력하세요. 마지막 인자가 URL로 인식됩니다._"
+                        "현재 활성화된 카테고리 목록을 표시합니다.\n\n"
+                        "`/amz refresh`\n"
+                        "활성 카테고리의 BSR 데이터를 재수집합니다."
                     ),
                 },
             },
@@ -256,31 +253,6 @@ async def slack_amz(
     # /amz help — 상세 도움말
     if subcommand == "help":
         return _build_help_response()
-
-    # /amz add {name} {url}
-    if subcommand == "add":
-        if len(parts) < 3:
-            return {
-                "response_type": "ephemeral",
-                "text": "사용법: `/amz add {카테고리명} {Amazon Best Sellers URL}`\n예: `/amz add \"Hair Oils\" https://www.amazon.com/Best-Sellers/zgbs/beauty/11058281`",
-            }
-        # URL은 마지막 파트, 나머지가 이름
-        url = parts[-1]
-        name = " ".join(parts[1:-1])
-        if not url.startswith("http"):
-            return {"response_type": "ephemeral", "text": "❌ 마지막 인자는 Amazon URL이어야 합니다."}
-        product_db = ProductDBService("CFO")
-        result = product_db.add_category(name, url)
-        if result["ok"]:
-            background_tasks.add_task(
-                _generate_category_keywords,
-                result["node_id"], result["name"], response_url, channel_id,
-            )
-            return {
-                "response_type": "ephemeral",
-                "text": f"✅ 카테고리 추가 완료: *{result['name']}* (`{result['node_id']}`)\n다음 수집 시 자동 포함됩니다.\n🔄 검색 키워드 자동 생성 중...",
-            }
-        return {"response_type": "ephemeral", "text": f"❌ 추가 실패: {result['error']}"}
 
     # /amz list
     if subcommand == "list":
@@ -466,7 +438,7 @@ async def slack_amz(
     buttons = [
         {
             "type": "button",
-            "text": {"type": "plain_text", "text": m["name"]},
+            "text": {"type": "plain_text", "text": f"{m['name']} [NEW]" if not m.get("is_active") else m["name"]},
             "action_id": f"amz_category_{m['node_id']}",
             "value": json.dumps({
                 "node_id": m["node_id"],
@@ -667,6 +639,16 @@ async def brightdata_webhook(
         background_tasks.add_task(_ingest_keyword_snapshot, snapshot_id, keyword_log)
         return {"status": "accepted", "snapshot_id": snapshot_id, "type": "keyword_search"}
 
+    # 카테고리 원샷 수집인지 확인
+    category_cb = _category_collection_callbacks.get(snapshot_id)
+    if category_cb:
+        logger.info(
+            "Bright Data webhook: category oneshot snapshot %s ready (category=%s)",
+            snapshot_id, category_cb["name"],
+        )
+        background_tasks.add_task(_ingest_and_analyze_category, snapshot_id, category_cb)
+        return {"status": "accepted", "snapshot_id": snapshot_id, "type": "category_oneshot"}
+
     logger.info("Bright Data webhook: snapshot %s ready, starting BSR ingestion", snapshot_id)
     background_tasks.add_task(_ingest_snapshot, snapshot_id)
     return {"status": "accepted", "snapshot_id": snapshot_id}
@@ -715,6 +697,49 @@ async def _ingest_snapshot(snapshot_id: str):
         logger.warning("Webhook ingestion cancelled: snapshot=%s", snapshot_id)
     except Exception:
         logger.exception("Webhook ingestion failed: snapshot=%s", snapshot_id)
+    finally:
+        await bright_data.close()
+
+
+async def _ingest_and_analyze_category(snapshot_id: str, cb: dict):
+    """카테고리 원샷: snapshot fetch → DB 적재 → 분석 파이프라인 자동 실행."""
+    node_id = cb["node_id"]
+    name = cb["name"]
+    response_url = cb.get("response_url", "")
+    channel_id = cb.get("channel_id", "")
+    user_id = cb.get("user_id", "")
+
+    bright_data = BrightDataService(
+        api_token=settings.BRIGHT_DATA_API_TOKEN,
+        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
+    )
+    collector = DataCollector("CFO")
+
+    try:
+        products = await bright_data.fetch_snapshot(snapshot_id)
+        count = collector.process_snapshot(products)
+        logger.info(
+            "Category oneshot ingestion complete: snapshot=%s, category=%s, %d products",
+            snapshot_id, name, count,
+        )
+        # 콜백 제거
+        _category_collection_callbacks.pop(snapshot_id, None)
+        # 분석 파이프라인 자동 실행
+        await run_analysis(node_id, name, response_url, channel_id, user_id)
+    except Exception:
+        logger.exception(
+            "Category oneshot failed: snapshot=%s, category=%s", snapshot_id, name,
+        )
+        _category_collection_callbacks.pop(snapshot_id, None)
+        slack = SlackSender(settings.AMZ_BOT_TOKEN)
+        try:
+            await slack.send_message(
+                response_url,
+                f"❌ *{name}* 수집/분석 실패",
+                ephemeral=True, channel_id=channel_id,
+            )
+        finally:
+            await slack.close()
     finally:
         await bright_data.close()
 

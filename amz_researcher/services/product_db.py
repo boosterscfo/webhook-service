@@ -12,10 +12,10 @@ class ProductDBService:
         self._env = environment
 
     def search_categories(self, keyword: str) -> list[dict]:
-        """키워드로 카테고리 fuzzy 검색. is_active=TRUE만."""
+        """키워드로 카테고리 fuzzy 검색. 전체 카테고리 대상."""
         query = (
-            "SELECT node_id, name, url, keywords "
-            "FROM amz_categories WHERE is_active = TRUE"
+            "SELECT node_id, name, url, keywords, is_active, depth "
+            "FROM amz_categories"
         )
         try:
             with MysqlConnector(self._env) as conn:
@@ -36,7 +36,11 @@ class ProductDBService:
                     "node_id": row["node_id"],
                     "name": row["name"],
                     "url": row["url"],
+                    "is_active": bool(row["is_active"]),
+                    "depth": int(row["depth"]) if row["depth"] is not None else 0,
                 })
+        # 깊은 카테고리(더 구체적인) 우선 정렬
+        results.sort(key=lambda x: -x["depth"])
         return results
 
     def get_products_by_category(self, category_node_id: str) -> list[dict]:
@@ -59,8 +63,8 @@ class ProductDBService:
         return df.to_dict("records")
 
     def get_category_url(self, node_id: str) -> str | None:
-        """특정 카테고리의 URL 반환."""
-        query = "SELECT url FROM amz_categories WHERE node_id = %s AND is_active = TRUE"
+        """특정 카테고리의 URL 반환 (active 여부 무관)."""
+        query = "SELECT url FROM amz_categories WHERE node_id = %s"
         try:
             with MysqlConnector(self._env) as conn:
                 df = conn.read_query_table(query, (node_id,))
@@ -253,27 +257,17 @@ class ProductDBService:
         except Exception:
             logger.exception("Failed to update keyword search log for %s", keyword)
 
-    def add_category(self, name: str, url: str) -> dict:
-        """Amazon Best Sellers URL로 카테고리 추가. node_id는 URL에서 추출."""
-        import re
-        m = re.search(r"/(\d+)(?:\?|$)", url)
-        if not m:
-            return {"ok": False, "error": "URL에서 node_id를 추출할 수 없습니다."}
-        node_id = m.group(1)
-
-        query = """
-            INSERT INTO amz_categories (node_id, name, url, is_active)
-            VALUES (%s, %s, %s, TRUE)
-            ON DUPLICATE KEY UPDATE name=VALUES(name), url=VALUES(url), is_active=TRUE
-        """
+    def activate_category(self, node_id: str) -> None:
+        """카테고리를 is_active=TRUE로 전환."""
         try:
             with MysqlConnector(self._env) as conn:
-                conn.cursor.execute(query, (node_id, name, url))
+                conn.cursor.execute(
+                    "UPDATE amz_categories SET is_active = TRUE WHERE node_id = %s",
+                    (node_id,),
+                )
                 conn.connection.commit()
         except Exception:
-            logger.exception("Failed to add category %s", name)
-            return {"ok": False, "error": "DB 저장 실패"}
-        return {"ok": True, "node_id": node_id, "name": name}
+            logger.exception("Failed to activate category %s", node_id)
 
     def update_category_keywords(self, node_id: str, keywords: str) -> bool:
         """카테고리 검색 키워드 업데이트."""
