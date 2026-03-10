@@ -260,7 +260,7 @@ async def slack_amz(
                 result["node_id"], result["name"], response_url, channel_id,
             )
             return {
-                "response_type": "in_channel",
+                "response_type": "ephemeral",
                 "text": f"✅ 카테고리 추가 완료: *{result['name']}* (`{result['node_id']}`)\n다음 수집 시 자동 포함됩니다.\n🔄 검색 키워드 자동 생성 중...",
             }
         return {"response_type": "ephemeral", "text": f"❌ 추가 실패: {result['error']}"}
@@ -425,7 +425,7 @@ async def _generate_category_keywords(
             await slack.send_message(
                 response_url,
                 f"🏷️ *{category_name}* 검색 키워드 설정 완료:\n`{keywords}`",
-                ephemeral=False, channel_id=channel_id,
+                ephemeral=True, channel_id=channel_id,
             )
     except Exception:
         logger.exception("Category keyword generation failed for %s", category_name)
