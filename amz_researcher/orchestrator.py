@@ -67,6 +67,15 @@ def _extract_executive_summary(report_md: str) -> dict:
     return result
 
 
+def _sanitize_for_slack(text: str) -> str:
+    """마크다운 텍스트를 Slack mrkdwn 호환 형식으로 변환."""
+    # **bold** → *bold*
+    text = re.sub(r"\*\*([^*]+)\*\*", r"*\1*", text)
+    # __italic__ → _italic_
+    text = re.sub(r"__([^_]+)__", r"_\1_", text)
+    return text
+
+
 def _build_report_blocks(
     label: str,
     report_url: str,
@@ -84,18 +93,22 @@ def _build_report_blocks(
     # Header
     blocks.append({
         "type": "header",
-        "text": {"type": "plain_text", "text": f"📊 {label} {report_type} 분석 결과", "emoji": True},
+        "text": {"type": "plain_text", "text": f"{label} {report_type} 분석 리포트", "emoji": True},
     })
 
     # 요청자 멘션
     if requester:
         blocks.append({
             "type": "context",
-            "elements": [{"type": "mrkdwn", "text": f"{requester} 님이 요청한 분석입니다."}],
+            "elements": [
+                {"type": "mrkdwn", "text": f":mag:  {requester} 님이 요청한 분석입니다."},
+            ],
         })
 
+    blocks.append({"type": "divider"})
+
     # 시장 요약
-    overview = exec_parts.get("overview", "")
+    overview = _sanitize_for_slack(exec_parts.get("overview", ""))
     if overview:
         blocks.append({
             "type": "section",
@@ -108,28 +121,35 @@ def _build_report_blocks(
         })
 
     # 전략 제안
-    strategy = exec_parts.get("strategy", "")
+    strategy = _sanitize_for_slack(exec_parts.get("strategy", ""))
     if strategy:
         blocks.append({"type": "divider"})
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"💡 *즉각적인 전략 제안*\n{strategy}"},
+            "text": {"type": "mrkdwn", "text": f":bulb: *즉각적인 전략 제안*\n{strategy}"},
         })
 
-    # 리포트 버튼
+    # 리포트 CTA
     blocks.append({"type": "divider"})
     blocks.append({
-        "type": "section",
-        "text": {"type": "mrkdwn", "text": "📊 *인터랙티브 인사이트 리포트*"},
-        "accessory": {
-            "type": "button",
-            "text": {"type": "plain_text", "text": "리포트 열기"},
-            "url": report_url,
-            "style": "primary",
-        },
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": ":chart_with_upwards_trend:  인사이트 리포트 보기", "emoji": True},
+                "url": report_url,
+                "style": "primary",
+            },
+        ],
+    })
+    blocks.append({
+        "type": "context",
+        "elements": [
+            {"type": "mrkdwn", "text": "차트·테이블로 시장 데이터를 인터랙티브하게 확인할 수 있습니다."},
+        ],
     })
 
-    fallback_text = f"{mention_prefix}📊 {label} 분석 리포트: {report_url}"
+    fallback_text = f"{mention_prefix}{label} {report_type} 분석 리포트: {report_url}"
     return fallback_text, blocks
 
 
