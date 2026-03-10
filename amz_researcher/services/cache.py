@@ -286,45 +286,30 @@ class AmzCacheService:
     def get_ingredient_cache(self, asins: list[str]) -> dict[str, list[Ingredient]]:
         """Gemini 추출 성분 캐시 조회. {asin: [Ingredient]} 반환.
 
-        제품이 새로 수집(collected_at)된 경우만 재추출 유도.
-        updated_at은 브랜드 보정 등 성분과 무관한 변경에도 갱신되므로 사용하지 않음.
+        성분은 BSR 재수집(가격/순위 갱신)과 무관하게 변하지 않으므로
+        TTL(30일)만으로 유효성 판단. collected_at 기반 stale 비교 제거.
         """
         if not asins:
             return {}
+        cutoff = datetime.now() - timedelta(days=CACHE_TTL_DAYS)
         placeholders = ",".join(["%s"] * len(asins))
         query = (
-            f"SELECT ic.asin, ic.ingredient_name, ic.common_name, "
-            f"ic.category, ic.extracted_at, p.collected_at "
-            f"FROM amz_ingredient_cache ic "
-            f"LEFT JOIN amz_products p ON ic.asin = p.asin "
-            f"WHERE ic.asin IN ({placeholders})"
+            f"SELECT asin, ingredient_name, common_name, category "
+            f"FROM amz_ingredient_cache "
+            f"WHERE asin IN ({placeholders}) AND extracted_at >= %s"
         )
         try:
             with MysqlConnector(self._env) as conn:
-                df = conn.read_query_table(query, tuple(asins))
+                df = conn.read_query_table(query, (*asins, cutoff))
         except Exception:
             logger.exception("Failed to read ingredient cache")
             return {}
         if df.empty:
             return {}
 
-        # 제품 collected_at > 캐시 extracted_at이면 stale → 제외
-        stale_asins: set[str] = set()
-        for _, row in df.iterrows():
-            extracted = row.get("extracted_at")
-            collected = row.get("collected_at")
-            if extracted is not None and collected is not None:
-                if pd.Timestamp(collected) > pd.Timestamp(extracted):
-                    stale_asins.add(row["asin"])
-
-        if stale_asins:
-            logger.info("Ingredient cache stale for %d ASINs, will re-extract", len(stale_asins))
-
         result: dict[str, list[Ingredient]] = {}
         for _, row in df.iterrows():
             asin = row["asin"]
-            if asin in stale_asins:
-                continue
             if asin not in result:
                 result[asin] = []
             if row["ingredient_name"] != "_NONE_":
