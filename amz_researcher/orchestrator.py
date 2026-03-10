@@ -583,6 +583,18 @@ async def run_analysis(
             response_url,
             f"📊 인터랙티브 인사이트 리포트: {report_url}",
             ephemeral=False, channel_id=channel_id,
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"📊 *인터랙티브 인사이트 리포트*"},
+                    "accessory": {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "리포트 열기"},
+                        "url": report_url,
+                        "style": "primary",
+                    },
+                },
+            ],
         )
         excel_filename = f"{category_name.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(
@@ -932,6 +944,18 @@ async def _run_keyword_analysis_pipeline(
             response_url,
             f"📊 인터랙티브 인사이트 리포트: {report_url}",
             ephemeral=False, channel_id=channel_id,
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"📊 *인터랙티브 인사이트 리포트*"},
+                    "accessory": {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "리포트 열기"},
+                        "url": report_url,
+                        "style": "primary",
+                    },
+                },
+            ],
         )
         excel_filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(

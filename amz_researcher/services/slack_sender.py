@@ -29,8 +29,7 @@ class SlackSender:
                 resp.raise_for_status()
                 return
             except Exception:
-                logger.exception("Failed to send Slack message via response_url")
-                return
+                logger.warning("response_url failed, falling back to chat.postMessage")
 
         if channel_id and self.bot_token:
             try:
