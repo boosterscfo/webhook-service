@@ -305,6 +305,7 @@ class DataCollector:
                 "manufacturer": (raw.get("manufacturer") or "")[:200],
                 "price": raw.get("final_price"),
                 "initial_price": raw.get("initial_price"),
+                "sns_price": (raw.get("buybox_prices") or {}).get("sns_price", {}).get("base_price") if isinstance((raw.get("buybox_prices") or {}).get("sns_price"), dict) else None,
                 "currency": raw.get("currency", "USD"),
                 "rating": raw.get("rating") or 0,
                 "reviews_count": raw.get("reviews_count") or 0,

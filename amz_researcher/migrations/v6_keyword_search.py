@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS amz_keyword_products (
     manufacturer VARCHAR(200) DEFAULT '',
     price DECIMAL(10,2),
     initial_price DECIMAL(10,2),
+    sns_price DECIMAL(10,2),
     currency VARCHAR(10) DEFAULT 'USD',
     rating DECIMAL(3,2) DEFAULT 0,
     reviews_count INT DEFAULT 0,

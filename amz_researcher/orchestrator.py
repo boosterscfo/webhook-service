@@ -866,6 +866,7 @@ async def _run_keyword_analysis_pipeline(
             if kp:
                 wp.badge = kp.get("badge", "") or ""
                 wp.initial_price = _safe_num(kp.get("initial_price"))
+                wp.sns_price = _safe_num(kp.get("sns_price"))
                 wp.manufacturer = kp.get("manufacturer", "") or ""
                 wp.variations_count = int(_safe_num(kp.get("variations_count")) or 0)
                 wp.coupon = str(kp.get("coupon", "") or "")
