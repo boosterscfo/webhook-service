@@ -378,6 +378,63 @@ async def slack_amz(
                 "response_type": "ephemeral",
                 "text": "사용법: `/amz search {키워드}`\n예: `/amz search vitamin c serum for face`",
             }
+
+        # 정확한 캐시가 있으면 바로 분석 시작
+        product_db = ProductDBService("CFO")
+        exact_cache = product_db.get_keyword_cache(keyword)
+        if exact_cache and exact_cache.get("status") == "completed":
+            background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id, user_id)
+            return {
+                "response_type": "ephemeral",
+                "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
+            }
+
+        # 정확한 캐시 없음 → 유사 키워드 추천
+        similar = product_db.find_similar_keywords(keyword)
+        if similar:
+            from datetime import datetime
+
+            buttons = []
+            for s in similar[:4]:
+                days_ago = (datetime.now() - s["searched_at"]).days
+                btn_text = f"{s['keyword']} ({s['product_count']}개, {days_ago}일 전)"
+                buttons.append({
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": btn_text[:75]},
+                    "action_id": f"amz_keyword_existing_{hash(s['keyword']) % 100000}",
+                    "value": json.dumps({
+                        "keyword": s["keyword"],
+                        "response_url": response_url,
+                        "channel_id": channel_id,
+                    }),
+                })
+            # 새로 수집 버튼
+            buttons.append({
+                "type": "button",
+                "text": {"type": "plain_text", "text": f"🆕 \"{keyword}\" 새로 수집"},
+                "action_id": "amz_keyword_new",
+                "value": json.dumps({
+                    "keyword": keyword,
+                    "response_url": response_url,
+                    "channel_id": channel_id,
+                }),
+                "style": "primary",
+            })
+            return {
+                "response_type": "ephemeral",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f":mag: *\"{keyword}\"*와 유사한 기존 분석 결과가 있습니다.\n기존 데이터로 리포트를 생성하거나, 새로 수집할 수 있습니다.",
+                        },
+                    },
+                    {"type": "actions", "elements": buttons},
+                ],
+            }
+
+        # 유사 키워드도 없음 → 바로 수집 시작
         background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id, user_id)
         return {
             "response_type": "ephemeral",
@@ -444,12 +501,37 @@ async def slack_amz_interact(
         return {"text": "No action received"}
 
     action = actions[0]
+    action_id = action.get("action_id", "")
     value = json.loads(action["value"])
-    node_id = value["node_id"]
-    name = value["name"]
+    user_id = (data.get("user") or {}).get("id", "")
+
+    # 키워드 검색: 기존 데이터로 리포트 생성
+    if action_id.startswith("amz_keyword_existing_"):
+        kw = value["keyword"]
+        response_url = value["response_url"]
+        channel_id = value["channel_id"]
+        background_tasks.add_task(run_keyword_analysis, kw, response_url, channel_id, user_id)
+        return {
+            "response_type": "ephemeral",
+            "text": f"🔍 기존 데이터 *\"{kw}\"* 로 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
+        }
+
+    # 키워드 검색: 새로 수집
+    if action_id == "amz_keyword_new":
+        kw = value["keyword"]
+        response_url = value["response_url"]
+        channel_id = value["channel_id"]
+        background_tasks.add_task(run_keyword_analysis, kw, response_url, channel_id, user_id)
+        return {
+            "response_type": "ephemeral",
+            "text": f"🔍 키워드 *\"{kw}\"* 새로 수집 시작... 완료 시 채널에 결과가 공유됩니다.",
+        }
+
+    # 카테고리 BSR 분석
+    node_id = value.get("node_id")
+    name = value.get("name")
     response_url = value["response_url"]
     channel_id = value["channel_id"]
-    user_id = (data.get("user") or {}).get("id", "")
 
     background_tasks.add_task(run_analysis, node_id, name, response_url, channel_id, user_id)
     return {

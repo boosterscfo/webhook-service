@@ -94,6 +94,61 @@ class ProductDBService:
             return []
         return df.to_dict("records") if not df.empty else []
 
+    # ── 키워드 유사 검색 ──────────────────────────────
+
+    def find_similar_keywords(self, keyword: str, limit: int = 5) -> list[dict]:
+        """DB에 수집 완료된 유사 키워드 검색.
+
+        단어 단위로 LIKE 매칭하여 일치 단어 수 기준 정렬.
+        Returns: [{keyword, product_count, searched_at, match_score}, ...]
+        """
+        from app.config import settings
+
+        normalized = " ".join(keyword.lower().split())
+        words = normalized.split()
+        if not words:
+            return []
+
+        # 각 단어를 LIKE로 매칭하고, 일치 단어 수를 score로 계산
+        score_expr = " + ".join(
+            [f"(keyword LIKE %s)" for _ in words]
+        )
+        like_params = [f"%{w}%" for w in words]
+
+        # 최소 1단어 이상 매칭, 정확히 일치하는 키워드는 제외
+        query = f"""
+            SELECT keyword, product_count, searched_at,
+                   ({score_expr}) AS match_score
+            FROM amz_keyword_search_log
+            WHERE status = 'completed'
+              AND searched_at >= NOW() - INTERVAL %s DAY
+              AND keyword != %s
+              AND ({score_expr}) >= 1
+            ORDER BY match_score DESC, searched_at DESC
+            LIMIT %s
+        """
+        params = tuple(like_params) + (settings.AMZ_KEYWORD_CACHE_DAYS, normalized) + tuple(like_params) + (limit,)
+
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, params)
+        except Exception:
+            logger.exception("Failed to find similar keywords for %s", keyword)
+            return []
+
+        if df.empty:
+            return []
+
+        # 중복 키워드 제거 (가장 최근 것만)
+        seen = set()
+        results = []
+        for row in df.to_dict("records"):
+            kw = row["keyword"]
+            if kw not in seen:
+                seen.add(kw)
+                results.append(row)
+        return results
+
     # ── 키워드 검색 캐시 ──────────────────────────────
 
     def get_keyword_cache(self, keyword: str) -> dict | None:
