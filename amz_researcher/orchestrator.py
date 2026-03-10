@@ -20,9 +20,15 @@ from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.excel_builder import build_excel, build_keyword_excel
 from amz_researcher.services.html_report_builder import build_html, build_keyword_html
 from amz_researcher.services.market_analyzer import build_market_analysis, build_keyword_market_analysis
+from amz_researcher.services.report_store import ReportStore
 from amz_researcher.services.slack_sender import SlackSender
 
 logger = logging.getLogger(__name__)
+
+_report_store = ReportStore(
+    base_dir=settings.REPORT_DIR,
+    ttl_days=settings.REPORT_TTL_DAYS,
+)
 
 
 def _extract_action_items_section(report_md: str) -> str:
@@ -562,11 +568,13 @@ async def run_analysis(
             blocks=summary_blocks,
         )
 
-        # Step 7: 파일 업로드 (HTML primary + Excel secondary)
-        html_filename = f"{category_name.replace(' ', '_')}_insight.html"
-        await slack.upload_file(
-            channel_id, html_bytes, html_filename,
-            comment="📊 인터랙티브 인사이트 리포트 (브라우저에서 열기)",
+        # Step 7: 리포트 URL 서빙 + Excel 업로드
+        report_id = _report_store.save(html_bytes, label=category_name)
+        report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
+        await slack.send_message(
+            response_url,
+            f"📊 인터랙티브 인사이트 리포트: {report_url}",
+            ephemeral=False, channel_id=channel_id,
         )
         excel_filename = f"{category_name.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(
@@ -897,11 +905,13 @@ async def _run_keyword_analysis_pipeline(
             blocks=summary_blocks,
         )
 
-        # Step 6: 파일 업로드 (HTML primary + Excel secondary)
-        html_filename = f"keyword_{keyword.replace(' ', '_')}_insight.html"
-        await slack.upload_file(
-            channel_id, html_bytes, html_filename,
-            comment="📊 인터랙티브 인사이트 리포트 (브라우저에서 열기)",
+        # Step 6: 리포트 URL 서빙 + Excel 업로드
+        report_id = _report_store.save(html_bytes, label=keyword)
+        report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
+        await slack.send_message(
+            response_url,
+            f"📊 인터랙티브 인사이트 리포트: {report_url}",
+            ephemeral=False, channel_id=channel_id,
         )
         excel_filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(

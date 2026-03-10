@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # Keyword Search
     AMZ_KEYWORD_CACHE_DAYS: int = 7
 
+    # Report Serving
+    REPORT_DIR: str = "data/reports"
+    REPORT_TTL_DAYS: int = 30
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

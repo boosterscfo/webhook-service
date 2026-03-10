@@ -3,6 +3,7 @@ import json
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Form, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from amz_researcher.orchestrator import (
@@ -14,10 +15,25 @@ from amz_researcher.orchestrator import (
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.product_db import ProductDBService
+from amz_researcher.services.report_store import ReportStore
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_report_store = ReportStore(
+    base_dir=settings.REPORT_DIR,
+    ttl_days=settings.REPORT_TTL_DAYS,
+)
+
+
+@router.get("/reports/{report_id}")
+async def serve_report(report_id: str):
+    """Serve a stored HTML report by its ID."""
+    path = _report_store.get_path(report_id)
+    if path is None:
+        return HTMLResponse("<h1>리포트를 찾을 수 없습니다</h1><p>만료되었거나 존재하지 않는 리포트입니다.</p>", status_code=404)
+    return FileResponse(path, media_type="text/html")
 
 
 def _build_help_response() -> dict:
