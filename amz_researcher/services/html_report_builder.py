@@ -763,9 +763,12 @@ function renderMarkdown(text) {
       closeLists(); result.push('<h1>' + applyInline(line.replace(/^# /, '')) + '</h1>');
     } else if (/^---$/.test(line.trim())) {
       closeLists(); result.push('<hr>');
-    } else if (/^- (.+)/.test(line)) {
+    } else if (/^[\-\*] (.+)/.test(line)) {
       if (!inUl) { result.push('<ul>'); inUl = true; }
-      result.push('<li>' + applyInline(line.replace(/^- /, '')) + '</li>');
+      result.push('<li>' + applyInline(line.replace(/^[\-\*] /, '')) + '</li>');
+    } else if (/^  [\-\*] (.+)/.test(line)) {
+      if (!inUl) { result.push('<ul>'); inUl = true; }
+      result.push('<li style="margin-left:20px">' + applyInline(line.replace(/^  [\-\*] /, '')) + '</li>');
     } else if (/^\d+\. (.+)/.test(line)) {
       if (!inOl) { result.push('<ol>'); inOl = true; }
       result.push('<li>' + applyInline(line.replace(/^\d+\. /, '')) + '</li>');
@@ -786,6 +789,7 @@ function renderMarkdown(text) {
 
   function applyInline(s) {
     return s
+      .replace(/`(.+?)`/g, '<code style="background:var(--color-surface-2);padding:1px 5px;border-radius:3px;font-size:0.9em">$1</code>')
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>');
   }
