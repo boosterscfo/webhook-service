@@ -763,12 +763,11 @@ function renderMarkdown(text) {
       closeLists(); result.push('<h1>' + applyInline(line.replace(/^# /, '')) + '</h1>');
     } else if (/^---$/.test(line.trim())) {
       closeLists(); result.push('<hr>');
-    } else if (/^[\-\*] (.+)/.test(line)) {
+    } else if (/^\s*[\-\*] (.+)/.test(line)) {
+      const depth = line.search(/\S/);
       if (!inUl) { result.push('<ul>'); inUl = true; }
-      result.push('<li>' + applyInline(line.replace(/^[\-\*] /, '')) + '</li>');
-    } else if (/^  [\-\*] (.+)/.test(line)) {
-      if (!inUl) { result.push('<ul>'); inUl = true; }
-      result.push('<li style="margin-left:20px">' + applyInline(line.replace(/^  [\-\*] /, '')) + '</li>');
+      const indent = depth > 0 ? ` style="margin-left:${depth * 10}px"` : '';
+      result.push('<li' + indent + '>' + applyInline(line.replace(/^\s*[\-\*] /, '')) + '</li>');
     } else if (/^\d+\. (.+)/.test(line)) {
       if (!inOl) { result.push('<ol>'); inOl = true; }
       result.push('<li>' + applyInline(line.replace(/^\d+\. /, '')) + '</li>');
