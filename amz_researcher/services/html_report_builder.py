@@ -1678,11 +1678,11 @@ function renderRawSearch(data) {
 
   const tc = new TableController({
     data: data.search_products,
-    pageSize: 100,
+    pageSize: 25,
     columns: [
       { key: 'position', header: '#' },
       { key: 'asin', header: 'ASIN', className: 'mono' },
-      { key: 'title', header: 'Title', sortable: false, render: (v) => `<span style="max-width:320px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v)}">${esc(v)}</span>` },
+      { key: 'title', header: 'Title', sortable: false, render: (v) => `<span style="max-width:320px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(v)}">${esc(v)}</span>` },
       { key: 'price_raw', header: 'Price' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
@@ -1708,7 +1708,7 @@ function renderRawDetail(data) {
 
   const tc = new TableController({
     data: data.details,
-    pageSize: 100,
+    pageSize: 25,
     columns: [
       { key: 'asin', header: 'ASIN', className: 'mono' },
       { key: 'brand', header: 'Brand' },
@@ -1900,11 +1900,26 @@ function buildSectionsHTML() {
         <tbody id="top-sellers-tbody"></tbody>
       </table>
     </div>
-    <div class="two-col">
+    <div class="subsection">
+      <div class="subsection-title">Sales by Price Tier</div>
+      <div class="chart-container" style="height:220px">
+        <canvas id="price-tier-chart"></canvas>
+      </div>
+    </div>
+    <div class="subsection">
+      <div class="subsection-title">Discount Impact on BSR</div>
+      <div class="chart-container" style="height:240px">
+        <canvas id="discount-chart"></canvas>
+      </div>
+    </div>
+    <div class="two-col" style="margin-top:40px">
       <div>
-        <div class="subsection-title">Sales by Price Tier</div>
-        <div class="chart-container" style="height:220px">
-          <canvas id="price-tier-chart"></canvas>
+        <div class="subsection-title">Coupon Distribution</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Coupon Type</th><th>Count</th></tr></thead>
+            <tbody id="coupon-tbody"></tbody>
+          </table>
         </div>
       </div>
       <div id="sns-stats">
@@ -1916,21 +1931,6 @@ function buildSectionsHTML() {
           </div>
           <div id="sns-stat-list" style="display:grid;gap:6px"></div>
         </div>
-      </div>
-    </div>
-    <div class="subsection">
-      <div class="subsection-title">Discount Impact on BSR</div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="discount-chart"></canvas>
-      </div>
-    </div>
-    <div class="subsection">
-      <div class="subsection-title">Coupon Distribution</div>
-      <div class="table-wrapper" style="max-width:400px">
-        <table>
-          <thead><tr><th>Coupon Type</th><th>Count</th></tr></thead>
-          <tbody id="coupon-tbody"></tbody>
-        </table>
       </div>
     </div>
   </section>
