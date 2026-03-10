@@ -541,8 +541,9 @@ async def run_analysis(
     response_url: str,
     channel_id: str,
     user_id: str = "",
+    report_only: bool = False,
 ):
-    """V4 DB 기반 분석 파이프라인. 카테고리 선택 후 호출."""
+    """V4 DB 기반 분석 파이프라인. report_only=True면 Gemini 호출 없이 캐시로 리포트만 재빌드."""
     product_db = ProductDBService("CFO")
     gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
@@ -560,16 +561,16 @@ async def run_analysis(
 
         products = [BrightDataProduct(**_parse_db_row(r)) for r in raw_products]
         await _msg(
-            f"📦 {len(products)}개 제품 로드 완료. 성분 분석 중...",
+            f"📦 {len(products)}개 제품 로드 완료. {'리포트 재생성 중...' if report_only else '성분 분석 중...'}",
             ephemeral=True,
         )
 
-        # Step 2: Gemini 성분 추출 (캐시 우선)
+        # Step 2: Gemini 성분 추출 (report_only면 캐시만 사용)
         asins = [p.asin for p in products]
         cached_ingredients = cache.get_ingredient_cache(asins)
         uncached = [p for p in products if p.asin not in cached_ingredients]
 
-        if uncached:
+        if uncached and not report_only:
             await _msg(
                 f"🧪 성분 추출 중... (캐시 {len(cached_ingredients)}개, "
                 f"신규 {len(uncached)}개 → Gemini Flash)",
@@ -601,8 +602,10 @@ async def run_analysis(
                 for asin, ings in cached_ingredients.items()
             ]
         else:
+            if report_only and uncached:
+                logger.info("report_only: skipping %d uncached ASINs", len(uncached))
             await _msg(
-                f"♻️ 성분 추출 전체 캐시 사용: {len(cached_ingredients)}개",
+                f"♻️ 성분 추출 캐시 사용: {len(cached_ingredients)}개",
                 ephemeral=True,
             )
             gemini_results = [
@@ -640,6 +643,10 @@ async def run_analysis(
         if market_report:
             logger.info("Market report cache hit for category=%s", category_name)
             await _msg("♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
+        elif report_only:
+            logger.warning("report_only but no cached market report for %s", category_name)
+            await _msg("⚠️ 캐시된 시장 분석 리포트가 없습니다. `/amz` 명령으로 전체 분석을 먼저 실행하세요.", ephemeral=True)
+            return
         else:
             await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
             market_report = await gemini.generate_market_report(analysis_data)
@@ -911,8 +918,9 @@ async def _run_keyword_analysis_pipeline(
     response_url: str,
     channel_id: str,
     user_id: str = "",
+    report_only: bool = False,
 ):
-    """키워드 검색 분석 파이프라인 (수집 완료 후). 캐시 HIT 또는 webhook 콜백에서 호출."""
+    """키워드 검색 분석 파이프라인. report_only=True면 Gemini 호출 없이 캐시로 리포트만 재빌드."""
     normalized_keyword = " ".join(keyword.lower().split())
     gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
@@ -927,7 +935,7 @@ async def _run_keyword_analysis_pipeline(
         cached_ingredients = cache.get_ingredient_cache(asins)
         uncached_asins = [a for a in asins if a not in cached_ingredients]
 
-        if uncached_asins:
+        if uncached_asins and not report_only:
             await _msg(
                 f"🧪 성분 캐시 {len(cached_ingredients)}건 매칭 / {len(uncached_asins)}건 Gemini 추출 중...",
                 ephemeral=True,
@@ -954,8 +962,10 @@ async def _run_keyword_analysis_pipeline(
                 for asin, ings in cached_ingredients.items()
             ]
         else:
+            if report_only and uncached_asins:
+                logger.info("report_only: skipping %d uncached ASINs", len(uncached_asins))
             await _msg(
-                f"♻️ 성분 추출 전체 캐시 사용: {len(cached_ingredients)}개",
+                f"♻️ 성분 추출 캐시 사용: {len(cached_ingredients)}개",
                 ephemeral=True,
             )
             gemini_results = [
@@ -991,8 +1001,18 @@ async def _run_keyword_analysis_pipeline(
         # Step 3: 시장 분석 (BSR 의존 분석 제외)
         analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details)
 
-        await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
-        market_report = await gemini.generate_market_report(analysis_data)
+        market_report = cache.get_market_report_cache(normalized_keyword, len(weighted_products)) or ""
+        if market_report:
+            logger.info("Market report cache hit for keyword=%s", normalized_keyword)
+            await _msg("♻️ 시장 분석 리포트 캐시 사용", ephemeral=True)
+        elif report_only:
+            logger.warning("report_only but no cached market report for keyword=%s", normalized_keyword)
+            await _msg("⚠️ 캐시된 시장 분석 리포트가 없습니다. `/amz search` 명령으로 전체 분석을 먼저 실행하세요.", ephemeral=True)
+            return
+        else:
+            await _msg("📊 시장 분석 리포트 생성 중... (Gemini)", ephemeral=True)
+            market_report = await gemini.generate_market_report(analysis_data)
+            cache.save_market_report_cache(normalized_keyword, market_report, len(weighted_products))
 
         # Step 4: Excel + HTML 생성
         excel_bytes = build_keyword_excel(

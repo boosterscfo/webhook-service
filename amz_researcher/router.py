@@ -136,6 +136,21 @@ def _build_help_response() -> dict:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
+                        "*📄 리포트 재생성*\n\n"
+                        "`/amz report {카테고리명}`\n"
+                        "Gemini 호출 없이 캐시된 분석 데이터로 HTML 리포트만 재생성합니다.\n\n"
+                        "`/amz report-search {키워드}`\n"
+                        "캐시된 키워드 분석 데이터로 리포트만 재생성합니다.\n\n"
+                        "_리포트 템플릿 변경 후 빠르게 결과를 확인할 때 유용합니다._"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
                         "*📈 분석 리포트 구성*\n\n"
                         "Excel 파일에 포함되는 시트:\n"
                         "• *V4 Raw* — 수집된 원본 제품 데이터\n"
@@ -228,6 +243,8 @@ async def slack_amz(
                 "*Amazon BSR Analyzer*\n\n"
                 "`/amz {키워드}` — 카테고리 분석 (예: `/amz serum`)\n"
                 "`/amz search {키워드}` — 키워드 검색 분석 (예: `/amz search vitamin c serum`)\n"
+                "`/amz report {카테고리}` — 리포트만 재생성 (캐시 사용)\n"
+                "`/amz report-search {키워드}` — 키워드 리포트만 재생성\n"
                 "`/amz list` — 카테고리 목록\n"
                 "`/amz refresh` — 데이터 수집\n"
                 "`/amz help` — 상세 가이드"
@@ -301,6 +318,56 @@ async def slack_amz(
             response_url=response_url, channel_id=channel_id,
         )
         return {"response_type": "ephemeral", "text": "🔄 전체 카테고리 수집 트리거됨. 완료까지 수 분 소요."}
+
+    # /amz report {category} — 캐시 기반 리포트만 재생성 (Gemini 호출 없음)
+    if subcommand == "report":
+        keyword = " ".join(parts[1:]).strip() if len(parts) > 1 else ""
+        if not keyword:
+            return {
+                "response_type": "ephemeral",
+                "text": "사용법: `/amz report {카테고리명}`\n예: `/amz report Hair Styling Serums`",
+            }
+        product_db = ProductDBService("CFO")
+        matches = product_db.search_categories(keyword)
+        if not matches:
+            return {"response_type": "ephemeral", "text": f"🔍 \"{keyword}\" 관련 카테고리를 찾을 수 없습니다."}
+        cat = matches[0]
+        background_tasks.add_task(
+            run_analysis, cat["node_id"], cat["name"],
+            response_url, channel_id, user_id, report_only=True,
+        )
+        return {
+            "response_type": "ephemeral",
+            "text": f"🔄 *{cat['name']}* 리포트 재생성 중... (Gemini 호출 없음, 캐시 사용)",
+        }
+
+    # /amz report-search {keyword} — 키워드 분석 리포트만 재생성
+    if subcommand == "report-search":
+        keyword = " ".join(parts[1:]).strip() if len(parts) > 1 else ""
+        if not keyword:
+            return {
+                "response_type": "ephemeral",
+                "text": "사용법: `/amz report-search {키워드}`\n예: `/amz report-search retinol serum`",
+            }
+        product_db = ProductDBService("CFO")
+        normalized = " ".join(keyword.lower().split())
+        cached = product_db.get_keyword_cache(normalized)
+        if not cached or cached.get("status") != "completed":
+            return {
+                "response_type": "ephemeral",
+                "text": f"⚠️ *\"{keyword}\"* 수집 완료된 데이터가 없습니다. `/amz search {keyword}`로 먼저 분석하세요.",
+            }
+        keyword_products = product_db.get_keyword_products(normalized, cached["searched_at"])
+        if not keyword_products:
+            return {"response_type": "ephemeral", "text": f"⚠️ *\"{keyword}\"* 제품 데이터가 없습니다."}
+        background_tasks.add_task(
+            _run_keyword_analysis_pipeline, keyword, keyword_products,
+            response_url, channel_id, user_id, report_only=True,
+        )
+        return {
+            "response_type": "ephemeral",
+            "text": f"🔄 *\"{keyword}\"* 키워드 리포트 재생성 중... (Gemini 호출 없음, 캐시 사용)",
+        }
 
     # /amz search {keyword} — V6 키워드 검색 분석
     if subcommand == "search":
