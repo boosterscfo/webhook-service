@@ -1,5 +1,7 @@
+import html
 import json
 import logging
+import re
 from datetime import date, datetime
 
 import pandas as pd
@@ -135,6 +137,42 @@ _BRAND_MAPPINGS: dict[str, list[str]] = {
 }
 
 
+_COUPON_NOISE_RE = re.compile(
+    r":?\s*Coupon available when you select\s*\.?\s*\|?",
+    re.IGNORECASE,
+)
+_COUPON_VALUE_RE = re.compile(
+    r"(?:Save|Apply)\s+(\$[\d.]+|\d+%)|(\d+%)\s*off|Up to\s+(\d+%)\s*off",
+    re.IGNORECASE,
+)
+
+
+def _normalize_coupon(raw: str) -> str:
+    """Bright Data coupon 문자열 정규화.
+
+    'Save 5%:  Coupon available when you select . |, Save 10%' → 'Save 5%, Save 10%'
+    'Apply $9 coupon     |' → 'Apply $9 coupon'
+    """
+    if not raw or not raw.strip():
+        return ""
+    # 노이즈 제거
+    cleaned = _COUPON_NOISE_RE.sub("", raw)
+    # 파이프, 여분 공백 정리
+    cleaned = cleaned.replace("|", ",")
+    # 쉼표 분리 후 개별 정리
+    parts = [p.strip().rstrip(",").strip() for p in cleaned.split(",")]
+    parts = [p for p in parts if p]
+    # 중복 제거 (순서 유지)
+    seen = set()
+    unique = []
+    for p in parts:
+        key = p.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+    return ", ".join(unique)
+
+
 def _resolve_brand(raw_brand: str, title: str) -> str:
     """모회사/OEM 브랜드를 title 기반으로 실제 소비자 브랜드로 보정."""
     candidates = _BRAND_MAPPINGS.get(raw_brand.lower())
@@ -199,8 +237,8 @@ class DataCollector:
         sns = buybox.get("sns_price") or {}
         sns_price = sns.get("base_price")
 
-        title = (raw.get("title") or "")[:500]
-        raw_brand = (raw.get("brand") or "")[:200]
+        title = html.unescape((raw.get("title") or ""))[:500]
+        raw_brand = html.unescape((raw.get("brand") or ""))[:200]
         brand = _resolve_brand(raw_brand, title)
 
         return {
@@ -234,7 +272,7 @@ class DataCollector:
             "sns_price": sns_price,
             "variations_count": len(raw.get("variations") or []),
             "number_of_sellers": raw.get("number_of_sellers") or 1,
-            "coupon": raw.get("coupon") or "",
+            "coupon": _normalize_coupon(raw.get("coupon") or ""),
             "plus_content": bool(raw.get("plus_content")),
             "collected_at": datetime.now(),
         }
@@ -277,8 +315,8 @@ class DataCollector:
 
         rows = []
         for i, raw in enumerate(products):
-            title = (raw.get("title") or "")[:500]
-            raw_brand = (raw.get("brand") or "")[:200]
+            title = html.unescape((raw.get("title") or ""))[:500]
+            raw_brand = html.unescape((raw.get("brand") or ""))[:200]
             brand = _resolve_brand(raw_brand, title)
 
             # customer_says / customers_say fallback — dict/list → JSON 문자열
@@ -291,11 +329,11 @@ class DataCollector:
             if isinstance(description, (dict, list)):
                 description = json.dumps(description, ensure_ascii=False)
 
-            # coupon — dict/list → JSON 문자열
+            # coupon — dict/list 처리 + 정규화
             coupon = (raw.get("coupon") or "")
             if isinstance(coupon, (dict, list)):
                 coupon = json.dumps(coupon, ensure_ascii=False)
-            coupon = str(coupon)[:200]
+            coupon = _normalize_coupon(str(coupon))[:200]
 
             rows.append({
                 "keyword": keyword,
