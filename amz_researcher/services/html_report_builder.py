@@ -1217,7 +1217,6 @@ function renderSalesPricing(data) {
 
   // Listing Tactics (keyword reports) or SNS stats (BSR reports)
   const ltEl = el.querySelector('#listing-tactics');
-  const lt = data.analysis && data.analysis.listing_tactics;
   if (ltEl && lt) {
     const ad = lt.ad_pressure || {};
     const cd = lt.coupon_discount || {};
