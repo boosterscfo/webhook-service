@@ -31,22 +31,106 @@ _report_store = ReportStore(
 )
 
 
-def _extract_executive_summary(report_md: str) -> str:
-    """시장 리포트 마크다운에서 Executive Summary 도입부만 추출.
+def _extract_executive_summary(report_md: str) -> dict:
+    """시장 리포트 마크다운에서 Executive Summary를 구조화하여 추출.
 
-    ## Executive Summary 이후 첫 번째 ### / --- / 번호 섹션 전까지만 가져온다.
+    Returns: {"overview": str, "strategy": str}
+    - overview: 시장 요약 단락
+    - strategy: **즉각적인 전략 제안:** 이후 내용
     """
+    result = {"overview": "", "strategy": ""}
     if not report_md or not report_md.strip():
-        return ""
+        return result
     m = re.search(
         r"(?:^|\n)##\s*Executive\s*Summary\s*\n(.*?)(?=\n###\s|\n---|\n\d+\.\s|\n##\s|\Z)",
         report_md,
         re.DOTALL | re.IGNORECASE,
     )
-    if m:
-        text = m.group(1).strip()
-        return text[:1500] if len(text) > 1500 else text
-    return ""
+    if not m:
+        return result
+    text = m.group(1).strip()
+
+    # "**즉각적인 전략 제안" 으로 분리
+    strategy_m = re.search(
+        r"\*\*즉각적인\s*전략\s*제안[^*]*\*\*[:\s]*(.*)",
+        text,
+        re.DOTALL,
+    )
+    if strategy_m:
+        result["overview"] = text[: strategy_m.start()].strip()
+        result["strategy"] = strategy_m.group(1).strip()
+    else:
+        result["overview"] = text
+    # Slack section 블록 최대 3000자 제한
+    result["overview"] = result["overview"][:2000]
+    result["strategy"] = result["strategy"][:1000]
+    return result
+
+
+def _build_report_blocks(
+    label: str,
+    report_url: str,
+    exec_parts: dict,
+    requester: str = "",
+    report_type: str = "BSR",
+) -> tuple[str, list[dict]]:
+    """Executive Summary + 리포트 버튼을 Block Kit으로 구성.
+
+    Returns: (fallback_text, blocks)
+    """
+    mention_prefix = f"{requester} " if requester else ""
+    blocks: list[dict] = []
+
+    # Header
+    blocks.append({
+        "type": "header",
+        "text": {"type": "plain_text", "text": f"📊 {label} {report_type} 분석 결과", "emoji": True},
+    })
+
+    # 요청자 멘션
+    if requester:
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": f"{requester} 님이 요청한 분석입니다."}],
+        })
+
+    # 시장 요약
+    overview = exec_parts.get("overview", "")
+    if overview:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": overview},
+        })
+    else:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*{label}* 분석이 완료되었습니다."},
+        })
+
+    # 전략 제안
+    strategy = exec_parts.get("strategy", "")
+    if strategy:
+        blocks.append({"type": "divider"})
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"💡 *즉각적인 전략 제안*\n{strategy}"},
+        })
+
+    # 리포트 버튼
+    blocks.append({"type": "divider"})
+    blocks.append({
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": "📊 *인터랙티브 인사이트 리포트*"},
+        "accessory": {
+            "type": "button",
+            "text": {"type": "plain_text", "text": "리포트 열기"},
+            "url": report_url,
+            "style": "primary",
+        },
+    })
+
+    fallback_text = f"{mention_prefix}📊 {label} 분석 리포트: {report_url}"
+    return fallback_text, blocks
 
 
 def _extract_action_items_section(report_md: str) -> str:
@@ -591,31 +675,12 @@ async def run_analysis(
         # Step 7: Executive Summary + 리포트 URL + Excel
         report_id = _report_store.save(html_bytes, label=category_name)
         report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
-        exec_summary = _extract_executive_summary(market_report)
-
-        report_blocks: list[dict] = []
-        # 요청자 멘션 + Executive Summary
-        mention_prefix = f"{requester} " if requester else ""
-        summary_text = exec_summary if exec_summary else f"*{category_name}* BSR 분석이 완료되었습니다."
-        report_blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"{mention_prefix}{summary_text}"},
-        })
-        report_blocks.append({"type": "divider"})
-        # 리포트 링크 버튼
-        report_blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "📊 *인터랙티브 인사이트 리포트*"},
-            "accessory": {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "리포트 열기"},
-                "url": report_url,
-                "style": "primary",
-            },
-        })
+        exec_parts = _extract_executive_summary(market_report)
+        report_fallback, report_blocks = _build_report_blocks(
+            category_name, report_url, exec_parts, requester, report_type="BSR",
+        )
         await slack.send_message(
-            response_url,
-            f"{mention_prefix}📊 인터랙티브 인사이트 리포트: {report_url}",
+            response_url, report_fallback,
             ephemeral=False, channel_id=channel_id,
             blocks=report_blocks,
         )
@@ -957,29 +1022,12 @@ async def _run_keyword_analysis_pipeline(
         # Step 6: Executive Summary + 리포트 URL + Excel
         report_id = _report_store.save(html_bytes, label=keyword)
         report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
-        exec_summary = _extract_executive_summary(market_report)
-
-        report_blocks: list[dict] = []
-        mention_prefix = f"{requester} " if requester else ""
-        summary_text = exec_summary if exec_summary else f"*\"{keyword}\"* 키워드 분석이 완료되었습니다."
-        report_blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"{mention_prefix}{summary_text}"},
-        })
-        report_blocks.append({"type": "divider"})
-        report_blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "📊 *인터랙티브 인사이트 리포트*"},
-            "accessory": {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "리포트 열기"},
-                "url": report_url,
-                "style": "primary",
-            },
-        })
+        exec_parts = _extract_executive_summary(market_report)
+        report_fallback, report_blocks = _build_report_blocks(
+            keyword, report_url, exec_parts, requester, report_type="키워드",
+        )
         await slack.send_message(
-            response_url,
-            f"{mention_prefix}📊 인터랙티브 인사이트 리포트: {report_url}",
+            response_url, report_fallback,
             ephemeral=False, channel_id=channel_id,
             blocks=report_blocks,
         )
