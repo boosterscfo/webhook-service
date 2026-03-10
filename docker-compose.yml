@@ -10,6 +10,7 @@ services:
       - GOOGLE_KEY_PATH=/google_keys/google_boosters_finance_key.json
     volumes:
       - ./google_keys:/google_keys:ro
+      - ./data/reports:/app/data/reports
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9000/health', timeout=5)\" || exit 1"]
