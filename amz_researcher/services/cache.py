@@ -411,12 +411,13 @@ class AmzCacheService:
     # ── Market Report Cache ──────────────────────────
 
     def _get_data_freshness(self, category_name: str) -> datetime | None:
-        """카테고리 제품의 최신 updated_at 조회.
+        """카테고리 제품의 최신 collected_at 조회.
 
-        category_name으로 amz_categories → amz_product_categories → amz_products 조인.
+        collected_at은 Bright Data에서 실제 새 데이터를 수집한 시점.
+        updated_at은 upsert 시 값이 동일해도 갱신되므로 부적합.
         """
         query = """
-            SELECT MAX(p.updated_at) as latest
+            SELECT MAX(p.collected_at) as latest
             FROM amz_products p
             JOIN amz_product_categories pc ON p.asin = pc.asin
             JOIN amz_categories c ON pc.category_node_id = c.node_id
