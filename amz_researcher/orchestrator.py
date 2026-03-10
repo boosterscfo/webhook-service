@@ -129,7 +129,7 @@ def _build_summary_blocks(
 
 async def run_research(
     keyword: str, response_url: str, channel_id: str,
-    refresh: bool = False,
+    refresh: bool = False, user_id: str = "",
 ):
     browse = BrowseAiService(
         api_key=settings.BROWSE_AI_API_KEY,
@@ -438,6 +438,7 @@ async def run_analysis(
     category_name: str,
     response_url: str,
     channel_id: str,
+    user_id: str = "",
 ):
     """V4 DB 기반 분석 파이프라인. 카테고리 선택 후 호출."""
     product_db = ProductDBService("CFO")
@@ -559,9 +560,16 @@ async def run_analysis(
         )
 
         # Step 6: Slack 요약
+        requester = f"<@{user_id}>" if user_id else ""
         fallback_text, summary_blocks = _build_summary_blocks(
             category_name, len(weighted_products), rankings[:10], market_report,
         )
+        if requester:
+            await slack.send_message(
+                response_url,
+                f"{requester} 님이 요청한 *{category_name}* BSR 분석 결과입니다.",
+                ephemeral=False, channel_id=channel_id,
+            )
         await slack.send_message(
             response_url, fallback_text,
             ephemeral=False, channel_id=channel_id,
@@ -704,6 +712,7 @@ async def run_keyword_analysis(
     keyword: str,
     response_url: str,
     channel_id: str,
+    user_id: str = "",
 ):
     """V6 키워드 검색: 캐시 HIT → 즉시 분석, MISS → Bright Data 트리거 후 종료 (webhook 콜백 대기)."""
     product_db = ProductDBService("CFO")
@@ -746,7 +755,7 @@ async def run_keyword_analysis(
 
         if keyword_products:
             # 캐시 HIT → 분석 파이프라인 즉시 실행
-            await _run_keyword_analysis_pipeline(keyword, keyword_products, response_url, channel_id)
+            await _run_keyword_analysis_pipeline(keyword, keyword_products, response_url, channel_id, user_id)
             return
 
         # 캐시 MISS → Bright Data 트리거 (비동기, webhook 콜백 대기)
@@ -801,6 +810,7 @@ async def _run_keyword_analysis_pipeline(
     keyword_products: list[dict],
     response_url: str,
     channel_id: str,
+    user_id: str = "",
 ):
     """키워드 검색 분석 파이프라인 (수집 완료 후). 캐시 HIT 또는 webhook 콜백에서 호출."""
     normalized_keyword = " ".join(keyword.lower().split())
@@ -899,9 +909,16 @@ async def _run_keyword_analysis_pipeline(
         )
 
         # Step 5: Slack 요약
+        requester = f"<@{user_id}>" if user_id else ""
         fallback_text, summary_blocks = _build_summary_blocks(
             keyword, len(weighted_products), rankings[:10], market_report,
         )
+        if requester:
+            await slack.send_message(
+                response_url,
+                f"{requester} 님이 요청한 *\"{keyword}\"* 키워드 분석 결과입니다.",
+                ephemeral=False, channel_id=channel_id,
+            )
         await slack.send_message(
             response_url, fallback_text,
             ephemeral=False, channel_id=channel_id,

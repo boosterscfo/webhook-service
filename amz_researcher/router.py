@@ -204,7 +204,7 @@ async def slack_amz_legacy(
     if not keyword:
         return {"response_type": "ephemeral", "text": "사용법: /amz prod {키워드} [--refresh]"}
 
-    background_tasks.add_task(run_research, keyword, response_url, channel_id, refresh)
+    background_tasks.add_task(run_research, keyword, response_url, channel_id, refresh, user_id)
     return {"response_type": "ephemeral", "text": f"🔍 *{keyword}* 분석 시작. 완료 시 채널에 결과가 공유됩니다."}
 
 
@@ -311,7 +311,7 @@ async def slack_amz(
                 "response_type": "ephemeral",
                 "text": "사용법: `/amz search {키워드}`\n예: `/amz search vitamin c serum for face`",
             }
-        background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id)
+        background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id, user_id)
         return {
             "response_type": "ephemeral",
             "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
@@ -324,7 +324,7 @@ async def slack_amz(
         if not keyword:
             return {"response_type": "ephemeral", "text": "사용법: /amz prod {키워드}"}
         refresh = "--refresh" in parts
-        background_tasks.add_task(run_research, keyword, response_url, channel_id, refresh)
+        background_tasks.add_task(run_research, keyword, response_url, channel_id, refresh, user_id)
         return {"response_type": "ephemeral", "text": f"🔍 *{keyword}* 분석 시작 (V3). 완료 시 채널에 결과가 공유됩니다."}
 
     # /amz {keyword} — V4 카테고리 검색 → 버튼
@@ -382,8 +382,9 @@ async def slack_amz_interact(
     name = value["name"]
     response_url = value["response_url"]
     channel_id = value["channel_id"]
+    user_id = (data.get("user") or {}).get("id", "")
 
-    background_tasks.add_task(run_analysis, node_id, name, response_url, channel_id)
+    background_tasks.add_task(run_analysis, node_id, name, response_url, channel_id, user_id)
     return {
         "response_type": "ephemeral",
         "text": f"📊 *{name}* BSR Top 100 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
