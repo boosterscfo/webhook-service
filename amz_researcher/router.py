@@ -437,6 +437,10 @@ async def _generate_category_keywords(
             pass
 
 
+# snapshot_id → Slack 콜백 정보 매핑 (수집 완료 알림용)
+_collection_callbacks: dict[str, dict] = {}
+
+
 async def _run_manual_collection(
     urls: list[str] | None = None,
     response_url: str = "",
@@ -465,6 +469,12 @@ async def _run_manual_collection(
         snapshot_id = await bright_data.trigger_collection(
             urls, notify_url=notify_url,
         )
+        if response_url and snapshot_id:
+            _collection_callbacks[snapshot_id] = {
+                "response_url": response_url,
+                "channel_id": channel_id,
+                "category_count": len(urls),
+            }
         logger.info(
             "Collection triggered (async): snapshot_id=%s, %d categories, notify=%s",
             snapshot_id, len(urls), notify_url,
@@ -533,14 +543,15 @@ async def _ingest_snapshot(snapshot_id: str):
 
     try:
         count = await asyncio.wait_for(_work(), timeout=INGESTION_TIMEOUT)
-        # 완료 알림
-        admin_id = settings.AMZ_ADMIN_SLACK_ID
-        if admin_id:
+        # 완료 알림 (refresh 요청자에게 ephemeral)
+        cb = _collection_callbacks.pop(snapshot_id, None)
+        if cb and cb.get("response_url"):
             slack = SlackSender(settings.AMZ_BOT_TOKEN)
             try:
-                await slack.send_dm(
-                    admin_id,
-                    f"✅ BSR 데이터 수집 완료\n• snapshot: `{snapshot_id[:12]}...`\n• {count}개 제품 적재됨",
+                await slack.send_message(
+                    cb["response_url"],
+                    f"✅ BSR 데이터 수집 완료 — {count}개 제품 적재됨",
+                    ephemeral=True, channel_id=cb.get("channel_id", ""),
                 )
             finally:
                 await slack.close()
