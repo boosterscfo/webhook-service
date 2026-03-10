@@ -31,6 +31,21 @@ _report_store = ReportStore(
 )
 
 
+def _extract_executive_summary(report_md: str) -> str:
+    """시장 리포트 마크다운에서 Executive Summary 섹션만 추출."""
+    if not report_md or not report_md.strip():
+        return ""
+    m = re.search(
+        r"(?:^|\n)##\s*Executive\s*Summary\s*\n(.*?)(?=\n##\s|\Z)",
+        report_md,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if m:
+        text = m.group(1).strip()
+        return text[:2000] if len(text) > 2000 else text
+    return ""
+
+
 def _extract_action_items_section(report_md: str) -> str:
     """시장 리포트 마크다운에서 '액션 아이템' 섹션만 추출 (다음 번호 섹션 또는 ## 전까지)."""
     if not report_md or not report_md.strip():
@@ -564,37 +579,42 @@ async def run_analysis(
         fallback_text, summary_blocks = _build_summary_blocks(
             category_name, len(weighted_products), rankings[:10], market_report,
         )
-        if requester:
-            await slack.send_message(
-                response_url,
-                f"{requester} 님이 요청한 *{category_name}* BSR 분석 결과입니다.",
-                ephemeral=False, channel_id=channel_id,
-            )
         await slack.send_message(
             response_url, fallback_text,
             ephemeral=False, channel_id=channel_id,
             blocks=summary_blocks,
         )
 
-        # Step 7: 리포트 URL 서빙 + Excel 업로드
+        # Step 7: Executive Summary + 리포트 URL + Excel
         report_id = _report_store.save(html_bytes, label=category_name)
         report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
+        exec_summary = _extract_executive_summary(market_report)
+
+        report_blocks: list[dict] = []
+        # 요청자 멘션 + Executive Summary
+        mention_prefix = f"{requester} " if requester else ""
+        summary_text = exec_summary if exec_summary else f"*{category_name}* BSR 분석이 완료되었습니다."
+        report_blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention_prefix}{summary_text}"},
+        })
+        report_blocks.append({"type": "divider"})
+        # 리포트 링크 버튼
+        report_blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "📊 *인터랙티브 인사이트 리포트*"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "리포트 열기"},
+                "url": report_url,
+                "style": "primary",
+            },
+        })
         await slack.send_message(
             response_url,
-            f"📊 인터랙티브 인사이트 리포트: {report_url}",
+            f"{mention_prefix}📊 인터랙티브 인사이트 리포트: {report_url}",
             ephemeral=False, channel_id=channel_id,
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"📊 *인터랙티브 인사이트 리포트*"},
-                    "accessory": {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "리포트 열기"},
-                        "url": report_url,
-                        "style": "primary",
-                    },
-                },
-            ],
+            blocks=report_blocks,
         )
         excel_filename = f"{category_name.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(
@@ -925,37 +945,40 @@ async def _run_keyword_analysis_pipeline(
         fallback_text, summary_blocks = _build_summary_blocks(
             keyword, len(weighted_products), rankings[:10], market_report,
         )
-        if requester:
-            await slack.send_message(
-                response_url,
-                f"{requester} 님이 요청한 *\"{keyword}\"* 키워드 분석 결과입니다.",
-                ephemeral=False, channel_id=channel_id,
-            )
         await slack.send_message(
             response_url, fallback_text,
             ephemeral=False, channel_id=channel_id,
             blocks=summary_blocks,
         )
 
-        # Step 6: 리포트 URL 서빙 + Excel 업로드
+        # Step 6: Executive Summary + 리포트 URL + Excel
         report_id = _report_store.save(html_bytes, label=keyword)
         report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
+        exec_summary = _extract_executive_summary(market_report)
+
+        report_blocks: list[dict] = []
+        mention_prefix = f"{requester} " if requester else ""
+        summary_text = exec_summary if exec_summary else f"*\"{keyword}\"* 키워드 분석이 완료되었습니다."
+        report_blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention_prefix}{summary_text}"},
+        })
+        report_blocks.append({"type": "divider"})
+        report_blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "📊 *인터랙티브 인사이트 리포트*"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "리포트 열기"},
+                "url": report_url,
+                "style": "primary",
+            },
+        })
         await slack.send_message(
             response_url,
-            f"📊 인터랙티브 인사이트 리포트: {report_url}",
+            f"{mention_prefix}📊 인터랙티브 인사이트 리포트: {report_url}",
             ephemeral=False, channel_id=channel_id,
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"📊 *인터랙티브 인사이트 리포트*"},
-                    "accessory": {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "리포트 열기"},
-                        "url": report_url,
-                        "style": "primary",
-                    },
-                },
-            ],
+            blocks=report_blocks,
         )
         excel_filename = f"keyword_{keyword.replace(' ', '_')}_analysis.xlsx"
         await slack.upload_file(
