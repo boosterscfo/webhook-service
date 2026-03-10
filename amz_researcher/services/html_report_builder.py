@@ -1342,7 +1342,7 @@ function renderBrandPositioning(data) {
   const scatterCtx = el.querySelector('#brand-scatter-chart');
   if (scatterCtx && bp.positioning) {
     const segColors = { budget: '#94A3B8', mid: '#60A5FA', premium: '#C084FC', luxury: '#FBBF24' };
-    const scatterData = bp.positioning.filter(b => b.avg_price && b.avg_bsr).map(b => ({
+    const scatterData = bp.positioning.filter(b => b.avg_price && b.avg_bsr && b.avg_bsr < 50000).map(b => ({
       x: b.avg_price, y: b.avg_bsr, label: b.brand,
       r: Math.min(Math.max((b.product_count || 1) * 2, 4), 18),
       seg: (b.segment || 'mid').toLowerCase(),
