@@ -230,7 +230,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       --color-bg-hover:   #20233A;
 
       --color-text-primary:   #F0F2F8;
-      --color-text-secondary: #8B92A5;
+      --color-text-secondary: #B0B8CA;
       --color-text-muted:     #4D5468;
       --color-positive:  #22C55E;
       --color-negative:  #EF4444;
@@ -778,9 +778,11 @@ function renderMarkdown(text) {
       if (!inUl) { result.push('<ul>'); inUl = true; }
       const indent = depth > 0 ? ` style="margin-left:${depth * 10}px"` : '';
       result.push('<li' + indent + '>' + applyInline(line.replace(/^\s*[\-\*] /, '')) + '</li>');
-    } else if (/^\d+\. (.+)/.test(line)) {
+    } else if (/^\s*\d+\.\s+(.+)/.test(line)) {
+      const depth = line.search(/\S/);
       if (!inOl) { result.push('<ol>'); inOl = true; }
-      result.push('<li>' + applyInline(line.replace(/^\d+\. /, '')) + '</li>');
+      const olIndent = depth > 0 ? ` style="margin-left:${depth * 10}px"` : '';
+      result.push('<li' + olIndent + '>' + applyInline(line.replace(/^\s*\d+\.\s+/, '')) + '</li>');
     } else if (line.trim() === '') {
       closeLists();
     } else {
