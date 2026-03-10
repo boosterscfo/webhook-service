@@ -688,18 +688,8 @@ async def run_analysis(
             analysis_data=analysis_data,
         )
 
-        # Step 6: Slack 요약
+        # Step 6: Executive Summary + 리포트 URL + Excel
         requester = f"<@{user_id}>" if user_id else ""
-        fallback_text, summary_blocks = _build_summary_blocks(
-            category_name, len(weighted_products), rankings[:10], market_report,
-        )
-        await slack.send_message(
-            response_url, fallback_text,
-            ephemeral=False, channel_id=channel_id,
-            blocks=summary_blocks,
-        )
-
-        # Step 7: Executive Summary + 리포트 URL + Excel
         report_id = _report_store.save(html_bytes, label=category_name)
         report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
         exec_parts = _extract_executive_summary(market_report)
@@ -1048,18 +1038,8 @@ async def _run_keyword_analysis_pipeline(
             analysis_data=analysis_data,
         )
 
-        # Step 5: Slack 요약
+        # Step 5: Executive Summary + 리포트 URL + Excel
         requester = f"<@{user_id}>" if user_id else ""
-        fallback_text, summary_blocks = _build_summary_blocks(
-            keyword, len(weighted_products), rankings[:10], market_report,
-        )
-        await slack.send_message(
-            response_url, fallback_text,
-            ephemeral=False, channel_id=channel_id,
-            blocks=summary_blocks,
-        )
-
-        # Step 6: Executive Summary + 리포트 URL + Excel
         report_id = _report_store.save(html_bytes, label=keyword)
         report_url = f"{settings.WEBHOOK_BASE_URL}/reports/{report_id}"
         exec_parts = _extract_executive_summary(market_report)
