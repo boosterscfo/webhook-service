@@ -14,8 +14,10 @@ from amz_researcher.orchestrator import (
 )
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
+from amz_researcher.services.gemini import GeminiService
 from amz_researcher.services.product_db import ProductDBService
 from amz_researcher.services.report_store import ReportStore
+from amz_researcher.services.slack_sender import SlackSender
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -188,7 +190,7 @@ async def slack_amz_legacy(
     user_id: str = Form(""),
 ):
     """V3 키워드 기반 분석 (향후 제거 예정)."""
-    parts = text.strip().split()
+    parts = text.strip().replace("*", "").replace("~", "").replace("`", "").split()
     if not parts:
         return {"response_type": "ephemeral", "text": "사용법: /amz prod {키워드}"}
 
@@ -203,7 +205,7 @@ async def slack_amz_legacy(
         return {"response_type": "ephemeral", "text": "사용법: /amz prod {키워드} [--refresh]"}
 
     background_tasks.add_task(run_research, keyword, response_url, channel_id, refresh)
-    return {"response_type": "in_channel", "text": f"🔍 *{keyword}* 분석 시작. 약 10~15분 소요됩니다."}
+    return {"response_type": "ephemeral", "text": f"🔍 *{keyword}* 분석 시작. 완료 시 채널에 결과가 공유됩니다."}
 
 
 # ── V4: 카테고리 기반 분석 ────────────────────────────────
@@ -216,7 +218,9 @@ async def slack_amz(
     channel_id: str = Form(""),
     user_id: str = Form(""),
 ):
-    parts = text.strip().split()
+    # Slack 볼드/이탤릭/취소선/코드 마크다운 제거 (*bold*, _italic_, ~strike~, `code`)
+    clean_text = text.strip().replace("*", "").replace("~", "").replace("`", "")
+    parts = clean_text.split()
     if not parts:
         return {
             "response_type": "ephemeral",
@@ -251,9 +255,13 @@ async def slack_amz(
         product_db = ProductDBService("CFO")
         result = product_db.add_category(name, url)
         if result["ok"]:
+            background_tasks.add_task(
+                _generate_category_keywords,
+                result["node_id"], result["name"], response_url, channel_id,
+            )
             return {
                 "response_type": "in_channel",
-                "text": f"✅ 카테고리 추가 완료: *{result['name']}* (`{result['node_id']}`)\n다음 수집 시 자동 포함됩니다.",
+                "text": f"✅ 카테고리 추가 완료: *{result['name']}* (`{result['node_id']}`)\n다음 수집 시 자동 포함됩니다.\n🔄 검색 키워드 자동 생성 중...",
             }
         return {"response_type": "ephemeral", "text": f"❌ 추가 실패: {result['error']}"}
 
@@ -282,10 +290,16 @@ async def slack_amz(
             url = product_db.get_category_url(cat["node_id"])
             if not url:
                 return {"response_type": "ephemeral", "text": "❌ 카테고리 URL을 찾을 수 없습니다."}
-            background_tasks.add_task(_run_manual_collection, [url])
+            background_tasks.add_task(
+                _run_manual_collection, [url],
+                response_url=response_url, channel_id=channel_id,
+            )
             return {"response_type": "ephemeral", "text": f"🔄 *{cat['name']}* 수집 트리거됨. 완료까지 수 분 소요."}
         # 전체 수집
-        background_tasks.add_task(_run_manual_collection)
+        background_tasks.add_task(
+            _run_manual_collection,
+            response_url=response_url, channel_id=channel_id,
+        )
         return {"response_type": "ephemeral", "text": "🔄 전체 카테고리 수집 트리거됨. 완료까지 수 분 소요."}
 
     # /amz search {keyword} — V6 키워드 검색 분석
@@ -299,8 +313,8 @@ async def slack_amz(
             }
         background_tasks.add_task(run_keyword_analysis, keyword, response_url, channel_id)
         return {
-            "response_type": "in_channel",
-            "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... 완료 시 자동 알림됩니다.",
+            "response_type": "ephemeral",
+            "text": f"🔍 키워드 *\"{keyword}\"* 검색 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
         }
 
     # /amz prod {keyword} — V3 하위 호환
@@ -311,7 +325,7 @@ async def slack_amz(
             return {"response_type": "ephemeral", "text": "사용법: /amz prod {키워드}"}
         refresh = "--refresh" in parts
         background_tasks.add_task(run_research, keyword, response_url, channel_id, refresh)
-        return {"response_type": "in_channel", "text": f"🔍 *{keyword}* 분석 시작 (V3). 약 10~15분 소요됩니다."}
+        return {"response_type": "ephemeral", "text": f"🔍 *{keyword}* 분석 시작 (V3). 완료 시 채널에 결과가 공유됩니다."}
 
     # /amz {keyword} — V4 카테고리 검색 → 버튼
     keyword = " ".join(parts)
@@ -371,8 +385,8 @@ async def slack_amz_interact(
 
     background_tasks.add_task(run_analysis, node_id, name, response_url, channel_id)
     return {
-        "response_type": "in_channel",
-        "text": f"📊 *{name}* BSR Top 100 분석 시작... (수초~1분 소요)",
+        "response_type": "ephemeral",
+        "text": f"📊 *{name}* BSR Top 100 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
     }
 
 
@@ -391,11 +405,49 @@ async def research_test(
     return {"status": "started", "keyword": keyword, "refresh": req.refresh}
 
 
-async def _run_manual_collection(urls: list[str] | None = None):
+async def _generate_category_keywords(
+    node_id: str, category_name: str, response_url: str, channel_id: str,
+):
+    """Gemini로 카테고리 검색 키워드 자동 생성 → DB 저장 → Slack 알림."""
+    gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+    try:
+        keywords = await gemini.generate_category_keywords(category_name)
+        if not keywords:
+            logger.warning("Empty keywords generated for category=%s", category_name)
+            return
+
+        product_db = ProductDBService("CFO")
+        product_db.update_category_keywords(node_id, keywords)
+        logger.info("Category keywords saved: %s → %s", category_name, keywords)
+
+        if response_url:
+            await slack.send_message(
+                response_url,
+                f"🏷️ *{category_name}* 검색 키워드 설정 완료:\n`{keywords}`",
+                ephemeral=False, channel_id=channel_id,
+            )
+    except Exception:
+        logger.exception("Category keyword generation failed for %s", category_name)
+    finally:
+        await gemini.close()
+        try:
+            await slack.close()
+        except Exception:
+            pass
+
+
+async def _run_manual_collection(
+    urls: list[str] | None = None,
+    response_url: str = "",
+    channel_id: str = "",
+):
     """수동 수집 트리거 — trigger만 보내고 종료 (webhook으로 수신).
 
     Args:
         urls: 수집할 카테고리 URL 목록. None이면 전체 활성 카테고리.
+        response_url: Slack 응답 URL (완료 알림용).
+        channel_id: Slack 채널 ID (완료 알림용).
     """
     bright_data = BrightDataService(
         api_token=settings.BRIGHT_DATA_API_TOKEN,
@@ -471,14 +523,27 @@ async def _ingest_snapshot(snapshot_id: str):
         dataset_id=settings.BRIGHT_DATA_DATASET_ID,
     )
     collector = DataCollector("CFO")
+    count = 0
 
-    async def _work() -> None:
+    async def _work() -> int:
         products = await bright_data.fetch_snapshot(snapshot_id)
-        count = collector.process_snapshot(products)
-        logger.info("Webhook ingestion complete: snapshot=%s, %d products", snapshot_id, count)
+        n = collector.process_snapshot(products)
+        logger.info("Webhook ingestion complete: snapshot=%s, %d products", snapshot_id, n)
+        return n
 
     try:
-        await asyncio.wait_for(_work(), timeout=INGESTION_TIMEOUT)
+        count = await asyncio.wait_for(_work(), timeout=INGESTION_TIMEOUT)
+        # 완료 알림
+        admin_id = settings.AMZ_ADMIN_SLACK_ID
+        if admin_id:
+            slack = SlackSender(settings.AMZ_BOT_TOKEN)
+            try:
+                await slack.send_dm(
+                    admin_id,
+                    f"✅ BSR 데이터 수집 완료\n• snapshot: `{snapshot_id[:12]}...`\n• {count}개 제품 적재됨",
+                )
+            finally:
+                await slack.close()
     except asyncio.TimeoutError:
         logger.error(
             "Webhook ingestion timeout (cancelled): snapshot=%s, limit=%ds",
