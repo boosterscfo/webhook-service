@@ -743,6 +743,16 @@ function fmtPrice(n) {
   return '$' + num.toFixed(2);
 }
 
+function formatRankedIngredients(raw) {
+  if (!raw) return '';
+  const items = (typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? raw.map(i => i.name || i) : []).map(s => s.trim()).filter(Boolean);
+  const medals = ['🥇','🥈','🥉'];
+  return items.map((name, i) => {
+    const badge = i < 3 ? `<span style="margin-right:2px">${medals[i]}</span>` : `<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.08);text-align:center;line-height:18px;font-size:10px;font-weight:700;color:var(--color-text-muted);margin-right:3px">${i+1}</span>`;
+    return `<span style="display:inline-flex;align-items:center;padding:2px 8px 2px 4px;margin:2px;border-radius:12px;background:rgba(255,255,255,0.05);font-size:11px;white-space:nowrap">${badge}${esc(name)}</span>`;
+  }).join('');
+}
+
 // ============================================================
 // MARKDOWN RENDERER
 // ============================================================
@@ -1584,7 +1594,7 @@ function renderCategorySummary(data) {
         <td>${fmt(c.type_count)}</td>
         <td>${fmt(c.mention_count)}</td>
         <td>${fmtPrice(c.avg_price)}</td>
-        <td class="muted">${esc(c.top_ingredients)}</td>
+        <td>${formatRankedIngredients(c.top_ingredients)}</td>
       </tr>`
     ).join('');
   }
@@ -1636,7 +1646,7 @@ function renderProductDetail(data) {
       { key: 'brand', header: 'Brand' },
       { key: 'title', header: 'Title', render: (v) => `<span style="max-width:220px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(v)}">${esc(v)}</span>`, sortable: false },
       { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
-      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*this\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return `<span style="max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help;font-size:11px" title="${esc(clean)}">${esc(clean)}</span>`; } },
+      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*(this)?\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return `<span style="max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(clean)}">${esc(clean)}</span>`; } },
       { key: 'sns_price', header: 'SNS Price', render: (v) => fmtPrice(v) },
       { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
