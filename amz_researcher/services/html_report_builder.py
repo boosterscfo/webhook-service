@@ -1307,10 +1307,34 @@ function renderBrandPositioning(data) {
       borderColor: color,
       borderWidth: 1,
       pointLabels: scatterData.filter(d => d.seg.includes(seg)).map(d => d.label),
+      pointCounts: scatterData.filter(d => d.seg.includes(seg)).map(d => Math.round(d.r / 2)),
     }));
-    new Chart(scatterCtx, {
+    const scatterChart = new Chart(scatterCtx, {
       type: 'bubble',
       data: { datasets },
+      plugins: [{
+        id: 'bubbleLabels',
+        afterDatasetsDraw(chart) {
+          const { ctx: c } = chart;
+          c.save();
+          chart.data.datasets.forEach((ds, di) => {
+            const meta = chart.getDatasetMeta(di);
+            meta.data.forEach((el, i) => {
+              const lbl = ds.pointLabels && ds.pointLabels[i] || '';
+              const cnt = ds.pointCounts && ds.pointCounts[i] || '';
+              if (!lbl) return;
+              c.fillStyle = '#C8CDD8';
+              c.font = '10px -apple-system, sans-serif';
+              c.textAlign = 'center';
+              c.fillText(lbl, el.x, el.y - el.options.radius - 6);
+              c.fillStyle = '#8B92A5';
+              c.font = '9px -apple-system, sans-serif';
+              c.fillText(cnt + 'ea', el.x, el.y + 3);
+            });
+          });
+          c.restore();
+        }
+      }],
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: {
@@ -1324,7 +1348,8 @@ function renderBrandPositioning(data) {
               label: function(ctx) {
                 const ds = ctx.dataset;
                 const lbl = ds.pointLabels && ds.pointLabels[ctx.dataIndex] || '';
-                return `${lbl}: $${ctx.parsed.x.toFixed(0)} / BSR ${ctx.parsed.y.toLocaleString()}`;
+                const cnt = ds.pointCounts && ds.pointCounts[ctx.dataIndex] || '';
+                return `${lbl} (${cnt}ea): $${ctx.parsed.x.toFixed(0)} / BSR ${ctx.parsed.y.toLocaleString()}`;
               }
             }
           }
@@ -1409,6 +1434,7 @@ function renderMarketingKeywords(data) {
       ? rawKws
       : Object.entries(rawKws).map(([k, v]) => ({ keyword: k, ...v }));
     const kws = kwArr.slice(0, 20).sort((a, b) => (a.avg_bsr || 0) - (b.avg_bsr || 0));
+    kwCtx.parentElement.style.height = Math.max(320, kws.length * 28) + 'px';
     new Chart(kwCtx, {
       type: 'bar',
       data: {
@@ -1421,7 +1447,7 @@ function renderMarketingKeywords(data) {
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: '#8B92A5' }, grid: { color: '#2A2D3E' } },
-          y: { ticks: { color: '#8B92A5', font: { size: 11 } }, grid: { color: '#2A2D3E' } }
+          y: { ticks: { color: '#8B92A5', font: { size: 11 }, autoSkip: false }, grid: { color: '#2A2D3E' } }
         }
       }
     });
@@ -1610,6 +1636,7 @@ function renderProductDetail(data) {
       { key: 'brand', header: 'Brand' },
       { key: 'title', header: 'Title', render: (v) => `<span style="max-width:280px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v)}">${esc(v)}</span>`, sortable: false },
       { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
+      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; const clean = v.replace(/Customers?\s*find\s*this\s*:?\s*/gi, '').trim(); return `<span style="max-width:320px;display:inline-block;white-space:normal;line-height:1.4;font-size:11px" title="${esc(v)}">${esc(clean)}</span>`; } },
       { key: 'sns_price', header: 'SNS Price', render: (v) => fmtPrice(v) },
       { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
@@ -1621,7 +1648,6 @@ function renderProductDetail(data) {
       { key: 'badge', header: 'Badge' },
       { key: 'plus_content', header: 'A+', render: (v) => v ? '<span class="badge badge-positive">Yes</span>' : '' },
       { key: 'variations_count', header: 'Vars', render: (v) => fmt(v) },
-      { key: 'customer_says', header: 'Customer Says', className: 'muted', sortable: false, render: (v) => v ? `<span style="max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v)}">${esc(v)}</span>` : '' },
     ],
     container: tableEl,
     searchInput: searchInput,
