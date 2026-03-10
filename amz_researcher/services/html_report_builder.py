@@ -1634,9 +1634,9 @@ function renderProductDetail(data) {
     columns: [
       { key: 'asin', header: 'ASIN', className: 'mono' },
       { key: 'brand', header: 'Brand' },
-      { key: 'title', header: 'Title', render: (v) => `<span style="max-width:280px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v)}">${esc(v)}</span>`, sortable: false },
+      { key: 'title', header: 'Title', render: (v) => `<span style="max-width:220px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(v)}">${esc(v)}</span>`, sortable: false },
       { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
-      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; const clean = v.replace(/Customers?\s*find\s*this\s*:?\s*/gi, '').trim(); return `<span style="max-width:320px;display:inline-block;white-space:normal;line-height:1.4;font-size:11px" title="${esc(v)}">${esc(clean)}</span>`; } },
+      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*this\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return `<span style="max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help;font-size:11px" title="${esc(clean)}">${esc(clean)}</span>`; } },
       { key: 'sns_price', header: 'SNS Price', render: (v) => fmtPrice(v) },
       { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
