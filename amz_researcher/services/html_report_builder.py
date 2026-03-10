@@ -1174,7 +1174,7 @@ function renderSalesPricing(data) {
         <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.title)}</td>
         <td><strong>${p.bought_past_month != null ? fmt(p.bought_past_month)+'+' : '-'}</strong></td>
         <td>${fmtPrice(p.price)}</td>
-        <td>${fmt(p.bsr_category)}</td>
+        <td>${fmt(p.bsr_category || p.bsr)}</td>
       </tr>`
     ).join('');
   }

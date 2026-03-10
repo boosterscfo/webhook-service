@@ -864,6 +864,8 @@ async def _run_keyword_analysis_pipeline(
         for wp in weighted_products:
             kp = kp_map.get(wp.asin)
             if kp:
+                bsr_val = _safe_num(kp.get("bsr"))
+                wp.bsr_category = int(bsr_val) if bsr_val is not None else None
                 wp.badge = kp.get("badge", "") or ""
                 wp.initial_price = _safe_num(kp.get("initial_price"))
                 wp.sns_price = _safe_num(kp.get("sns_price"))
