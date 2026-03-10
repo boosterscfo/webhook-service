@@ -16,3 +16,7 @@ google_keys/
 
 # Reference (migration source)
 reference/
+
+# Local test files
+generate_report_local.py
+data/
