@@ -1454,18 +1454,24 @@ function renderBrandPositioning(data) {
     });
   }
 
-  const brandTbody = el.querySelector('#brand-tbody');
-  if (brandTbody && bp.positioning) {
-    brandTbody.innerHTML = bp.positioning.map(b =>
-      `<tr>
-        <td>${esc(b.brand)}</td>
-        <td>${fmt(b.product_count)}</td>
-        <td>${fmtPrice(b.avg_price)}</td>
-        <td>${fmt(b.avg_bsr)}</td>
-        <td>${fmt(b.avg_rating,1)}</td>
-        <td>${segmentBadge(b.segment)}</td>
-      </tr>`
-    ).join('');
+  const brandTableEl = el.querySelector('#brand-table-wrap');
+  const brandSearchInput = el.querySelector('#brand-search');
+  if (brandTableEl && bp.positioning) {
+    const btc = new TableController({
+      data: bp.positioning,
+      pageSize: 20,
+      columns: [
+        { key: 'brand', header: 'Brand', render: (v) => `<strong>${esc(v)}</strong>` },
+        { key: 'product_count', header: 'Products' },
+        { key: 'avg_price', header: 'Avg Price', render: (v) => fmtPrice(v) },
+        { key: 'avg_bsr', header: 'Avg BSR', render: (v) => fmt(v) },
+        { key: 'avg_rating', header: 'Avg Rating', render: (v) => fmt(v, 1) },
+        { key: 'segment', header: 'Segment', sortable: false, render: (v) => segmentBadge(v) },
+      ],
+      container: brandTableEl,
+      searchInput: brandSearchInput,
+    });
+    btc.init();
   }
 
   const mc = (mfr && mfr.market_concentration) || bp.market_concentration || {};
@@ -2043,11 +2049,22 @@ function buildSectionsHTML() {
     <div class="two-col-left-wide">
       <div>
         <div class="subsection-title">Brand Performance</div>
-        <div class="table-wrapper">
-          <table>
-            <thead><tr><th>Brand</th><th>Products</th><th>Avg Price</th><th>Avg BSR</th><th>Avg Rating</th><th>Segment</th></tr></thead>
-            <tbody id="brand-tbody"></tbody>
-          </table>
+        <input class="search-input" type="text" id="brand-search" placeholder="Search brand..." style="margin-bottom:8px">
+        <div data-tc="1" id="brand-table-wrap">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr>
+                <th>Brand <span class="sort-icon">&#8597;</span></th>
+                <th>Products <span class="sort-icon">&#8597;</span></th>
+                <th>Avg Price <span class="sort-icon">&#8597;</span></th>
+                <th>Avg BSR <span class="sort-icon">&#8597;</span></th>
+                <th>Avg Rating <span class="sort-icon">&#8597;</span></th>
+                <th>Segment</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="pagination"></div>
         </div>
         <div class="subsection">
           <div class="subsection-title">Top Manufacturers</div>
