@@ -471,7 +471,10 @@ async def run_research(
         # Step 5: AI 시장 분석 리포트 (캐시 우선)
         _db = ProductDBService("CFO")
         voice_keywords = _load_cached_voice_keywords(weighted_products, _db)
-        if not voice_keywords:
+        if voice_keywords:
+            await _msg("♻️ Consumer Voice 키워드 캐시 사용", ephemeral=True)
+        else:
+            await _msg("🗣️ Consumer Voice 키워드 추출 중... (Gemini)", ephemeral=True)
             voice_keywords = await gemini.extract_voice_keywords(keyword, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, _db)
         analysis_data = build_market_analysis(keyword, weighted_products, all_details, voice_keywords=voice_keywords)
@@ -802,7 +805,10 @@ async def run_analysis(
 
         # Step 4: 시장 분석 리포트
         voice_keywords = _load_cached_voice_keywords(weighted_products, product_db)
-        if not voice_keywords:
+        if voice_keywords:
+            await _msg("♻️ Consumer Voice 키워드 캐시 사용", ephemeral=True)
+        else:
+            await _msg("🗣️ Consumer Voice 키워드 추출 중... (Gemini)", ephemeral=True)
             voice_keywords = await gemini.extract_voice_keywords(category_name, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, product_db)
         analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords)
@@ -1158,7 +1164,10 @@ async def _run_keyword_analysis_pipeline(
 
         # Step 3: 시장 분석 (BSR 의존 분석 제외)
         voice_keywords = _load_cached_voice_keywords(weighted_products, product_db)
-        if not voice_keywords:
+        if voice_keywords:
+            await _msg("♻️ Consumer Voice 키워드 캐시 사용", ephemeral=True)
+        else:
+            await _msg("🗣️ Consumer Voice 키워드 추출 중... (Gemini)", ephemeral=True)
             voice_keywords = await gemini.extract_voice_keywords(normalized_keyword, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, product_db)
         analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details, voice_keywords=voice_keywords)
