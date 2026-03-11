@@ -275,6 +275,8 @@ class DataCollector:
             "coupon": _normalize_coupon(raw.get("coupon") or ""),
             "plus_content": bool(raw.get("plus_content")),
             "collected_at": datetime.now(),
+            "voice_positive": None,
+            "voice_negative": None,
         }
 
     def _map_history(self, raw: dict, snapshot_date: date) -> dict:
