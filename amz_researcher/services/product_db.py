@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 
 from lib.mysql_connector import MysqlConnector
 
@@ -377,3 +378,64 @@ class ProductDBService:
                 "negative": neg or [],
             }
         return result
+
+    # ── 리포트 요청 로그 ──────────────────────────────
+
+    def log_request_start(
+        self,
+        user_id: str,
+        channel_id: str,
+        request_type: str,
+        query_value: str,
+    ) -> int | None:
+        """요청 시작 로그. INSERT 후 id 반환."""
+        query = """
+            INSERT INTO amz_report_request_log
+                (user_id, channel_id, request_type, query_value, status, requested_at)
+            VALUES (%s, %s, %s, %s, 'started', %s)
+        """
+        now = datetime.now()
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(query, (user_id, channel_id, request_type, query_value, now))
+                conn.connection.commit()
+                return conn.cursor.lastrowid
+        except Exception:
+            logger.exception("Failed to log request start")
+            return None
+
+    def log_request_complete(
+        self,
+        log_id: int,
+        product_count: int = 0,
+        report_id: str = "",
+        duration_sec: float | None = None,
+    ) -> None:
+        """요청 완료 로그 업데이트."""
+        query = """
+            UPDATE amz_report_request_log
+            SET status = 'completed', product_count = %s, report_id = %s,
+                duration_sec = %s, completed_at = %s
+            WHERE id = %s
+        """
+        now = datetime.now()
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(query, (product_count, report_id, duration_sec, now, log_id))
+                conn.connection.commit()
+        except Exception:
+            logger.exception("Failed to log request complete")
+
+    def log_request_failed(self, log_id: int, error: str = "") -> None:
+        """요청 실패 로그 업데이트."""
+        query = """
+            UPDATE amz_report_request_log
+            SET status = 'failed', error_message = %s, completed_at = %s
+            WHERE id = %s
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(query, (error[:500], datetime.now(), log_id))
+                conn.connection.commit()
+        except Exception:
+            logger.exception("Failed to log request failure")

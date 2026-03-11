@@ -709,10 +709,14 @@ async def run_analysis(
     report_only: bool = False,
 ):
     """V4 DB 기반 분석 파이프라인. report_only=True면 Gemini 호출 없이 캐시로 리포트만 재빌드."""
+    import time as _time
+    _t0 = _time.monotonic()
     product_db = ProductDBService("CFO")
     gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
     cache = AmzCacheService("CFO")
+    _req_type = "report_only" if report_only else "category"
+    _log_id = product_db.log_request_start(user_id, channel_id, _req_type, category_name)
 
     async def _msg(text: str, ephemeral: bool = False):
         await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
@@ -866,9 +870,16 @@ async def run_analysis(
             comment="📋 원본 데이터 엑셀",
         )
         logger.info("Analysis completed for category=%s (%d products)", category_name, len(products))
+        if _log_id:
+            product_db.log_request_complete(
+                _log_id, product_count=len(products),
+                report_id=report_id, duration_sec=round(_time.monotonic() - _t0, 1),
+            )
 
     except Exception as e:
         logger.exception("Analysis failed for category=%s", category_name)
+        if _log_id:
+            product_db.log_request_failed(_log_id, str(e)[:500])
         await _msg(f"❌ *{category_name}* 분석 실패: {e!s}", ephemeral=True)
         admin_id = settings.AMZ_ADMIN_SLACK_ID
         if admin_id:
@@ -1090,11 +1101,15 @@ async def _run_keyword_analysis_pipeline(
     report_only: bool = False,
 ):
     """키워드 검색 분석 파이프라인. report_only=True면 Gemini 호출 없이 캐시로 리포트만 재빌드."""
+    import time as _time
+    _t0 = _time.monotonic()
     normalized_keyword = " ".join(keyword.lower().split())
     gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
     cache = AmzCacheService("CFO")
     product_db = ProductDBService("CFO")
+    _req_type = "report_only" if report_only else "keyword"
+    _log_id = product_db.log_request_start(user_id, channel_id, _req_type, normalized_keyword)
 
     async def _msg(text: str, ephemeral: bool = False):
         await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
@@ -1227,9 +1242,16 @@ async def _run_keyword_analysis_pipeline(
             comment="📋 원본 데이터 엑셀",
         )
         logger.info("Keyword analysis completed for keyword=%s (%d products)", keyword, len(keyword_products))
+        if _log_id:
+            product_db.log_request_complete(
+                _log_id, product_count=len(keyword_products),
+                report_id=report_id, duration_sec=round(_time.monotonic() - _t0, 1),
+            )
 
     except Exception as e:
         logger.exception("Keyword analysis pipeline failed for keyword=%s", keyword)
+        if _log_id:
+            product_db.log_request_failed(_log_id, str(e)[:500])
         await _msg(f"❌ *\"{keyword}\"* 검색 분석 실패: {e!s}", ephemeral=True)
         admin_id = settings.AMZ_ADMIN_SLACK_ID
         if admin_id:
