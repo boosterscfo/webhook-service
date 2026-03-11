@@ -1092,6 +1092,7 @@ async def _run_keyword_analysis_pipeline(
     gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
     slack = SlackSender(settings.AMZ_BOT_TOKEN)
     cache = AmzCacheService("CFO")
+    product_db = ProductDBService("CFO")
 
     async def _msg(text: str, ephemeral: bool = False):
         await slack.send_message(response_url, text, ephemeral=ephemeral, channel_id=channel_id)
