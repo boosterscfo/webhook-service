@@ -552,20 +552,22 @@ async def slack_amz_interact(
             "text": f"📡 *{name}* 데이터가 없습니다. 수집을 시작합니다...",
         }
 
-    # 캐시 있음 → 선택지 제시
-    return _build_category_options(
-        node_id, name, freshness, response_url, channel_id,
+    # 캐시 있음 → response_url로 선택지 전송
+    background_tasks.add_task(
+        _send_category_options, node_id, name, freshness,
+        response_url, channel_id,
     )
+    return {"text": f":mag: *{name}* 데이터 확인 중..."}
 
 
-def _build_category_options(
+async def _send_category_options(
     node_id: str,
     name: str,
     freshness: dict,
     response_url: str,
     channel_id: str,
-) -> dict:
-    """카테고리 freshness 기반 '새로 수집' / '캐시 사용' 선택지 Block Kit 응답."""
+) -> None:
+    """카테고리 freshness 기반 선택지를 response_url로 전송."""
     from datetime import datetime
 
     collected_at = freshness["collected_at"]
@@ -580,43 +582,53 @@ def _build_category_options(
         "channel_id": channel_id,
     })
 
-    return {
-        "replace_original": True,
-        "text": f":mag: *{name}* — {product_count}개 제품, {age_text} 수집",
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        f":mag: *{name}*\n"
-                        f"현재 데이터: {product_count}개 제품, {age_text} 수집"
-                    ),
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":mag: *{name}*\n"
+                    f"현재 데이터: {product_count}개 제품, {age_text} 수집"
+                ),
+            },
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "새로 수집 후 분석"},
+                    "action_id": "amz_cat_refresh",
+                    "value": payload,
+                    "style": "primary",
                 },
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "새로 수집 후 분석"},
-                        "action_id": "amz_cat_refresh",
-                        "value": payload,
-                        "style": "primary",
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"캐시 사용 ({age_text})",
                     },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": f"캐시 사용 ({age_text})",
-                        },
-                        "action_id": "amz_cat_cached",
-                        "value": payload,
-                    },
-                ],
-            },
-        ],
-    }
+                    "action_id": "amz_cat_cached",
+                    "value": payload,
+                },
+            ],
+        },
+    ]
+
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+    try:
+        await slack.send_message(
+            response_url,
+            f":mag: *{name}* — {product_count}개 제품, {age_text} 수집",
+            ephemeral=True,
+            channel_id=channel_id,
+            blocks=blocks,
+        )
+    except Exception:
+        logger.exception("Failed to send category options for %s", name)
+    finally:
+        await slack.close()
 
 
 @router.post("/research")
