@@ -535,8 +535,11 @@ async def slack_amz_interact(
     response_url = value["response_url"]
     channel_id = value["channel_id"]
 
+    logger.info("Category interact: node_id=%s, name=%s, action_id=%s", node_id, name, action_id)
+
     product_db = ProductDBService("CFO")
     freshness = product_db.get_category_freshness(node_id)
+    logger.info("Category freshness: node_id=%s, result=%s", node_id, freshness)
 
     if freshness is None:
         # 미수집 카테고리 → 바로 수집 트리거
@@ -578,7 +581,8 @@ def _build_category_options(
     })
 
     return {
-        "response_type": "ephemeral",
+        "replace_original": True,
+        "text": f":mag: *{name}* — {product_count}개 제품, {age_text} 수집",
         "blocks": [
             {
                 "type": "section",
