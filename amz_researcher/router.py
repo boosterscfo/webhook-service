@@ -12,6 +12,7 @@ from amz_researcher.orchestrator import (
     run_research,
     _run_keyword_analysis_pipeline,
     _category_collection_callbacks,
+    _trigger_category_collection,
 )
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
