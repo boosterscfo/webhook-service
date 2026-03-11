@@ -7,6 +7,7 @@ import httpx
 from amz_researcher.models import (
     GeminiResponse,
     ProductIngredients,
+    TitleKeywordResult,
     VoiceKeywordResult,
     WeightedProduct,
 )
@@ -175,6 +176,8 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 7. **소비자 인식 & 배지 효과 (Consumer Voice & Badge Impact)**
    - 긍정/부정 리뷰 키워드 Top 5와 BSR 상관관계
    - 소비자가 실제로 중시하는 속성(향, 효과, 질감 등)
+   - **가격대별 불만 패턴**: Budget/Mid/Premium/Luxury 각 가격대에서 두드러지는 부정 키워드 차이 분석. 낮은 가격대에서만 나타나는 불만 vs 고가에서도 지속되는 불만 구분
+   - **BSR Top 10 공통 강점**: BSR 상위 10개 제품이 공유하는 긍정 키워드. 80%+ 공통 키워드는 "시장 필수 요건", 50-80%는 "차별화 요인"으로 해석
    - Badge(Amazon's Choice/Best Seller) 보유 제품의 성과 차이
    - Badge 획득 전략 제안
 
@@ -443,6 +446,96 @@ class GeminiService:
                     logger.warning("Voice keywords extraction failed, retrying")
                     continue
                 logger.warning("Voice keywords extraction failed after retries for '%s'", category_name)
+                return None
+
+        return None
+
+
+    async def extract_title_keywords(
+        self,
+        category_name: str,
+        products: list[WeightedProduct],
+    ) -> TitleKeywordResult | None:
+        """title에서 카테고리 맞춤 마케팅 키워드 동적 추출.
+
+        Returns None on failure (caller falls back to hardcoded keywords).
+        """
+        with_title = [p for p in products if p.title]
+        if len(with_title) < 10:
+            logger.info(
+                "Title keywords skipped: only %d products with title",
+                len(with_title),
+            )
+            return None
+
+        title_block = "\n".join(p.title for p in with_title)
+        count = len(with_title)
+
+        prompt = (
+            f'아래는 아마존 "{category_name}" 카테고리 제품 {count}개의 제목(title)이다.\n\n'
+            f"{title_block}\n\n"
+            f"이 카테고리의 제품 제목에서 반복적으로 사용되는 핵심 마케팅 키워드를 추출하라.\n\n"
+            f"규칙:\n"
+            f"1. 이 카테고리에 특화된 마케팅 키워드만 추출\n"
+            f"2. 포함 대상: 성분명 (Hyaluronic Acid, Retinol 등), "
+            f"인증/클레임 (Organic, Vegan 등), "
+            f"제품 특성 (Fragrance-Free, Waterproof 등)\n"
+            f"3. 브랜드명, 제품 유형(Cream, Serum 등), 숫자(100ml, 2-Pack 등)는 제외\n"
+            f"4. 각 키워드는 1-3 단어로 간결하게\n"
+            f"5. 15-25개 범위로 추출\n"
+            f"6. 3개 이상의 제품 제목에서 사용된 키워드만 포함\n\n"
+            f"JSON 출력:\n"
+            f'{{\n'
+            f'  "keywords": ["keyword1", "keyword2", ...]\n'
+            f"}}"
+        )
+
+        for attempt in range(2):
+            try:
+                resp = await self.client.post(
+                    self.url,
+                    params={"key": self.api_key},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.1,
+                            "maxOutputTokens": 4096,
+                            "responseMimeType": "application/json",
+                            "thinkingConfig": {"thinkingBudget": 0},
+                        },
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                if not text:
+                    logger.warning("Title keywords empty response (attempt %d)", attempt + 1)
+                    continue
+
+                result = TitleKeywordResult.model_validate_json(text)
+                if not result.keywords:
+                    logger.warning("Title keywords returned empty list for '%s'", category_name)
+                    return None
+                logger.info(
+                    "Title keywords extracted: %d keywords for '%s'",
+                    len(result.keywords),
+                    category_name,
+                )
+                return result
+
+            except Exception:
+                if attempt == 0:
+                    logger.warning("Title keywords extraction failed, retrying")
+                    continue
+                logger.warning(
+                    "Title keywords extraction failed after retries for '%s'",
+                    category_name,
+                )
                 return None
 
         return None

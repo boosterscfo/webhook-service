@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 
 from amz_researcher.models import (
     ProductDetail,
+    TitleKeywordResult,
     VoiceKeywordResult,
     WeightedProduct,
 )
@@ -646,6 +647,71 @@ def analyze_customer_voice(
                 freq[kw] = count
         return freq
 
+    # --- (A) voice_negative_by_price_tier ---
+    tier_products: dict[str, list[WeightedProduct]] = defaultdict(list)
+    for p in with_cs:
+        tier_products[_price_tier(p.price)].append(p)
+
+    voice_negative_by_price_tier: dict[str, dict] = {}
+    for tier, tier_prods in tier_products.items():
+        tier_asins = {p.asin for p in tier_prods}
+        tier_neg: dict[str, int] = {}
+        for kw, kw_prods in neg_counts.items():
+            cnt = sum(1 for p in kw_prods if p.asin in tier_asins)
+            if cnt > 0:
+                tier_neg[kw] = cnt
+        product_count = len(tier_prods)
+        top_complaints = sorted(
+            [
+                {
+                    "keyword": kw,
+                    "count": cnt,
+                    "pct": round(cnt / product_count * 100, 1),
+                }
+                for kw, cnt in tier_neg.items()
+            ],
+            key=lambda x: x["count"],
+            reverse=True,
+        )
+        voice_negative_by_price_tier[tier] = {
+            "product_count": product_count,
+            "top_complaints": top_complaints,
+        }
+
+    # --- (B) bsr_top_common_strengths ---
+    top_n = 10
+    bsr_top = sorted_by_bsr[:top_n]
+    actual_count = len(bsr_top)
+    bsr_top_common_strengths: dict = {
+        "top_n": top_n,
+        "actual_count": actual_count,
+        "common_keywords": [],
+        "universal_keywords": [],
+    }
+    if actual_count > 0:
+        top_asins = {p.asin for p in bsr_top}
+        kw_freq: dict[str, int] = {}
+        for kw, kw_prods in pos_counts.items():
+            cnt = sum(1 for p in kw_prods if p.asin in top_asins)
+            if cnt > 0:
+                kw_freq[kw] = cnt
+        common_keywords = sorted(
+            [
+                {
+                    "keyword": kw,
+                    "count": cnt,
+                    "pct": round(cnt / actual_count * 100, 1),
+                }
+                for kw, cnt in kw_freq.items()
+            ],
+            key=lambda x: x["count"],
+            reverse=True,
+        )
+        bsr_top_common_strengths["common_keywords"] = common_keywords
+        bsr_top_common_strengths["universal_keywords"] = [
+            item["keyword"] for item in common_keywords if item["count"] == actual_count
+        ]
+
     return {
         "total_with_customer_says": len(with_cs),
         "positive_keywords": {
@@ -658,6 +724,8 @@ def analyze_customer_voice(
         "bsr_top_half_negative": _group_keyword_freq(top_half, neg_counts),
         "bsr_bottom_half_positive": _group_keyword_freq(bottom_half, pos_counts),
         "bsr_bottom_half_negative": _group_keyword_freq(bottom_half, neg_counts),
+        "voice_negative_by_price_tier": voice_negative_by_price_tier,
+        "bsr_top_common_strengths": bsr_top_common_strengths,
     }
 
 
@@ -771,9 +839,15 @@ def analyze_discount_impact(products: list[WeightedProduct]) -> dict:
     }
 
 
-def analyze_title_keywords(products: list[WeightedProduct]) -> dict:
-    """title 내 마케팅 키워드별 BSR/판매량 비교."""
-    MARKETING_KEYWORDS = [
+def analyze_title_keywords(
+    products: list[WeightedProduct],
+    title_keywords: TitleKeywordResult | None = None,
+) -> dict:
+    """title 내 마케팅 키워드별 BSR/판매량 비교.
+
+    title_keywords가 있으면 Gemini 동적 키워드 사용, 없으면 하드코딩 fallback.
+    """
+    _FALLBACK_KEYWORDS = [
         "Organic", "Natural", "Korean", "Vegan", "Sulfate-Free",
         "Dermatologist", "Clinical", "Hyaluronic", "Retinol", "Vitamin C",
         "Collagen", "Niacinamide", "Salicylic", "SPF", "Cruelty-Free",
@@ -781,11 +855,17 @@ def analyze_title_keywords(products: list[WeightedProduct]) -> dict:
         "Sensitive", "Anti-Aging", "Moisturizing",
     ]
 
-    keyword_products: dict[str, list[WeightedProduct]] = {kw: [] for kw in MARKETING_KEYWORDS}
+    marketing_keywords = (
+        title_keywords.keywords
+        if title_keywords and title_keywords.keywords
+        else _FALLBACK_KEYWORDS
+    )
+
+    keyword_products: dict[str, list[WeightedProduct]] = {kw: [] for kw in marketing_keywords}
 
     for p in products:
         title_lower = p.title.lower()
-        for kw in MARKETING_KEYWORDS:
+        for kw in marketing_keywords:
             if kw.lower() in title_lower:
                 keyword_products[kw].append(p)
 
@@ -1013,6 +1093,7 @@ def build_keyword_market_analysis(
     weighted_products: list[WeightedProduct],
     details: list[ProductDetail],
     voice_keywords: VoiceKeywordResult | None = None,
+    title_keywords: TitleKeywordResult | None = None,
 ) -> dict:
     """키워드 검색 전용 시장 분석. BSR 의존 분석 2개 제외.
 
@@ -1035,7 +1116,7 @@ def build_keyword_market_analysis(
         "promotions": analyze_promotions(weighted_products),
         "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),
         "discount_impact": analyze_discount_impact(weighted_products),
-        "title_keywords": analyze_title_keywords(weighted_products),
+        "title_keywords": analyze_title_keywords(weighted_products, title_keywords),
         "unit_economics": analyze_unit_economics(weighted_products),
         "manufacturer": analyze_manufacturer(weighted_products, details),
         "sku_strategy": analyze_sku_strategy(weighted_products),
@@ -1047,6 +1128,7 @@ def build_market_analysis(
     weighted_products: list[WeightedProduct],
     details: list[ProductDetail],
     voice_keywords: VoiceKeywordResult | None = None,
+    title_keywords: TitleKeywordResult | None = None,
 ) -> dict:
     """전체 시장 분석 데이터 생성."""
     return {
@@ -1068,7 +1150,7 @@ def build_market_analysis(
         "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),
         "badges": analyze_badges(weighted_products),
         "discount_impact": analyze_discount_impact(weighted_products),
-        "title_keywords": analyze_title_keywords(weighted_products),
+        "title_keywords": analyze_title_keywords(weighted_products, title_keywords),
         # V5 Phase 2 신규
         "unit_economics": analyze_unit_economics(weighted_products),
         "manufacturer": analyze_manufacturer(weighted_products, details),

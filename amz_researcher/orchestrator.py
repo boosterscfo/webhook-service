@@ -477,7 +477,8 @@ async def run_research(
             await _msg("🗣️ Consumer Voice 키워드 추출 중... (Gemini)", ephemeral=True)
             voice_keywords = await gemini.extract_voice_keywords(keyword, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, _db)
-        analysis_data = build_market_analysis(keyword, weighted_products, all_details, voice_keywords=voice_keywords)
+        title_keywords = await gemini.extract_title_keywords(keyword, weighted_products)
+        analysis_data = build_market_analysis(keyword, weighted_products, all_details, voice_keywords=voice_keywords, title_keywords=title_keywords)
 
         market_report = ""
         if not refresh:
@@ -811,7 +812,8 @@ async def run_analysis(
             await _msg("🗣️ Consumer Voice 키워드 추출 중... (Gemini)", ephemeral=True)
             voice_keywords = await gemini.extract_voice_keywords(category_name, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, product_db)
-        analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords)
+        title_keywords = await gemini.extract_title_keywords(category_name, weighted_products)
+        analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords, title_keywords=title_keywords)
 
         market_report = cache.get_market_report_cache(category_name, len(weighted_products)) or ""
         if market_report:
@@ -1170,7 +1172,8 @@ async def _run_keyword_analysis_pipeline(
             await _msg("🗣️ Consumer Voice 키워드 추출 중... (Gemini)", ephemeral=True)
             voice_keywords = await gemini.extract_voice_keywords(normalized_keyword, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, product_db)
-        analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details, voice_keywords=voice_keywords)
+        title_keywords = await gemini.extract_title_keywords(normalized_keyword, weighted_products)
+        analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details, voice_keywords=voice_keywords, title_keywords=title_keywords)
 
         market_report = cache.get_market_report_cache(normalized_keyword, len(weighted_products)) or ""
         if market_report:

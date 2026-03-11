@@ -94,6 +94,10 @@ class VoiceKeywordResult(BaseModel):
     negative_keywords: list[VoiceKeyword] = []
 
 
+class TitleKeywordResult(BaseModel):
+    keywords: list[str] = []
+
+
 class WeightedProduct(BaseModel):
     asin: str
     title: str
