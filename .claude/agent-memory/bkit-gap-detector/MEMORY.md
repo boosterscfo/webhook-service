@@ -59,6 +59,11 @@
   - Iteration 2 resolved: Chart.js CDN->inline bundle, hamburger button, Brand Positioning scatter chart
   - Remaining backlog (all Low/a11y): column toggle, focus states, th scope, reduced-motion, light mode, sticky pills
   - Implementation at: `amz_researcher/services/html_report_builder.py` (all-in-one)
+- `category-refresh-ux`: 100% match rate (2026-03-11). 0 gaps.
+  - Analysis at: `docs/03-analysis/category-refresh-ux.analysis.md`
+  - Scope: Category click freshness check, 2-button choice (refresh/cached), 2 new action_ids
+  - 59 comparison items across 7 design sections, all matched
+  - Files changed: `product_db.py` (get_category_freshness), `router.py` (interact handler + _build_category_options)
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)

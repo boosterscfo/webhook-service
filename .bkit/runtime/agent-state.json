@@ -1,25 +1,14 @@
 {
   "version": "1.0",
-  "enabled": true,
+  "enabled": false,
   "teamName": "",
   "feature": "excel-report-v6",
   "pdcaPhase": "design",
   "orchestrationPattern": "leader",
   "ctoAgent": "opus",
   "startedAt": "2026-03-11T02:49:56.845Z",
-  "lastUpdated": "2026-03-11T02:49:56.846Z",
-  "teammates": [
-    {
-      "name": "aa3e56829c12a644b",
-      "role": "bkit:gap-detector",
-      "model": "sonnet",
-      "status": "spawning",
-      "currentTask": null,
-      "taskId": null,
-      "startedAt": "2026-03-11T02:49:56.846Z",
-      "lastActivityAt": "2026-03-11T02:49:56.846Z"
-    }
-  ],
+  "lastUpdated": "2026-03-11T02:51:33.950Z",
+  "teammates": [],
   "progress": {
     "totalTasks": 0,
     "completedTasks": 0,
