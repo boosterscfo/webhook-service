@@ -1020,10 +1020,12 @@ function renderConsumerVoice(data) {
   const strengthsEl = el.querySelector('#cv-bsr-strengths');
   if (strengthsEl) {
     const strengths = cv.bsr_top_common_strengths;
-    if (strengths && typeof strengths === 'object' && Object.keys(strengths).length) {
-      const entries = Object.entries(strengths).sort((a, b) => b[1] - a[1]);
-      const badges = entries.map(([kw, pct]) => {
-        const p = Math.round(pct * (pct <= 1 ? 100 : 1));
+    const commonKws = strengths && strengths.common_keywords;
+    if (commonKws && Array.isArray(commonKws) && commonKws.length) {
+      const actualN = strengths.actual_count || strengths.top_n || 10;
+      const badges = commonKws.map(item => {
+        const kw = item.keyword || item;
+        const p = Math.round(item.pct || (item.count / actualN * 100) || 0);
         if (p >= 80) {
           return `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--radius-full);background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);font-size:12px;font-weight:700;color:var(--color-positive)">
             ${esc(kw)} <span style="background:var(--color-positive);color:#000;border-radius:var(--radius-full);padding:1px 6px;font-size:10px;font-weight:800">${p}%</span>
@@ -1049,10 +1051,15 @@ function renderConsumerVoice(data) {
     const tierData = cv.voice_negative_by_price_tier;
     if (tierData && typeof tierData === 'object' && Object.keys(tierData).length) {
       const tiers = Object.entries(tierData);
-      const rows = tiers.map(([tier, kws]) => {
-        const kwArr = Array.isArray(kws) ? kws : Object.keys(kws);
-        const kwText = kwArr.slice(0, 5).map(k => `<span style="padding:2px 7px;border-radius:var(--radius-full);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);font-size:11px;color:var(--color-negative)">${esc(typeof k === 'string' ? k : k.keyword || '')}</span>`).join(' ');
-        return `<tr><td style="color:var(--color-text-secondary);white-space:nowrap">${esc(tier)}</td><td style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px">${kwText}</td></tr>`;
+      const rows = tiers.map(([tier, info]) => {
+        const complaints = (info && info.top_complaints) || [];
+        const kwText = complaints.slice(0, 5).map(c => {
+          const kw = typeof c === 'string' ? c : (c.keyword || '');
+          const cnt = c.count ? ` (${c.count})` : '';
+          return `<span style="padding:2px 7px;border-radius:var(--radius-full);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);font-size:11px;color:var(--color-negative)">${esc(kw)}${cnt}</span>`;
+        }).join(' ');
+        const prodCount = info && info.product_count ? `<span style="color:var(--color-text-muted);font-size:11px;margin-left:4px">(${info.product_count}개)</span>` : '';
+        return `<tr><td style="color:var(--color-text-secondary);white-space:nowrap">${esc(tier)}${prodCount}</td><td style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px">${kwText || '<span style="color:var(--color-text-muted)">-</span>'}</td></tr>`;
       }).join('');
       priceTierEl.innerHTML = `
         <div class="subsection" style="margin-top:24px">
