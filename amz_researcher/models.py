@@ -73,6 +73,7 @@ class Ingredient(BaseModel):
     name: str  # INCI 학명 또는 원본 성분명
     common_name: str = ""  # 핵심 성분명 (마케팅용 일반명)
     category: str
+    source: str = ""  # "featured", "inci", "both", "" (legacy)
 
 
 class ProductIngredients(BaseModel):
@@ -127,6 +128,8 @@ class WeightedProduct(BaseModel):
     # V8 voice keywords
     voice_positive: list[str] = []
     voice_negative: list[str] = []
+    # V7 신규 필드
+    ingredients_raw: str = ""  # DB amz_products.ingredients 원본 텍스트
 
 
 class IngredientRanking(BaseModel):
@@ -139,6 +142,8 @@ class IngredientRanking(BaseModel):
     avg_price: float | None = None
     price_range: str = ""
     key_insight: str = ""
+    featured_count: int = 0    # 해당 성분이 source="featured"/"both"로 추출된 제품 수
+    inci_only_count: int = 0   # 해당 성분이 source="inci"로만 추출된 제품 수
 
 
 class CategorySummary(BaseModel):

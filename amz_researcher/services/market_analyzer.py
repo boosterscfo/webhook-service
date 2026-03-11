@@ -396,6 +396,65 @@ def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
     }
 
 
+def analyze_discount_by_segment(products: list[WeightedProduct]) -> dict:
+    """세그먼트(Budget/Mid/Premium/Luxury)별 할인 전략 분석."""
+    segments: dict[str, list] = defaultdict(list)
+
+    for p in products:
+        tier = _price_tier(p.price)
+        segments[tier].append(p)
+
+    overall_discounted = [
+        p for p in products
+        if p.initial_price is not None and p.price is not None
+        and p.initial_price > p.price
+    ]
+
+    def _segment_stats(group: list[WeightedProduct]) -> dict:
+        discounted = [
+            p for p in group
+            if p.initial_price is not None and p.price is not None
+            and p.initial_price > p.price
+        ]
+        non_discounted = [p for p in group if p not in discounted]
+
+        discount_pcts = [
+            round((1 - p.price / p.initial_price) * 100, 1)
+            for p in discounted
+        ]
+        bought_disc = [p.bought_past_month for p in discounted if p.bought_past_month is not None]
+        bought_non = [p.bought_past_month for p in non_discounted if p.bought_past_month is not None]
+
+        return {
+            "total": len(group),
+            "discounted": len(discounted),
+            "discount_rate": round(len(discounted) / len(group) * 100, 1) if group else 0,
+            "avg_discount_pct": round(sum(discount_pcts) / len(discount_pcts), 1) if discount_pcts else 0,
+            "max_discount_pct": max(discount_pcts) if discount_pcts else 0,
+            "avg_bought_discounted": round(sum(bought_disc) / len(bought_disc)) if bought_disc else None,
+            "avg_bought_non_discounted": round(sum(bought_non) / len(bought_non)) if bought_non else None,
+        }
+
+    tier_order = ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]
+    by_segment = {}
+    for tier_name in tier_order:
+        group = segments.get(tier_name, [])
+        if group:
+            by_segment[tier_name] = _segment_stats(group)
+
+    return {
+        "overall": {
+            "total_products": len(products),
+            "discounted_count": len(overall_discounted),
+            "discount_rate": round(len(overall_discounted) / len(products) * 100, 1) if products else 0,
+            "avg_discount_pct": round(
+                sum((1 - p.price / p.initial_price) * 100 for p in overall_discounted) / len(overall_discounted), 1
+            ) if overall_discounted else 0,
+        },
+        "by_segment": by_segment,
+    }
+
+
 def analyze_listing_tactics(products: list[WeightedProduct]) -> dict:
     """키워드 검색 리스팅 전술 분석 — Sponsored, Coupon, A+ Content, Strikethrough 등."""
     if not products:
@@ -1112,7 +1171,7 @@ def build_keyword_market_analysis(
         "rating_ingredients": analyze_rating_ingredients(weighted_products),
         "sales_volume": analyze_sales_volume(weighted_products),
         "listing_tactics": analyze_listing_tactics(weighted_products),
-        "sns_pricing": analyze_sns_pricing(weighted_products),
+        "discount_analysis": analyze_discount_by_segment(weighted_products),
         "promotions": analyze_promotions(weighted_products),
         "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),
         "discount_impact": analyze_discount_impact(weighted_products),
@@ -1144,7 +1203,7 @@ def build_market_analysis(
         "rating_ingredients": analyze_rating_ingredients(weighted_products),
         # V4 분석 (competition 제거)
         "sales_volume": analyze_sales_volume(weighted_products),
-        "sns_pricing": analyze_sns_pricing(weighted_products),
+        "discount_analysis": analyze_discount_by_segment(weighted_products),
         "promotions": analyze_promotions(weighted_products),
         # V5 Phase 1 신규
         "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),

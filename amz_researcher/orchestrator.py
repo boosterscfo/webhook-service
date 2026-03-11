@@ -804,6 +804,8 @@ async def run_analysis(
                 wp.initial_price = bp.initial_price
                 wp.manufacturer = bp.manufacturer
                 wp.variations_count = bp.variations_count
+                # V7 NEW:
+                wp.ingredients_raw = bp.ingredients or ""
 
         # Step 4: 시장 분석 리포트
         voice_keywords = _load_cached_voice_keywords(weighted_products, product_db)
@@ -1165,6 +1167,8 @@ async def _run_keyword_analysis_pipeline(
                 wp.number_of_sellers = int(_safe_num(kp.get("number_of_sellers")) or 1)
                 bpm = _safe_num(kp.get("bought_past_month"))
                 wp.bought_past_month = int(bpm) if bpm is not None else None
+                # V7 NEW:
+                wp.ingredients_raw = str(kp.get("ingredients", "") or "")
 
         # Step 3: 시장 분석 (BSR 의존 분석 제외)
         voice_keywords = _load_cached_voice_keywords(weighted_products, product_db)

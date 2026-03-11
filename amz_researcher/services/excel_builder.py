@@ -1,3 +1,4 @@
+import re
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -22,6 +23,7 @@ SUBTITLE_FONT = Font(name="Arial", size=10, color="666666")
 DATA_FONT = Font(name="Arial", size=10)
 WRAP_ALIGN = Alignment(wrap_text=True, vertical="top")
 DEFAULT_ALIGN = Alignment(vertical="center")
+ASIN_PATTERN = re.compile(r'^[A-Z0-9]{10}$')
 
 # Item 1: Consolidated TAB_COLORS
 TAB_COLORS = {
@@ -187,7 +189,7 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws = wb.create_sheet("Product Detail")
     ws.sheet_properties.tabColor = TAB_COLORS["Product Detail"]
 
-    col_count = 22
+    col_count = 23
     _write_title(
         ws,
         "Product-Level Data with Weight Breakdown",
@@ -204,12 +206,12 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
 
     headers = [
-        "ASIN", "Brand", "Title", "Price", "SNS Price",
+        "ASIN", "Brand", "Title", "Price", "Initial Price",
         "Bought/Mo", "Reviews", "Rating", "BSR",
         "Weight", "Unit Price", "Sellers", "Coupon",
         "A+", "Badge", "Discount%", "Variations",
         "Customer Says", "Voice Positive", "Voice Negative",
-        "Ingredients Found", "URL",
+        "Featured Ingredients", "Full Ingredients (INCI)", "URL",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=4, column=c, value=h)
@@ -217,14 +219,23 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
 
     for i, p in enumerate(products):
         row = 5 + i
-        ingredients_str = ", ".join(ing.name for ing in p.ingredients)
+        featured_str = ", ".join(
+            (ing.common_name or ing.name) for ing in p.ingredients
+            if ing.source in ("featured", "both")
+        )
+        # 레거시 데이터 (source="" 인 경우): 전부 표시
+        if not featured_str and p.ingredients:
+            featured_str = ", ".join((ing.common_name or ing.name) for ing in p.ingredients)
         ws.cell(row=row, column=1, value=p.asin)
         ws.cell(row=row, column=2, value=p.brand)
-        ws.cell(row=row, column=3, value=p.title)
+        title_cell = ws.cell(row=row, column=3, value=p.title)
+        if ASIN_PATTERN.match(p.asin):
+            title_cell.hyperlink = f"https://www.amazon.com/dp/{p.asin}"
+            title_cell.style = "Hyperlink"
         if p.price is not None:
             ws.cell(row=row, column=4, value=p.price).number_format = "$#,##0.00"
-        if p.sns_price is not None:
-            ws.cell(row=row, column=5, value=p.sns_price).number_format = "$#,##0.00"
+        if p.initial_price is not None:
+            ws.cell(row=row, column=5, value=p.initial_price).number_format = "$#,##0.00"
         if p.bought_past_month is not None:
             ws.cell(row=row, column=6, value=p.bought_past_month).number_format = "#,##0"
         ws.cell(row=row, column=7, value=p.reviews).number_format = "#,##0"
@@ -248,19 +259,20 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         vp_cell.alignment = WRAP_ALIGN
         vn_cell = ws.cell(row=row, column=20, value=", ".join(p.voice_negative))
         vn_cell.alignment = WRAP_ALIGN
-        ws.cell(row=row, column=21, value=ingredients_str)
+        ws.cell(row=row, column=21, value=featured_str)
+        ws.cell(row=row, column=22, value=p.ingredients_raw)
         url = f"https://www.amazon.com/dp/{p.asin}"
-        ws.cell(row=row, column=22, value=url)
+        ws.cell(row=row, column=23, value=url)
 
     end_row = 4 + len(products)
     _style_data_rows(ws, 5, end_row, col_count)
     ws.freeze_panes = "A5"
     _set_column_widths(ws, {
-        "A": 14, "B": 16, "C": 45, "D": 10, "E": 10,
+        "A": 14, "B": 16, "C": 45, "D": 10, "E": 12,
         "F": 12, "G": 10, "H": 8, "I": 10,
         "J": 10, "K": 16, "L": 8, "M": 14,
         "N": 5, "O": 18, "P": 10, "Q": 10,
-        "R": 40, "S": 30, "T": 30, "U": 45, "V": 14,
+        "R": 40, "S": 30, "T": 30, "U": 40, "V": 50, "W": 14,
     })
 
 
@@ -287,8 +299,11 @@ def _build_raw_search(wb: Workbook, keyword: str, products: list[SearchProduct])
     for i, p in enumerate(products):
         row = 4 + i
         ws.cell(row=row, column=1, value=p.position)
-        ws.cell(row=row, column=2, value=p.title)
+        title_cell = ws.cell(row=row, column=2, value=p.title)
         ws.cell(row=row, column=3, value=p.asin)
+        if ASIN_PATTERN.match(p.asin):
+            title_cell.hyperlink = f"https://www.amazon.com/dp/{p.asin}"
+            title_cell.style = "Hyperlink"
         ws.cell(row=row, column=4, value=p.price_raw)
         ws.cell(row=row, column=5, value=p.reviews_raw)
         ws.cell(row=row, column=6, value=p.rating)
@@ -672,13 +687,13 @@ def _build_badge_analysis(wb: Workbook, badge_data: dict):
 # Item 5: Sales & Pricing sheet
 def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
     sales = analysis_data.get("sales_volume") or {}
-    sns = analysis_data.get("sns_pricing") or {}
+    disc_seg = analysis_data.get("discount_analysis") or {}
     lt = analysis_data.get("listing_tactics") or {}
     discount = analysis_data.get("discount_impact") or {}
     promos = analysis_data.get("promotions") or {}
 
     # All sources empty → no sheet
-    if not any([sales, sns, lt, discount, promos]):
+    if not any([sales, disc_seg, lt, discount, promos]):
         return
 
     ws = wb.create_sheet("Sales & Pricing")
@@ -807,37 +822,49 @@ def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
                 row += 1
 
         _style_data_rows(ws, c_data_start, row - 1, 4)
-    elif sns:
+    elif disc_seg:
         row += 2
-        ws.cell(row=row, column=1, value="Subscribe & Save Pricing")
+        ws.cell(row=row, column=1, value="Discount Strategy by Segment")
         ws.cell(row=row, column=1).font = Font(bold=True, size=11)
         row += 1
 
-        ws.cell(row=row, column=1, value="Metric")
-        ws.cell(row=row, column=2, value="Value")
-        _style_header_row(ws, row, 2)
+        d_headers = ["Segment", "Total", "Discounted", "Disc. Rate", "Avg Disc%", "Max Disc%", "Avg Bought (Disc)", "Avg Bought (No Disc)"]
+        for c, h in enumerate(d_headers, 1):
+            ws.cell(row=row, column=c, value=h)
+        _style_header_row(ws, row, 8)
         row += 1
-        c_data_start = row
+        d_data_start = row
 
-        retention = sns.get("retention_signal") or {}
-
-        kv_rows = [
-            ("SNS Adoption Rate", f"{sns.get('sns_adoption_pct', '')}%", None),
-            ("Avg SNS Discount", f"{sns.get('avg_discount_pct', '')}%", None),
-            ("SNS Avg Bought/Mo", retention.get("sns_avg_bought"), "#,##0"),
-            ("No-SNS Avg Bought/Mo", retention.get("no_sns_avg_bought"), "#,##0"),
-            ("With SNS Count", sns.get("with_sns_count"), "#,##0"),
-            ("Without SNS Count", sns.get("without_sns_count"), "#,##0"),
-        ]
-        for label, value, fmt in kv_rows:
-            ws.cell(row=row, column=1, value=label)
-            if value is not None:
-                cell = ws.cell(row=row, column=2, value=value)
-                if fmt:
-                    cell.number_format = fmt
+        by_seg = disc_seg.get("by_segment", {})
+        tier_order = ["Budget (<$10)", "Mid ($10-25)", "Premium ($25-50)", "Luxury ($50+)"]
+        for tier_name in tier_order:
+            seg = by_seg.get(tier_name)
+            if seg is None:
+                continue
+            ws.cell(row=row, column=1, value=tier_name)
+            ws.cell(row=row, column=2, value=seg.get("total", 0)).number_format = "#,##0"
+            ws.cell(row=row, column=3, value=seg.get("discounted", 0)).number_format = "#,##0"
+            ws.cell(row=row, column=4, value=f"{seg.get('discount_rate', 0)}%")
+            ws.cell(row=row, column=5, value=f"{seg.get('avg_discount_pct', 0)}%")
+            ws.cell(row=row, column=6, value=f"{seg.get('max_discount_pct', 0)}%")
+            if seg.get("avg_bought_discounted") is not None:
+                ws.cell(row=row, column=7, value=seg["avg_bought_discounted"]).number_format = "#,##0"
+            if seg.get("avg_bought_non_discounted") is not None:
+                ws.cell(row=row, column=8, value=seg["avg_bought_non_discounted"]).number_format = "#,##0"
             row += 1
 
-        _style_data_rows(ws, c_data_start, row - 1, 2)
+        if row > d_data_start:
+            _style_data_rows(ws, d_data_start, row - 1, 8)
+
+        # Overall summary
+        overall = disc_seg.get("overall", {})
+        if overall:
+            row += 1
+            ws.cell(row=row, column=1, value="Overall").font = Font(bold=True)
+            ws.cell(row=row, column=2, value=overall.get("total_products", 0))
+            ws.cell(row=row, column=3, value=overall.get("discounted_count", 0))
+            ws.cell(row=row, column=4, value=f"{overall.get('discount_rate', 0)}%")
+            ws.cell(row=row, column=5, value=f"{overall.get('avg_discount_pct', 0)}%")
 
     # Section D: Discount Impact
     discount_tiers = discount.get("tiers")

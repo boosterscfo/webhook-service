@@ -75,12 +75,19 @@ def _aggregate_ingredients(
                     "total_weight": 0.0,
                     "product_count": 0,
                     "prices": [],
+                    "featured_count": 0,
+                    "inci_only_count": 0,
                 }
             data = ingredient_data[key]
             data["total_weight"] += wp.composite_weight
             data["product_count"] += 1
             if wp.price is not None:
                 data["prices"].append(wp.price)
+            # source 집계 (제품 단위 카운트)
+            if ing.source in ("featured", "both"):
+                data["featured_count"] += 1
+            elif ing.source == "inci":
+                data["inci_only_count"] += 1
 
     rankings = []
     for name, data in ingredient_data.items():
@@ -104,6 +111,8 @@ def _aggregate_ingredients(
             category=data["category"],
             avg_price=avg_price,
             price_range=price_range,
+            featured_count=data["featured_count"],
+            inci_only_count=data["inci_only_count"],
         ))
 
     rankings.sort(key=lambda r: r.weighted_score, reverse=True)

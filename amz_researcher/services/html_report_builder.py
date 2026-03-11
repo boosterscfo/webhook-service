@@ -31,6 +31,8 @@ def _ranking_to_dict(r: IngredientRanking) -> dict:
         "avg_price": r.avg_price,
         "price_range": r.price_range,
         "key_insight": r.key_insight,
+        "featured_count": r.featured_count,
+        "inci_only_count": r.inci_only_count,
     }
 
 
@@ -70,9 +72,10 @@ def _product_to_dict(p: WeightedProduct) -> dict:
         "voice_positive": ", ".join(p.voice_positive) if p.voice_positive else "",
         "voice_negative": ", ".join(p.voice_negative) if p.voice_negative else "",
         "ingredients": [
-            {"name": i.name, "common_name": i.common_name, "category": i.category}
+            {"name": i.name, "common_name": i.common_name, "category": i.category, "source": i.source}
             for i in p.ingredients
         ],
+        "ingredients_raw": p.ingredients_raw,
     }
 
 
@@ -494,6 +497,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .cell-truncate-sm { max-width: 120px; }
     .cell-truncate-lg { max-width: 220px; }
     .cell-truncate-xl { max-width: 300px; }
+    .inci-expand { cursor: pointer; max-width: 200px; display: inline-block; }
+    .inci-expand.expanded { max-width: none; white-space: normal; word-break: break-all; }
 
     /* ===== BADGES / PILLS ===== */
     .badge {
@@ -506,6 +511,7 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .badge-positive { background: rgba(34,197,94,0.15); color: #22C55E; }
     .badge-negative { background: rgba(239,68,68,0.15); color: #EF4444; }
+    .price-original { text-decoration: line-through; color: var(--color-text-muted); font-size: 0.85em; }
     .badge-budget   { background: rgba(100,116,139,0.2); color: #94A3B8; }
     .badge-mid      { background: rgba(59,130,246,0.2); color: #60A5FA; }
     .badge-premium  { background: rgba(168,85,247,0.2); color: #C084FC; }
@@ -607,6 +613,19 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     }
     .rising-metrics { display: flex; gap: 12px; font-size: 12px; color: var(--color-text-secondary); }
     .rising-ingredients { font-size: 11px; color: var(--color-text-muted); margin-top: 8px; }
+
+    /* ===== PRODUCT LINK ===== */
+    .product-link { color: var(--color-positive); text-decoration: none; }
+    .product-link:hover { text-decoration: underline; }
+
+    /* ===== DRILLDOWN ===== */
+    .drilldown-row { background: var(--color-bg-input); }
+    .drilldown-panel { padding: 12px 16px; max-height: 300px; overflow-y: auto; }
+    .drilldown-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .drilldown-table th { font-size: 11px; color: var(--color-text-muted); text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--color-border); }
+    .drilldown-table td { padding: 4px 8px; border-bottom: 1px solid var(--color-border); }
+    .drilldown-trigger { cursor: pointer; color: var(--color-positive); text-decoration: underline; font-weight: 600; }
+    .drilldown-trigger:hover { color: var(--color-info); }
 
     /* ===== STAT BOX ===== */
     .stat-box {
@@ -756,6 +775,8 @@ function truncate(v, size) {
   return `<span class="${cls}" title="${esc(s)}">${esc(s)}</span>`;
 }
 
+function isValidAsin(asin) { return /^[A-Z0-9]{10}$/.test(asin); }
+
 function formatRankedIngredients(raw) {
   if (!raw) return '';
   const items = (typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? raw.map(i => i.name || i) : []).map(s => s.trim()).filter(Boolean);
@@ -857,7 +878,7 @@ function markdownToSections(text) {
 // TABLE CONTROLLER
 // ============================================================
 class TableController {
-  constructor({ data, columns, container, pageSize = 100, searchInput = null, filterInput = null }) {
+  constructor({ data, columns, container, pageSize = 100, searchInput = null, filterInput = null, drilldown = null }) {
     this.allData = data;
     this.filtered = [...data];
     this.columns = columns;
@@ -870,6 +891,8 @@ class TableController {
     this.filterQuery = '';
     this._searchInput = searchInput;
     this._filterInput = filterInput;
+    this.drilldown = drilldown;
+    this._openDrilldownRow = null;
 
     if (searchInput) {
       let timer;
@@ -928,17 +951,40 @@ class TableController {
   }
 
   _render() {
+    // Close any open drilldown when re-rendering
+    if (this._openDrilldownRow) {
+      this._openDrilldownRow.remove();
+      this._openDrilldownRow = null;
+    }
+
     const start = (this.currentPage - 1) * this.pageSize;
     const pageData = this.filtered.slice(start, start + this.pageSize);
     const tbody = this.container.querySelector('tbody');
-    tbody.innerHTML = pageData.map(row =>
+    tbody.innerHTML = pageData.map((row, idx) =>
       '<tr>' + this.columns.map(c => {
         const raw = typeof c.value === 'function' ? c.value(row) : row[c.key];
-        const html = typeof c.render === 'function' ? c.render(raw, row) : esc(raw);
+        let html = typeof c.render === 'function' ? c.render(raw, row) : esc(raw);
         const cls = c.className ? ` class="${c.className}"` : '';
+        // Drilldown trigger
+        if (this.drilldown && c.key === this.drilldown.triggerKey && raw > 0) {
+          html = `<span class="drilldown-trigger" data-row-idx="${idx}">${html}</span>`;
+        }
         return `<td${cls}>${html}</td>`;
       }).join('') + '</tr>'
     ).join('');
+
+    // Attach drilldown click handlers
+    if (this.drilldown) {
+      tbody.querySelectorAll('.drilldown-trigger').forEach(el => {
+        el.addEventListener('click', (e) => {
+          const trigger = e.target.closest('.drilldown-trigger');
+          if (!trigger) return;
+          const rowIdx = parseInt(trigger.dataset.rowIdx);
+          const row = pageData[rowIdx];
+          this._toggleDrilldown(row, trigger.closest('tr'));
+        });
+      });
+    }
 
     const pager = this.container.querySelector('.pagination');
     if (pager) {
@@ -983,6 +1029,59 @@ class TableController {
     if (p < 1 || p > pages) return;
     this.currentPage = p;
     this._render();
+  }
+
+  _toggleDrilldown(row, parentTr) {
+    // Close existing drilldown
+    if (this._openDrilldownRow) {
+      this._openDrilldownRow.remove();
+      if (this._openDrilldownRow._sourceRow === parentTr) {
+        this._openDrilldownRow = null;
+        return; // Toggle off
+      }
+    }
+
+    const matched = this.drilldown.sourceData.filter(p => this.drilldown.matchFn(row, p));
+    const maxRows = 20;
+    const display = matched.slice(0, maxRows);
+    const hasMore = matched.length > maxRows;
+
+    const drilldownTr = document.createElement('tr');
+    drilldownTr.className = 'drilldown-row';
+    drilldownTr._sourceRow = parentTr;
+    drilldownTr.innerHTML = `
+      <td colspan="${this.columns.length}">
+        <div class="drilldown-panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-weight:600;font-size:13px">${matched.length} products</span>
+            <button class="drilldown-close" style="background:none;border:none;color:var(--color-text-muted);cursor:pointer;font-size:16px">&times;</button>
+          </div>
+          <table class="drilldown-table">
+            <thead><tr>
+              <th>ASIN</th><th>Title</th><th>Price</th><th>BSR</th><th>Rating</th><th>Bought/Mo</th>
+            </tr></thead>
+            <tbody>${display.map(p => `
+              <tr>
+                <td class="mono">${esc(p.asin)}</td>
+                <td>${isValidAsin(p.asin) ? `<a href="https://www.amazon.com/dp/${p.asin}" target="_blank" rel="noopener noreferrer" class="product-link">${truncate(p.title, 'lg')}</a>` : esc(p.title || '')}</td>
+                <td>${fmtPrice(p.price)}</td>
+                <td>${fmt(p.bsr_category)}</td>
+                <td>${fmt(p.rating, 1)}</td>
+                <td>${p.bought_past_month != null ? fmt(p.bought_past_month) : '-'}</td>
+              </tr>
+            `).join('')}</tbody>
+          </table>
+          ${hasMore ? `<div style="text-align:center;color:var(--color-text-muted);font-size:12px;margin-top:8px">... and ${matched.length - maxRows} more</div>` : ''}
+        </div>
+      </td>`;
+
+    drilldownTr.querySelector('.drilldown-close').addEventListener('click', () => {
+      drilldownTr.remove();
+      this._openDrilldownRow = null;
+    });
+
+    parentTr.after(drilldownTr);
+    this._openDrilldownRow = drilldownTr;
   }
 
   init() {
@@ -1243,11 +1342,11 @@ function renderSalesPricing(data) {
   const el = document.getElementById('sales-pricing');
   if (!el) return;
   const sv = data.analysis && data.analysis.sales_volume;
-  const sns = data.analysis && data.analysis.sns_pricing;
+  const discSeg = data.analysis && data.analysis.discount_analysis;
   const disc = data.analysis && data.analysis.discount_impact;
   const promo = data.analysis && data.analysis.promotions;
   const lt = data.analysis && data.analysis.listing_tactics;
-  if (!sv && !sns && !disc && !lt) { el.style.display = 'none'; return; }
+  if (!sv && !discSeg && !disc && !lt) { el.style.display = 'none'; return; }
 
   // Top Sellers table
   const tsEl = el.querySelector('#top-sellers-tbody');
@@ -1319,29 +1418,42 @@ function renderSalesPricing(data) {
       ).join('');
     }
   } else if (ltEl) {
-    // BSR report: show SNS stats in same container
-    if (sns && sns.sns_adoption_pct > 0) {
-      const adoptPct = sns.sns_adoption_pct;
-      const discPct = sns.avg_discount_pct;
-      const ret = sns.retention_signal || {};
-      ltEl.querySelector('.subsection-title').textContent = 'Subscribe & Save Adoption';
+    if (discSeg && discSeg.overall) {
+      const ov = discSeg.overall;
+      ltEl.querySelector('.subsection-title').textContent = 'Discount Strategy by Segment';
       const kpiGrid = ltEl.querySelector('#lt-kpi-grid');
       if (kpiGrid) {
         const items = [
-          ['SNS Adoption', Math.round(adoptPct) + '%', sns.with_sns_count + ' of ' + sns.total_products],
-          ['Avg Discount', discPct ? discPct.toFixed(1) + '%' : '-', ''],
-          ['SNS Avg Bought/Mo', ret.sns_avg_bought ? fmt(ret.sns_avg_bought) : '-', ''],
-          ['No-SNS Avg Bought/Mo', ret.no_sns_avg_bought ? fmt(ret.no_sns_avg_bought) : '-', ''],
+          ['Discount Rate', Math.round(ov.discount_rate) + '%', ov.discounted_count + ' of ' + ov.total_products],
+          ['Avg Discount', ov.avg_discount_pct ? ov.avg_discount_pct.toFixed(1) + '%' : '-', ''],
         ];
+        // Add per-segment KPI cards
+        const segs = discSeg.by_segment || {};
+        for (const [seg, sd] of Object.entries(segs)) {
+          items.push([seg, sd.discount_rate + '%', sd.discounted + ' of ' + sd.total + ' discounted']);
+        }
         kpiGrid.innerHTML = items.map(([label, value, sub]) =>
           `<div class="kpi-card" style="border-top:2px solid var(--color-sales-pricing)">
             <div class="kpi-label">${esc(label)}</div>
-            <div class="kpi-value">${esc(value)}</div>
+            <div class="kpi-value">${esc(String(value))}</div>
             ${sub ? '<div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">' + esc(sub) + '</div>' : ''}
           </div>`
         ).join('');
       }
-      ltEl.querySelector('#lt-ad-position-tbody')?.closest('div[style]')?.remove();
+      // Segment comparison table
+      const adTbody = ltEl.querySelector('#lt-ad-position-tbody');
+      if (adTbody && discSeg.by_segment) {
+        adTbody.innerHTML = Object.entries(discSeg.by_segment).map(([seg, sd]) =>
+          `<tr>
+            <td>${esc(seg)}</td>
+            <td>${sd.total}</td>
+            <td>${sd.discounted}</td>
+            <td><strong>${sd.avg_discount_pct}%</strong></td>
+            <td>${sd.avg_bought_discounted != null ? fmt(sd.avg_bought_discounted) : '-'}</td>
+            <td>${sd.avg_bought_non_discounted != null ? fmt(sd.avg_bought_non_discounted) : '-'}</td>
+          </tr>`
+        ).join('');
+      }
     } else {
       ltEl.style.display = 'none';
     }
@@ -1470,6 +1582,11 @@ function renderBrandPositioning(data) {
       ],
       container: brandTableEl,
       searchInput: brandSearchInput,
+      drilldown: {
+        triggerKey: 'product_count',
+        matchFn: (row, product) => product.brand === row.brand,
+        sourceData: data.products,
+      },
     });
     btc.init();
   }
@@ -1578,6 +1695,26 @@ function renderIngredientRanking(data) {
   if (!el) return;
   if (!data.rankings || !data.rankings.length) { el.style.display = 'none'; return; }
 
+  const featuredRankings = data.rankings.filter(r => (r.featured_count || 0) > 0);
+  const featuredCardEl = el.querySelector('#featured-ingredients-card');
+  if (featuredCardEl && featuredRankings.length > 0) {
+    const top10 = featuredRankings.slice(0, 10);
+    featuredCardEl.innerHTML = `
+      <div class="insight-callout" style="border-left:3px solid var(--color-positive)">
+        <h4>Featured Ingredients — Actively Marketed by Brands</h4>
+        <p style="color:var(--color-text-muted);font-size:12px;margin-bottom:12px">
+          These ingredients appear in product titles or feature bullets, indicating brands actively market them as selling points.
+        </p>
+        <div class="kpi-grid">${top10.map(r =>
+          `<div class="kpi-card" style="border-top:2px solid var(--color-positive)">
+            <div class="kpi-label">${esc(r.ingredient)}</div>
+            <div class="kpi-value">${r.featured_count} products</div>
+            <div style="font-size:11px;color:var(--color-text-muted)">${esc(r.category)}</div>
+          </div>`
+        ).join('')}</div>
+      </div>`;
+  }
+
   const top5 = data.rankings.slice(0, 5);
   const heroEl = el.querySelector('#ingredient-hero');
   if (heroEl) {
@@ -1615,11 +1752,29 @@ function renderIngredientRanking(data) {
         { key: 'product_count', header: '# Products' },
         { key: 'avg_weight', header: 'Avg Weight', render: (v) => fmt(v, 3) },
         { key: 'category', header: 'Category', filterKey: 'category', render: (v) => v ? `<span class="badge badge-mid">${esc(v)}</span>` : '' },
+        { key: 'featured_count', header: 'Source', sortable: true,
+          render: (v, row) => {
+            const fc = row.featured_count || 0;
+            const ic = row.inci_only_count || 0;
+            if (fc > 0 && ic > 0) return `<span class="badge badge-positive">Featured</span> <span class="badge badge-mid">+INCI</span>`;
+            if (fc > 0) return `<span class="badge badge-positive">Featured (${fc})</span>`;
+            if (ic > 0) return `<span class="badge badge-mid">INCI Only (${ic})</span>`;
+            return '<span class="badge">Unknown</span>';
+          }
+        },
         { key: 'avg_price', header: 'Avg Price', render: (v) => fmtPrice(v) },
         { key: 'key_insight', header: 'Key Insight', className: 'muted', sortable: false, render: (v) => truncate(v, 'lg') },
       ],
       container: tableEl,
       searchInput: searchInput,
+      drilldown: {
+        triggerKey: 'product_count',
+        matchFn: (row, product) => {
+          if (!product.ingredients) return false;
+          return product.ingredients.some(i => (i.common_name || i.name) === row.ingredient);
+        },
+        sourceData: data.products,
+      },
     });
 
     if (catFilter) {
@@ -1677,18 +1832,30 @@ function renderCategorySummary(data) {
     });
   }
 
-  const tbody = el.querySelector('#category-tbody');
-  if (tbody) {
-    tbody.innerHTML = sorted.map(c =>
-      `<tr>
-        <td><strong>${esc(c.category)}</strong></td>
-        <td>${fmt(c.total_weighted_score,2)}</td>
-        <td>${fmt(c.type_count)}</td>
-        <td>${fmt(c.mention_count)}</td>
-        <td>${fmtPrice(c.avg_price)}</td>
-        <td>${formatRankedIngredients(c.top_ingredients)}</td>
-      </tr>`
-    ).join('');
+  const catTableEl = el.querySelector('#category-table-wrap');
+  if (catTableEl) {
+    const ctc = new TableController({
+      data: sorted,
+      pageSize: 50,
+      columns: [
+        { key: 'category', header: 'Category', render: (v) => `<strong>${esc(v)}</strong>` },
+        { key: 'total_weighted_score', header: 'Score', render: (v) => fmt(v, 2) },
+        { key: 'type_count', header: 'Types' },
+        { key: 'mention_count', header: 'Mentions' },
+        { key: 'avg_price', header: 'Avg Price', render: (v) => fmtPrice(v) },
+        { key: 'top_ingredients', header: 'Top Ingredients', sortable: false, render: (v) => formatRankedIngredients(v) },
+      ],
+      container: catTableEl,
+      drilldown: {
+        triggerKey: 'type_count',
+        matchFn: (row, product) => {
+          if (!product.ingredients) return false;
+          return product.ingredients.some(i => i.category === row.category);
+        },
+        sourceData: data.products,
+      },
+    });
+    ctc.init();
   }
 }
 
@@ -1707,7 +1874,7 @@ function renderRisingProducts(data) {
       `<div class="rising-card">
         <div class="rising-bsr">BSR: ${fmt(p.bsr || p.bsr_category)}</div>
         <div class="rising-brand">${esc(p.brand || '')}</div>
-        <div class="rising-title">${esc(p.title || '')}</div>
+        <div class="rising-title">${isValidAsin(p.asin) ? `<a href="https://www.amazon.com/dp/${p.asin}" target="_blank" rel="noopener noreferrer" class="product-link">${esc(p.title || '')}</a>` : esc(p.title || '')}</div>
         <div class="rising-metrics">
           <span>${fmtPrice(p.price)}</span>
           ${p.rating ? `<span>&#9733;${fmt(p.rating,1)}</span>` : ''}
@@ -1736,10 +1903,26 @@ function renderProductDetail(data) {
     columns: [
       { key: 'asin', header: 'ASIN', className: 'mono' },
       { key: 'brand', header: 'Brand' },
-      { key: 'title', header: 'Title', render: (v) => truncate(v, 'lg'), sortable: false },
-      { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
+      { key: 'title', header: 'Title', sortable: false,
+        render: (v, row) => {
+          if (isValidAsin(row.asin)) {
+            const url = `https://www.amazon.com/dp/${row.asin}`;
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="product-link">${truncate(v, 'lg')}</a>`;
+          }
+          return truncate(v, 'lg');
+        }
+      },
+      { key: 'price', header: 'Price', render: (v, row) => {
+          let html = fmtPrice(v);
+          if (row.initial_price && row.initial_price > v) {
+            const disc = Math.round((1 - v / row.initial_price) * 100);
+            html += ` <span class="price-original">${fmtPrice(row.initial_price)}</span>`;
+            html += ` <span class="badge badge-negative">-${disc}%</span>`;
+          }
+          return html;
+        }
+      },
       { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*(this)?\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return truncate(clean, 'lg'); } },
-      { key: 'sns_price', header: 'SNS Price', render: (v) => fmtPrice(v) },
       { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
@@ -1752,6 +1935,26 @@ function renderProductDetail(data) {
       { key: 'variations_count', header: 'Vars', render: (v) => fmt(v) },
       { key: 'voice_positive', header: 'Voice +', sortable: false, render: (v) => { if (!v) return ''; const s = String(v); return `<span class="cell-truncate" style="color:var(--color-positive)" title="${esc(s)}">${esc(s)}</span>`; } },
       { key: 'voice_negative', header: 'Voice -', sortable: false, render: (v) => { if (!v) return ''; const s = String(v); return `<span class="cell-truncate" style="color:var(--color-negative)" title="${esc(s)}">${esc(s)}</span>`; } },
+      { key: 'ingredients', header: 'Featured', sortable: false,
+        render: (v, row) => {
+          if (!v || !v.length) return '';
+          const featured = v.filter(i => i.source === 'featured' || i.source === 'both');
+          if (!featured.length) {
+            return v.map(i => esc(i.common_name || i.name)).join(', ');
+          }
+          return featured.map(i =>
+            `<span class="badge badge-positive" style="font-size:10px;margin:1px">${esc(i.common_name || i.name)}</span>`
+          ).join(' ');
+        }
+      },
+      { key: 'ingredients_raw', header: 'Full INCI', sortable: false,
+        render: (v) => {
+          if (!v) return '';
+          const short = v.length > 80 ? v.substring(0, 80) + '...' : v;
+          const attrSafe = (s) => esc(s).replace(/"/g, '&quot;');
+          return `<span class="cell-truncate inci-expand" title="${attrSafe(v)}" onclick="this.textContent = this.dataset.full || this.textContent; this.classList.toggle('expanded')" data-full="${attrSafe(v)}">${esc(short)}</span>`;
+        }
+      },
     ],
     container: tableEl,
     searchInput: searchInput,
@@ -1776,7 +1979,15 @@ function renderRawSearch(data) {
     columns: [
       { key: 'position', header: '#' },
       { key: 'asin', header: 'ASIN', className: 'mono' },
-      { key: 'title', header: 'Title', sortable: false, render: (v) => truncate(v, 'xl') },
+      { key: 'title', header: 'Title', sortable: false,
+        render: (v, row) => {
+          if (isValidAsin(row.asin)) {
+            const url = `https://www.amazon.com/dp/${row.asin}`;
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="product-link">${truncate(v, 'xl')}</a>`;
+          }
+          return truncate(v, 'xl');
+        }
+      },
       { key: 'price_raw', header: 'Price' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
@@ -2117,6 +2328,7 @@ function buildSectionsHTML() {
         <div class="section-subtitle">Weighted Score = Bought/Mo(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%)</div>
       </div>
     </div>
+    <div id="featured-ingredients-card" style="margin-bottom:24px"></div>
     <div class="card-grid card-grid-5" id="ingredient-hero" style="margin-bottom:32px"></div>
     <div class="toolbar">
       <input class="search-input" type="text" id="ing-search" placeholder="Search ingredient...">
@@ -2155,11 +2367,21 @@ function buildSectionsHTML() {
     <div class="chart-container" style="height:300px;margin-bottom:24px">
       <canvas id="category-chart"></canvas>
     </div>
-    <div class="table-wrapper">
-      <table>
-        <thead><tr><th>Category</th><th>Score</th><th>Types</th><th>Mentions</th><th>Avg Price</th><th>Top Ingredients</th></tr></thead>
-        <tbody id="category-tbody"></tbody>
-      </table>
+    <div data-tc="1" id="category-table-wrap">
+      <div class="table-wrapper">
+        <table>
+          <thead><tr>
+            <th>Category <span class="sort-icon">&#8597;</span></th>
+            <th>Score <span class="sort-icon">&#8597;</span></th>
+            <th>Types <span class="sort-icon">&#8597;</span></th>
+            <th>Mentions <span class="sort-icon">&#8597;</span></th>
+            <th>Avg Price <span class="sort-icon">&#8597;</span></th>
+            <th>Top Ingredients</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination"></div>
     </div>
   </section>
 

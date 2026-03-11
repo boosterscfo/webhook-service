@@ -69,14 +69,20 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
    Pharmaceutical / Humectant / Other
 4. 용매(Water), 방부제(Phenoxyethanol, Ethylhexylglycerin), 향료(Fragrance/Parfum/Linalool 등) 등 기본 성분은 제외
 5. 화학적으로 식별 가능한 물질만 추출
-6. JSON만 출력:
+6. JSON만 출력
+7. source: 성분이 어디에서 확인되었는지 반드시 분류
+   - "featured": 제품의 title 또는 features에서만 언급된 성분 (INCI에는 없거나 INCI가 비어있음)
+   - "inci": ingredients_raw(전성분 리스트)에서만 확인된 성분
+   - "both": title/features와 ingredients_raw 양쪽 모두에서 확인된 성분
+   - 판단 근거: title/features에 성분명이 직접 언급되어 있으면 "featured" 또는 "both"
 
 {{
   "products": [
     {{
       "asin": "제품ASIN",
       "ingredients": [
-        {{"name": "Argania Spinosa Kernel Oil", "common_name": "Argan Oil", "category": "Natural Oil"}}
+        {{"name": "Argania Spinosa Kernel Oil", "common_name": "Argan Oil", "category": "Natural Oil", "source": "both"}},
+        {{"name": "Tocopherol", "common_name": "Vitamin E", "category": "Vitamin", "source": "inci"}}
       ]
     }}
   ]
@@ -294,16 +300,16 @@ class GeminiService:
         def _dump(key: str) -> str:
             return json.dumps(analysis_data.get(key, {}), ensure_ascii=False, indent=2)
 
-        # 키워드 검색: listing_tactics 사용, BSR 분석: sns_pricing 사용
+        # 키워드 검색: listing_tactics 사용, BSR 분석: discount_analysis 사용
         has_listing_tactics = bool(analysis_data.get("listing_tactics"))
         if has_listing_tactics:
             section9_title = "리스팅 전술 분석 (Listing Tactics: Sponsored, Coupon, A+ Content)"
             section9_json = _dump("listing_tactics")
             section6_guidance = "Sponsored 광고 비율, 쿠폰/할인 전략, A+ Content 채택률 등 리스팅 전술 분석"
         else:
-            section9_title = "Subscribe & Save 가격 분석"
-            section9_json = _dump("sns_pricing")
-            section6_guidance = "SNS(Subscribe & Save) 채택 현황과 재구매 유도 효과"
+            section9_title = "세그먼트별 할인 전략 분석 (Budget/Mid/Premium/Luxury)"
+            section9_json = _dump("discount_analysis")
+            section6_guidance = "세그먼트별 할인율 현황, 할인/비할인 제품의 판매량 비교, 가격 전략 인사이트"
 
         prompt = MARKET_REPORT_PROMPT.format(
             keyword=analysis_data["keyword"],

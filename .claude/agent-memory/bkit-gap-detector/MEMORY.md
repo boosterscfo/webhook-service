@@ -64,6 +64,12 @@
   - Scope: Category click freshness check, 2-button choice (refresh/cached), 2 new action_ids
   - 59 comparison items across 7 design sections, all matched
   - Files changed: `product_db.py` (get_category_freshness), `router.py` (interact handler + _build_category_options)
+- `report-enhancement-v7`: 100% match rate (2026-03-11 v1.1). 0 gaps.
+  - Analysis at: `docs/03-analysis/report-enhancement-v7.analysis.md`
+  - V7 scope: Title hyperlinks, Initial Price + Discount%, Featured/INCI ingredients split, drilldown, SNS->Discount segment analysis
+  - 60 comparison items: 60 MATCH, 0 PARTIAL, 0 MISSING
+  - v1.1 re-verification: `_ranking_to_dict()` fix confirmed (featured_count/inci_only_count now serialized at lines 34-35)
+  - Files changed: all 7 amz_researcher files (models, orchestrator, gemini, analyzer, excel_builder, html_report_builder, market_analyzer)
 
 ### Key Callers of MysqlConnector
 - `jobs/cash_mgmt.py` - upsert_data, get_column_max_length (CFO)
