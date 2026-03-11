@@ -387,9 +387,10 @@ class GeminiService:
             f"2. 각 키워드는 원문에서 실제 사용된 표현 기반으로, 1-3 단어로 간결하게\n"
             f"3. 긍정 키워드: 소비자가 칭찬하는 속성 (효과, 질감, 향 등)\n"
             f"4. 부정 키워드: 소비자가 불만을 표현하는 속성 (자극, 질감, 부작용 등)\n"
-            f"5. 각 키워드별로 해당 키워드가 언급된 ASIN 목록을 포함\n"
+            f"5. 각 키워드별로 해당 키워드가 언급된 ASIN 목록을 포함 (전체 ASIN 모두 포함, 누락 없이)\n"
             f"6. 긍정 10-15개, 부정 10-15개 범위로 추출\n"
-            f"7. 2개 이상의 제품에서 언급된 키워드만 포함\n\n"
+            f"7. 2개 이상의 제품에서 언급된 키워드만 포함\n"
+            f"8. ASIN은 B0XXXXXXXX 형식의 원본 그대로 출력\n\n"
             f"JSON 출력:\n"
             f'{{\n'
             f'  "positive_keywords": [\n'
@@ -410,8 +411,9 @@ class GeminiService:
                         "contents": [{"parts": [{"text": prompt}]}],
                         "generationConfig": {
                             "temperature": 0.1,
-                            "maxOutputTokens": 16384,
+                            "maxOutputTokens": 65536,
                             "responseMimeType": "application/json",
+                            "thinkingConfig": {"thinkingBudget": 0},
                         },
                     },
                 )
