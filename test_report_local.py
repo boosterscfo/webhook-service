@@ -79,6 +79,7 @@ def _product_details_to_dicts(product_details):
 
 def _adapt_for_analyzer(products):
     from amz_researcher.models import SearchProduct, ProductDetail
+    from amz_researcher.services.data_collector import resolve_brand
     search_products, details = [], []
     for i, p in enumerate(products):
         price_str = f"${p.final_price:.2f}" if p.final_price is not None else ""
@@ -112,7 +113,7 @@ def _adapt_for_analyzer(products):
             bsr_subcategory_name=sub_name,
             rating=p.rating,
             review_count=p.reviews_count,
-            brand=p.brand,
+            brand=resolve_brand(p.brand, p.title),
             manufacturer=p.manufacturer,
             product_url=p.url,
         ))

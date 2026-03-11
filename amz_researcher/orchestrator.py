@@ -19,7 +19,7 @@ from amz_researcher.services.gemini import GeminiService
 from amz_researcher.services.product_db import ProductDBService
 from amz_researcher.services.analyzer import calculate_weights
 from amz_researcher.services.bright_data import BrightDataService
-from amz_researcher.services.data_collector import DataCollector
+from amz_researcher.services.data_collector import DataCollector, resolve_brand
 from amz_researcher.services.excel_builder import build_excel, build_keyword_excel
 from amz_researcher.services.html_report_builder import build_html, build_keyword_html
 from amz_researcher.services.market_analyzer import build_market_analysis, build_keyword_market_analysis
@@ -630,7 +630,7 @@ def _adapt_for_analyzer(
             bsr_subcategory_name=sub_name,
             rating=p.rating,
             review_count=p.reviews_count,
-            brand=p.brand,
+            brand=resolve_brand(p.brand, p.title),
             manufacturer=p.manufacturer,
             product_url=p.url,
         ))
@@ -987,7 +987,7 @@ def _adapt_search_for_analyzer(
             bsr_category_name=row.get("bsr_category", ""),
             rating=float(row.get("rating") or 0),
             review_count=row.get("reviews_count") or 0,
-            brand=row.get("brand", ""),
+            brand=resolve_brand(row.get("brand", ""), row.get("title", "")),
             manufacturer=row.get("manufacturer", ""),
             product_url=row.get("product_url", ""),
         ))

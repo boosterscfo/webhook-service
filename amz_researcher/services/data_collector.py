@@ -173,7 +173,7 @@ def _normalize_coupon(raw: str) -> str:
     return ", ".join(unique)
 
 
-def _resolve_brand(raw_brand: str, title: str) -> str:
+def resolve_brand(raw_brand: str, title: str) -> str:
     """모회사/OEM 브랜드를 title 기반으로 실제 소비자 브랜드로 보정."""
     candidates = _BRAND_MAPPINGS.get(raw_brand.lower())
     if not candidates:
@@ -239,7 +239,7 @@ class DataCollector:
 
         title = html.unescape((raw.get("title") or ""))[:500]
         raw_brand = html.unescape((raw.get("brand") or ""))[:200]
-        brand = _resolve_brand(raw_brand, title)
+        brand = resolve_brand(raw_brand, title)
 
         return {
             "asin": raw["asin"],
@@ -319,7 +319,7 @@ class DataCollector:
         for i, raw in enumerate(products):
             title = html.unescape((raw.get("title") or ""))[:500]
             raw_brand = html.unescape((raw.get("brand") or ""))[:200]
-            brand = _resolve_brand(raw_brand, title)
+            brand = resolve_brand(raw_brand, title)
 
             # customer_says / customers_say fallback — dict/list → JSON 문자열
             customer_says = raw.get("customer_says") or raw.get("customers_say") or ""
