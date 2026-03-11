@@ -84,6 +84,16 @@ class GeminiResponse(BaseModel):
     products: list[ProductIngredients]
 
 
+class VoiceKeyword(BaseModel):
+    keyword: str
+    asins: list[str] = []
+
+
+class VoiceKeywordResult(BaseModel):
+    positive_keywords: list[VoiceKeyword] = []
+    negative_keywords: list[VoiceKeyword] = []
+
+
 class WeightedProduct(BaseModel):
     asin: str
     title: str

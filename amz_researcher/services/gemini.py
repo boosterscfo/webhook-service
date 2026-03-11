@@ -4,7 +4,12 @@ import logging
 
 import httpx
 
-from amz_researcher.models import GeminiResponse, ProductIngredients
+from amz_researcher.models import (
+    GeminiResponse,
+    ProductIngredients,
+    VoiceKeywordResult,
+    WeightedProduct,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -349,6 +354,96 @@ class GeminiService:
                 await asyncio.sleep(2)
         logger.error("Market report generation failed after %d attempts", max_retries)
         return ""
+
+    async def extract_voice_keywords(
+        self,
+        category_name: str,
+        products: list[WeightedProduct],
+    ) -> VoiceKeywordResult | None:
+        """customer_says에서 카테고리 맞춤 긍정/부정 키워드 동적 추출.
+
+        Returns None on failure (caller falls back to hardcoded keywords).
+        """
+        with_cs = [p for p in products if p.customer_says]
+        if len(with_cs) < 10:
+            logger.info(
+                "Voice keywords skipped: only %d products with customer_says",
+                len(with_cs),
+            )
+            return None
+
+        lines = [
+            f"[{p.asin}] {p.customer_says}" for p in with_cs
+        ]
+        customer_says_block = "\n".join(lines)
+
+        prompt = (
+            f'아래는 아마존 "{category_name}" 카테고리 제품들의 '
+            f"소비자 리뷰 요약(customer_says)이다.\n\n"
+            f"{customer_says_block}\n\n"
+            f"위 리뷰 요약에서 이 카테고리에서 반복적으로 언급되는 핵심 키워드를 추출하라.\n\n"
+            f"규칙:\n"
+            f'1. 이 카테고리에 특화된 키워드만 추출 (generic한 "good", "bad", "nice", "love" 등 제외)\n'
+            f"2. 각 키워드는 원문에서 실제 사용된 표현 기반으로, 1-3 단어로 간결하게\n"
+            f"3. 긍정 키워드: 소비자가 칭찬하는 속성 (효과, 질감, 향 등)\n"
+            f"4. 부정 키워드: 소비자가 불만을 표현하는 속성 (자극, 질감, 부작용 등)\n"
+            f"5. 각 키워드별로 해당 키워드가 언급된 ASIN 목록을 포함\n"
+            f"6. 긍정 10-15개, 부정 10-15개 범위로 추출\n"
+            f"7. 2개 이상의 제품에서 언급된 키워드만 포함\n\n"
+            f"JSON 출력:\n"
+            f'{{\n'
+            f'  "positive_keywords": [\n'
+            f'    {{"keyword": "moisturizing", "asins": ["B0XXXX", "B0YYYY"]}}\n'
+            f"  ],\n"
+            f'  "negative_keywords": [\n'
+            f'    {{"keyword": "sticky", "asins": ["B0ZZZZ"]}}\n'
+            f"  ]\n"
+            f"}}"
+        )
+
+        for attempt in range(2):
+            try:
+                resp = await self.client.post(
+                    self.url,
+                    params={"key": self.api_key},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.1,
+                            "maxOutputTokens": 16384,
+                            "responseMimeType": "application/json",
+                        },
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                if not text:
+                    logger.warning("Voice keywords empty response (attempt %d)", attempt + 1)
+                    continue
+
+                result = VoiceKeywordResult.model_validate_json(text)
+                logger.info(
+                    "Voice keywords extracted: %d positive, %d negative for '%s'",
+                    len(result.positive_keywords),
+                    len(result.negative_keywords),
+                    category_name,
+                )
+                return result
+
+            except Exception:
+                if attempt == 0:
+                    logger.warning("Voice keywords extraction failed, retrying")
+                    continue
+                logger.warning("Voice keywords extraction failed after retries for '%s'", category_name)
+                return None
+
+        return None
 
     async def generate_category_keywords(self, category_name: str) -> str:
         """카테고리명으로 검색용 키워드(한/영 별칭) 생성. 쉼표 구분 문자열 반환."""

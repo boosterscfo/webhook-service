@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 
 from amz_researcher.models import (
     ProductDetail,
+    VoiceKeywordResult,
     WeightedProduct,
 )
 from amz_researcher.services.analyzer import _get_display_name
@@ -553,8 +554,10 @@ def analyze_sales_volume(products: list[WeightedProduct]) -> dict:
 # ── V5 신규 분석 ──────────────────────────────────────────
 
 
-def analyze_customer_voice(products: list[WeightedProduct]) -> dict:
-    """customer_says 키워드 빈도/감성 분석. Gemini 미사용, 키워드 사전 기반."""
+def _hardcoded_keyword_match(
+    products: list[WeightedProduct],
+) -> tuple[dict[str, list[WeightedProduct]], dict[str, list[WeightedProduct]]]:
+    """기존 하드코딩 키워드 매칭. Gemini fallback용."""
     POSITIVE_KEYWORDS = [
         "effective", "moisturizing", "gentle", "lightweight", "absorbs quickly",
         "hydrating", "brightening", "smooth", "refreshing", "no irritation",
@@ -565,22 +568,51 @@ def analyze_customer_voice(products: list[WeightedProduct]) -> dict:
         "drying", "burning", "broke out", "allergic", "thin",
         "oily", "too thick", "stinging", "rash", "waste",
     ]
+    pos_counts: dict[str, list[WeightedProduct]] = {}
+    neg_counts: dict[str, list[WeightedProduct]] = {}
+    for p in products:
+        text = p.customer_says.lower()
+        for kw in POSITIVE_KEYWORDS:
+            if kw in text:
+                pos_counts.setdefault(kw, []).append(p)
+        for kw in NEGATIVE_KEYWORDS:
+            if kw in text:
+                neg_counts.setdefault(kw, []).append(p)
+    return pos_counts, neg_counts
 
+
+def analyze_customer_voice(
+    products: list[WeightedProduct],
+    voice_keywords: VoiceKeywordResult | None = None,
+) -> dict:
+    """customer_says 키워드 빈도/감성 분석.
+
+    voice_keywords가 있으면 Gemini 동적 키워드 사용, 없으면 하드코딩 fallback.
+    """
     with_cs = [p for p in products if p.customer_says]
     if not with_cs:
         return {}
 
-    pos_counts: dict[str, list[WeightedProduct]] = {kw: [] for kw in POSITIVE_KEYWORDS}
-    neg_counts: dict[str, list[WeightedProduct]] = {kw: [] for kw in NEGATIVE_KEYWORDS}
+    product_map = {p.asin: p for p in with_cs}
 
-    for p in with_cs:
-        text = p.customer_says.lower()
-        for kw in POSITIVE_KEYWORDS:
-            if kw in text:
-                pos_counts[kw].append(p)
-        for kw in NEGATIVE_KEYWORDS:
-            if kw in text:
-                neg_counts[kw].append(p)
+    if voice_keywords:
+        # 동적 키워드: Gemini가 반환한 ASIN 매핑 사용
+        pos_counts: dict[str, list[WeightedProduct]] = {}
+        for vk in voice_keywords.positive_keywords:
+            matched = [product_map[a] for a in vk.asins if a in product_map]
+            if matched:
+                pos_counts[vk.keyword] = matched
+
+        neg_counts: dict[str, list[WeightedProduct]] = {}
+        for vk in voice_keywords.negative_keywords:
+            matched = [product_map[a] for a in vk.asins if a in product_map]
+            if matched:
+                neg_counts[vk.keyword] = matched
+    else:
+        # Fallback: 기존 하드코딩 키워드
+        pos_counts, neg_counts = _hardcoded_keyword_match(with_cs)
+
+    all_keywords = list(pos_counts.keys()) + list(neg_counts.keys())
 
     def _kw_stats(products_with_kw: list[WeightedProduct]) -> dict:
         if not products_with_kw:
@@ -602,10 +634,14 @@ def analyze_customer_voice(products: list[WeightedProduct]) -> dict:
     top_half = sorted_by_bsr[:mid] if mid > 0 else []
     bottom_half = sorted_by_bsr[mid:] if mid > 0 else []
 
-    def _group_keyword_freq(group: list[WeightedProduct], keywords: list[str]) -> dict[str, int]:
+    def _group_keyword_freq(
+        group: list[WeightedProduct],
+        kw_map: dict[str, list[WeightedProduct]],
+    ) -> dict[str, int]:
+        group_asins = {p.asin for p in group}
         freq: dict[str, int] = {}
-        for kw in keywords:
-            count = sum(1 for p in group if kw in p.customer_says.lower())
+        for kw, prods in kw_map.items():
+            count = sum(1 for p in prods if p.asin in group_asins)
             if count > 0:
                 freq[kw] = count
         return freq
@@ -618,10 +654,10 @@ def analyze_customer_voice(products: list[WeightedProduct]) -> dict:
         "negative_keywords": {
             kw: _kw_stats(prods) for kw, prods in neg_counts.items() if prods
         },
-        "bsr_top_half_positive": _group_keyword_freq(top_half, POSITIVE_KEYWORDS),
-        "bsr_top_half_negative": _group_keyword_freq(top_half, NEGATIVE_KEYWORDS),
-        "bsr_bottom_half_positive": _group_keyword_freq(bottom_half, POSITIVE_KEYWORDS),
-        "bsr_bottom_half_negative": _group_keyword_freq(bottom_half, NEGATIVE_KEYWORDS),
+        "bsr_top_half_positive": _group_keyword_freq(top_half, pos_counts),
+        "bsr_top_half_negative": _group_keyword_freq(top_half, neg_counts),
+        "bsr_bottom_half_positive": _group_keyword_freq(bottom_half, pos_counts),
+        "bsr_bottom_half_negative": _group_keyword_freq(bottom_half, neg_counts),
     }
 
 
@@ -976,6 +1012,7 @@ def build_keyword_market_analysis(
     keyword: str,
     weighted_products: list[WeightedProduct],
     details: list[ProductDetail],
+    voice_keywords: VoiceKeywordResult | None = None,
 ) -> dict:
     """키워드 검색 전용 시장 분석. BSR 의존 분석 2개 제외.
 
@@ -996,7 +1033,7 @@ def build_keyword_market_analysis(
         "listing_tactics": analyze_listing_tactics(weighted_products),
         "sns_pricing": analyze_sns_pricing(weighted_products),
         "promotions": analyze_promotions(weighted_products),
-        "customer_voice": analyze_customer_voice(weighted_products),
+        "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),
         "discount_impact": analyze_discount_impact(weighted_products),
         "title_keywords": analyze_title_keywords(weighted_products),
         "unit_economics": analyze_unit_economics(weighted_products),
@@ -1009,6 +1046,7 @@ def build_market_analysis(
     keyword: str,
     weighted_products: list[WeightedProduct],
     details: list[ProductDetail],
+    voice_keywords: VoiceKeywordResult | None = None,
 ) -> dict:
     """전체 시장 분석 데이터 생성."""
     return {
@@ -1027,7 +1065,7 @@ def build_market_analysis(
         "sns_pricing": analyze_sns_pricing(weighted_products),
         "promotions": analyze_promotions(weighted_products),
         # V5 Phase 1 신규
-        "customer_voice": analyze_customer_voice(weighted_products),
+        "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),
         "badges": analyze_badges(weighted_products),
         "discount_impact": analyze_discount_impact(weighted_products),
         "title_keywords": analyze_title_keywords(weighted_products),

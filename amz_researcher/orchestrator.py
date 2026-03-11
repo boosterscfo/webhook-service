@@ -397,7 +397,8 @@ async def run_research(
         )
 
         # Step 5: AI 시장 분석 리포트 (캐시 우선)
-        analysis_data = build_market_analysis(keyword, weighted_products, all_details)
+        voice_keywords = await gemini.extract_voice_keywords(keyword, weighted_products)
+        analysis_data = build_market_analysis(keyword, weighted_products, all_details, voice_keywords=voice_keywords)
 
         market_report = ""
         if not refresh:
@@ -724,7 +725,8 @@ async def run_analysis(
                 wp.variations_count = bp.variations_count
 
         # Step 4: 시장 분석 리포트
-        analysis_data = build_market_analysis(category_name, weighted_products, all_details)
+        voice_keywords = await gemini.extract_voice_keywords(category_name, weighted_products)
+        analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords)
 
         market_report = cache.get_market_report_cache(category_name, len(weighted_products)) or ""
         if market_report:
@@ -1076,7 +1078,8 @@ async def _run_keyword_analysis_pipeline(
                 wp.bought_past_month = int(bpm) if bpm is not None else None
 
         # Step 3: 시장 분석 (BSR 의존 분석 제외)
-        analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details)
+        voice_keywords = await gemini.extract_voice_keywords(normalized_keyword, weighted_products)
+        analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details, voice_keywords=voice_keywords)
 
         market_report = cache.get_market_report_cache(normalized_keyword, len(weighted_products)) or ""
         if market_report:
