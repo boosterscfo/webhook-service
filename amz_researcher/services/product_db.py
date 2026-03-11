@@ -98,6 +98,33 @@ class ProductDBService:
             return []
         return df.to_dict("records") if not df.empty else []
 
+    def get_category_freshness(self, node_id: str) -> dict | None:
+        """카테고리 데이터 freshness 조회.
+
+        Returns:
+            {"product_count": int, "collected_at": datetime} or None (미수집)
+        """
+        query = """
+            SELECT COUNT(*) as product_count,
+                   MAX(p.collected_at) as collected_at
+            FROM amz_products p
+            JOIN amz_product_categories pc ON p.asin = pc.asin
+            WHERE pc.category_node_id = %s
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (node_id,))
+        except Exception:
+            logger.exception("Failed to get freshness for category %s", node_id)
+            return None
+        if df.empty:
+            return None
+        row = df.iloc[0]
+        count = int(row["product_count"])
+        if count == 0 or row["collected_at"] is None:
+            return None
+        return {"product_count": count, "collected_at": row["collected_at"]}
+
     # ── 키워드 유사 검색 ──────────────────────────────
 
     def find_similar_keywords(self, keyword: str, limit: int = 5) -> list[dict]:

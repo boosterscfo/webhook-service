@@ -499,16 +499,118 @@ async def slack_amz_interact(
             "text": f"🔍 키워드 *\"{kw}\"* 새로 수집 시작... 완료 시 채널에 결과가 공유됩니다.",
         }
 
-    # 카테고리 BSR 분석
+    # 카테고리: 새로 수집 후 분석
+    if action_id == "amz_cat_refresh":
+        node_id = value["node_id"]
+        name = value["name"]
+        response_url = value["response_url"]
+        channel_id = value["channel_id"]
+        background_tasks.add_task(
+            _trigger_category_collection, node_id, name,
+            response_url, channel_id, user_id,
+        )
+        return {
+            "response_type": "ephemeral",
+            "text": f"📡 *{name}* 새로 수집 시작... 완료 시 자동으로 분석 결과를 보내드립니다.",
+        }
+
+    # 카테고리: 캐시 사용 분석
+    if action_id == "amz_cat_cached":
+        node_id = value["node_id"]
+        name = value["name"]
+        response_url = value["response_url"]
+        channel_id = value["channel_id"]
+        background_tasks.add_task(
+            run_analysis, node_id, name, response_url, channel_id, user_id,
+        )
+        return {
+            "response_type": "ephemeral",
+            "text": f"📊 *{name}* 기존 데이터로 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
+        }
+
+    # 카테고리 BSR 분석 — freshness 확인 후 선택지 제시
     node_id = value.get("node_id")
     name = value.get("name")
     response_url = value["response_url"]
     channel_id = value["channel_id"]
 
-    background_tasks.add_task(run_analysis, node_id, name, response_url, channel_id, user_id)
+    product_db = ProductDBService("CFO")
+    freshness = product_db.get_category_freshness(node_id)
+
+    if freshness is None:
+        # 미수집 카테고리 → 바로 수집 트리거
+        background_tasks.add_task(
+            _trigger_category_collection, node_id, name,
+            response_url, channel_id, user_id,
+        )
+        return {
+            "response_type": "ephemeral",
+            "text": f"📡 *{name}* 데이터가 없습니다. 수집을 시작합니다...",
+        }
+
+    # 캐시 있음 → 선택지 제시
+    return _build_category_options(
+        node_id, name, freshness, response_url, channel_id,
+    )
+
+
+def _build_category_options(
+    node_id: str,
+    name: str,
+    freshness: dict,
+    response_url: str,
+    channel_id: str,
+) -> dict:
+    """카테고리 freshness 기반 '새로 수집' / '캐시 사용' 선택지 Block Kit 응답."""
+    from datetime import datetime
+
+    collected_at = freshness["collected_at"]
+    product_count = freshness["product_count"]
+    days_ago = (datetime.now() - collected_at).days
+    age_text = "오늘" if days_ago == 0 else f"{days_ago}일 전"
+
+    payload = json.dumps({
+        "node_id": node_id,
+        "name": name,
+        "response_url": response_url,
+        "channel_id": channel_id,
+    })
+
     return {
         "response_type": "ephemeral",
-        "text": f"📊 *{name}* BSR Top 100 분석 시작... 완료 시 채널에 결과가 공유됩니다.",
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f":mag: *{name}*\n"
+                        f"현재 데이터: {product_count}개 제품, {age_text} 수집"
+                    ),
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "새로 수집 후 분석"},
+                        "action_id": "amz_cat_refresh",
+                        "value": payload,
+                        "style": "primary",
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"캐시 사용 ({age_text})",
+                        },
+                        "action_id": "amz_cat_cached",
+                        "value": payload,
+                    },
+                ],
+            },
+        ],
     }
 
 
