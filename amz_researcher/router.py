@@ -102,9 +102,7 @@ def _build_help_response() -> dict:
                     "type": "mrkdwn",
                     "text": (
                         "*📋 관리 명령어*\n\n"
-                        "`/amz list` — 활성 카테고리 목록\n"
-                        "`/amz refresh` — 전체 카테고리 일괄 수집\n"
-                        "`/amz refresh {키워드}` — 특정 카테고리만 수집"
+                        "`/amz list` — 활성 카테고리 목록"
                     ),
                 },
             },
@@ -207,7 +205,6 @@ async def slack_amz(
                 "`/amz report {카테고리}` — 리포트만 재생성 (캐시 사용)\n"
                 "`/amz report-search {키워드}` — 키워드 리포트만 재생성\n"
                 "`/amz list` — 카테고리 목록\n"
-                "`/amz refresh` — 데이터 수집\n"
                 "`/amz help` — 상세 가이드"
             ),
         }
@@ -229,31 +226,6 @@ async def slack_amz(
             "response_type": "ephemeral",
             "text": f"📋 등록된 카테고리 ({len(categories)}개):\n" + "\n".join(lines),
         }
-
-    # /amz refresh [keyword]
-    if subcommand == "refresh":
-        keyword = " ".join(parts[1:]).strip() if len(parts) > 1 else ""
-        if keyword:
-            # 특정 카테고리만 수집
-            product_db = ProductDBService("CFO")
-            matches = product_db.search_categories(keyword)
-            if not matches:
-                return {"response_type": "ephemeral", "text": f"🔍 \"{keyword}\" 관련 카테고리를 찾을 수 없습니다."}
-            cat = matches[0]
-            url = product_db.get_category_url(cat["node_id"])
-            if not url:
-                return {"response_type": "ephemeral", "text": "❌ 카테고리 URL을 찾을 수 없습니다."}
-            background_tasks.add_task(
-                _run_manual_collection, [url],
-                response_url=response_url, channel_id=channel_id,
-            )
-            return {"response_type": "ephemeral", "text": f"🔄 *{cat['name']}* 수집 트리거됨. 완료까지 수 분 소요."}
-        # 전체 수집
-        background_tasks.add_task(
-            _run_manual_collection,
-            response_url=response_url, channel_id=channel_id,
-        )
-        return {"response_type": "ephemeral", "text": "🔄 전체 카테고리 수집 트리거됨. 완료까지 수 분 소요."}
 
     # /amz report {category} — 캐시 기반 리포트만 재생성 (Gemini 호출 없음)
     if subcommand == "report":
@@ -647,54 +619,6 @@ async def _generate_category_keywords(
             pass
 
 
-# snapshot_id → Slack 콜백 정보 매핑 (수집 완료 알림용)
-_collection_callbacks: dict[str, dict] = {}
-
-
-async def _run_manual_collection(
-    urls: list[str] | None = None,
-    response_url: str = "",
-    channel_id: str = "",
-):
-    """수동 수집 트리거 — trigger만 보내고 종료 (webhook으로 수신).
-
-    Args:
-        urls: 수집할 카테고리 URL 목록. None이면 전체 활성 카테고리.
-        response_url: Slack 응답 URL (완료 알림용).
-        channel_id: Slack 채널 ID (완료 알림용).
-    """
-    bright_data = BrightDataService(
-        api_token=settings.BRIGHT_DATA_API_TOKEN,
-        dataset_id=settings.BRIGHT_DATA_DATASET_ID,
-    )
-    product_db = ProductDBService("CFO")
-    try:
-        if urls is None:
-            urls = product_db.get_all_active_category_urls()
-        if not urls:
-            logger.warning("No active categories to collect")
-            return
-
-        notify_url = f"{settings.WEBHOOK_BASE_URL}/webhook/brightdata"
-        snapshot_id = await bright_data.trigger_collection(
-            urls, notify_url=notify_url,
-        )
-        if response_url and snapshot_id:
-            _collection_callbacks[snapshot_id] = {
-                "response_url": response_url,
-                "channel_id": channel_id,
-                "category_count": len(urls),
-            }
-        logger.info(
-            "Collection triggered (async): snapshot_id=%s, %d categories, notify=%s",
-            snapshot_id, len(urls), notify_url,
-        )
-    except Exception:
-        logger.exception("Manual collection trigger failed")
-    finally:
-        await bright_data.close()
-
-
 # ── Bright Data 웹훅 콜백 ────────────────────────────────
 
 @router.post("/webhook/brightdata")
@@ -763,18 +687,6 @@ async def _ingest_snapshot(snapshot_id: str):
 
     try:
         count = await asyncio.wait_for(_work(), timeout=INGESTION_TIMEOUT)
-        # 완료 알림 (refresh 요청자에게 ephemeral)
-        cb = _collection_callbacks.pop(snapshot_id, None)
-        if cb and cb.get("response_url"):
-            slack = SlackSender(settings.AMZ_BOT_TOKEN)
-            try:
-                await slack.send_message(
-                    cb["response_url"],
-                    f"✅ BSR 데이터 수집 완료 — {count}개 제품 적재됨",
-                    ephemeral=True, channel_id=cb.get("channel_id", ""),
-                )
-            finally:
-                await slack.close()
     except asyncio.TimeoutError:
         logger.error(
             "Webhook ingestion timeout (cancelled): snapshot=%s, limit=%ds",
