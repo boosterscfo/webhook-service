@@ -582,6 +582,29 @@ async def _send_category_options(
         "channel_id": channel_id,
     })
 
+    is_stale = days_ago >= 30
+    refresh_btn = {
+        "type": "button",
+        "text": {"type": "plain_text", "text": "새로 수집 후 분석"},
+        "action_id": "amz_cat_refresh",
+        "value": payload,
+    }
+    cached_btn = {
+        "type": "button",
+        "text": {
+            "type": "plain_text",
+            "text": f"캐시 사용 ({age_text})",
+        },
+        "action_id": "amz_cat_cached",
+        "value": payload,
+    }
+    if is_stale:
+        refresh_btn["style"] = "primary"
+        buttons = [refresh_btn, cached_btn]
+    else:
+        cached_btn["style"] = "primary"
+        buttons = [cached_btn, refresh_btn]
+
     blocks = [
         {
             "type": "section",
@@ -595,24 +618,7 @@ async def _send_category_options(
         },
         {
             "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "새로 수집 후 분석"},
-                    "action_id": "amz_cat_refresh",
-                    "value": payload,
-                    "style": "primary",
-                },
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"캐시 사용 ({age_text})",
-                    },
-                    "action_id": "amz_cat_cached",
-                    "value": payload,
-                },
-            ],
+            "elements": buttons,
         },
     ]
 
