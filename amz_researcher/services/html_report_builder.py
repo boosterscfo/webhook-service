@@ -416,6 +416,12 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .card-grid-4 { grid-template-columns: repeat(4, 1fr); }
     .card-grid-5 { grid-template-columns: repeat(5, 1fr); }
 
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
     .kpi-card {
       background: var(--color-bg-card);
       border: 1px solid var(--color-border);
@@ -503,12 +509,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .pd-expand-icon.open { transform: rotate(90deg); }
     .pd-detail-row { background: var(--color-bg-input); }
     .pd-detail-row td { padding: 0 !important; }
-    .pd-detail-panel { padding: 12px 20px 14px 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 12px; }
-    .pd-detail-panel .pd-label { color: var(--color-text-muted); font-size: 11px; margin-bottom: 2px; }
-    .pd-detail-panel .pd-val { margin-bottom: 6px; }
+    .pd-detail-panel { padding: 16px 20px 16px 36px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 28px; font-size: 12px; }
+    .pd-detail-panel .pd-label { color: var(--color-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+    .pd-detail-panel .pd-val { margin-bottom: 8px; line-height: 1.5; }
+    .pd-detail-panel .pd-col-full { grid-column: 1 / -1; }
     .pd-tag-positive { display: inline-block; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; margin: 1px; background: rgba(52, 211, 153, 0.15); color: var(--color-positive); }
     .pd-tag-negative { display: inline-block; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; margin: 1px; background: rgba(248, 113, 113, 0.15); color: var(--color-negative); }
-    .pd-inci-line { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; color: var(--color-text-secondary); }
+    .pd-inci-line { max-width: 100%; color: var(--color-text-muted); font-size: 11px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; transition: all 0.2s; }
+    .pd-inci-line.expanded { -webkit-line-clamp: unset; display: block; }
     .pd-meta-grid { display: flex; gap: 12px; flex-wrap: wrap; }
     .pd-meta-item { display: flex; gap: 4px; align-items: center; }
 
@@ -706,12 +714,14 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       .main { margin-left: 0; }
       .card-grid-5 { grid-template-columns: repeat(3, 1fr); }
       .card-grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
       .two-col, .two-col-left-wide { grid-template-columns: 1fr; }
     }
     @media (max-width: 767px) {
       .section { padding: 24px 16px 40px; }
       .card-grid-5 { grid-template-columns: repeat(2, 1fr); }
       .card-grid-3 { grid-template-columns: 1fr 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
 </head>
@@ -1674,70 +1684,65 @@ function renderIngredientRanking(data) {
   if (!el) return;
   if (!data.rankings || !data.rankings.length) { el.style.display = 'none'; return; }
 
-  const featuredRankings = data.rankings.filter(r => (r.featured_count || 0) > 0);
-  const featuredCardEl = el.querySelector('#featured-ingredients-card');
-  if (featuredCardEl && featuredRankings.length > 0) {
-    const top10 = featuredRankings.slice(0, 10);
-    featuredCardEl.innerHTML = `
-      <div class="insight-callout" style="border-left:3px solid var(--color-positive)">
-        <h4>Featured Ingredients — Actively Marketed by Brands</h4>
-        <p style="color:var(--color-text-muted);font-size:12px;margin-bottom:12px">
-          These ingredients appear in product titles or feature bullets, indicating brands actively market them as selling points.
-        </p>
-        <div class="kpi-grid">${top10.map(r =>
-          `<div class="kpi-card" style="border-top:2px solid var(--color-positive)">
-            <div class="kpi-label">${esc(r.ingredient)}</div>
-            <div class="kpi-value">${r.featured_count} products</div>
-            <div style="font-size:11px;color:var(--color-text-muted)">${esc(r.category)}</div>
-          </div>`
-        ).join('')}</div>
-      </div>`;
-  }
+  // Featured 성분 = 타이틀/불릿에 마케팅됨, featured_count 순 정렬
+  const featuredRankings = [...data.rankings].filter(r => (r.featured_count || 0) > 0)
+    .sort((a, b) => b.featured_count - a.featured_count);
 
-  const top5 = data.rankings.slice(0, 5);
+  // insight-callout 은 제거, rank-card 스타일로 Hero 영역에 Top 10 표시
+  const featuredCardEl = el.querySelector('#featured-ingredients-card');
+  if (featuredCardEl) featuredCardEl.style.display = 'none';
+
   const heroEl = el.querySelector('#ingredient-hero');
-  if (heroEl) {
-    heroEl.innerHTML = top5.map((r, i) => {
+  if (heroEl && featuredRankings.length > 0) {
+    const top10 = featuredRankings.slice(0, 10);
+    heroEl.innerHTML = `<div style="grid-column:1/-1;margin-bottom:-4px">
+      <p style="margin:0;font-size:12px;color:var(--color-text-muted)">Ingredients actively promoted in product titles &amp; bullet points, ranked by frequency</p>
+    </div>` + top10.map((r, i) => {
       const rankClass = i < 3 ? ` rank-${i+1}` : '';
       return `<div class="rank-card${rankClass}">
-        <div class="rank-number">#${r.rank || i+1}</div>
+        <div class="rank-number">#${i+1}</div>
         <div class="rank-name">${esc(r.ingredient)}</div>
-        <div class="rank-score">${fmt(r.weighted_score,1)}</div>
-        <div class="rank-score-label">weighted score</div>
-        <div class="rank-count">${fmt(r.product_count)} products</div>
+        <div class="rank-score">${r.featured_count}</div>
+        <div class="rank-score-label">products featured</div>
+        <div class="rank-count">${fmt(r.product_count)} products total</div>
         ${r.category ? `<div style="margin-top:8px"><span class="badge badge-mid">${esc(r.category)}</span></div>` : ''}
-        ${r.key_insight ? `<div style="font-size:11px;color:var(--color-text-muted);margin-top:8px">${esc(r.key_insight)}</div>` : ''}
       </div>`;
     }).join('');
   }
 
-  const categories = [...new Set(data.rankings.map(r => r.category).filter(Boolean))];
+  // 각 성분에 featured Y/N 플래그 추가
+  const enriched = data.rankings.map(r => ({
+    ...r,
+    is_featured: (r.featured_count || 0) > 0 ? 'Y' : 'N',
+  }));
+
+  const categories = [...new Set(enriched.map(r => r.category).filter(Boolean))];
   const catFilter = el.querySelector('#cat-filter');
   if (catFilter) {
     catFilter.innerHTML = '<option value="">All categories</option>' +
       categories.map(c => `<option>${esc(c)}</option>`).join('');
   }
 
+  const featFilter = el.querySelector('#feat-filter');
+
   const tableEl = el.querySelector('#ingredient-table-wrap');
   if (tableEl) {
     const searchInput = el.querySelector('#ing-search');
     const tc = new TableController({
-      data: data.rankings,
+      data: enriched,
       pageSize: 20,
       columns: [
         { key: 'rank', header: 'Rank', sortable: true },
         { key: 'ingredient', header: 'Ingredient', render: (v) => `<strong>${esc(v)}</strong>` },
+        { key: 'is_featured', header: 'Featured', sortable: true,
+          render: (v) => v === 'Y'
+            ? '<span class="badge badge-positive">Y</span>'
+            : '<span class="badge">N</span>'
+        },
         { key: 'weighted_score', header: 'Weighted Score', render: (v) => fmt(v, 3) },
         { key: 'product_count', header: '# Products' },
         { key: 'avg_weight', header: 'Avg Weight', render: (v) => fmt(v, 3) },
         { key: 'category', header: 'Category', filterKey: 'category', render: (v) => v ? `<span class="badge badge-mid">${esc(v)}</span>` : '' },
-        { key: 'featured_count', header: 'Featured In', sortable: true,
-          render: (v) => {
-            const fc = v || 0;
-            if (fc > 0) return `<span class="badge badge-positive">${fc} products</span>`;
-            return '<span class="badge">-</span>';
-          }
-        },
         { key: 'avg_price', header: 'Avg Price', render: (v) => fmtPrice(v) },
         { key: 'key_insight', header: 'Key Insight', className: 'muted', sortable: false, render: (v) => truncate(v, 'lg') },
       ],
@@ -1753,28 +1758,34 @@ function renderIngredientRanking(data) {
       },
     });
 
-    if (catFilter) {
-      catFilter.addEventListener('change', () => {
-        tc.filterQuery = catFilter.value.toLowerCase();
-        const savedFilter = tc._filterInput;
-        tc._filterInput = null;
-        tc.columns[5].filterKey = 'category';
-        tc.filtered = tc.allData.filter(row => {
-          const matchSearch = !tc.searchQuery || tc.columns.some(c => {
-            const val = row[c.key];
-            return String(val || '').toLowerCase().includes(tc.searchQuery);
-          });
-          const matchFilter = !tc.filterQuery || String(row.category || '').toLowerCase().includes(tc.filterQuery);
-          return matchSearch && matchFilter;
+    // 커스텀 필터 함수: category + featured 동시 적용
+    function applyFilters() {
+      const catVal = catFilter ? catFilter.value.toLowerCase() : '';
+      const featVal = featFilter ? featFilter.value : '';
+      tc.filtered = tc.allData.filter(row => {
+        const matchSearch = !tc.searchQuery || tc.columns.some(c => {
+          const val = row[c.key];
+          return String(val || '').toLowerCase().includes(tc.searchQuery);
         });
-        if (tc.sortCol >= 0) tc._sort();
-        tc.currentPage = 1;
-        tc._render();
-        tc._filterInput = savedFilter;
+        const matchCat = !catVal || String(row.category || '').toLowerCase().includes(catVal);
+        const matchFeat = !featVal || row.is_featured === featVal;
+        return matchSearch && matchCat && matchFeat;
       });
+      if (tc.sortCol >= 0) tc._sort();
+      tc.currentPage = 1;
+      tc._render();
     }
 
+    if (catFilter) catFilter.addEventListener('change', applyFilters);
+    if (featFilter) featFilter.addEventListener('change', applyFilters);
+
     tc.init();
+
+    // 기본값: Featured Y 필터 적용
+    if (featFilter) {
+      featFilter.value = 'Y';
+      applyFilters();
+    }
   }
 }
 
@@ -1844,21 +1855,42 @@ function renderRisingProducts(data) {
   if (data.report_type === 'keyword') { el.style.display = 'none'; return; }
   if (!data.rising_products || !data.rising_products.length) { el.style.display = 'none'; return; }
 
-  const container = el.querySelector('#rising-grid');
-  if (container) {
-    container.innerHTML = data.rising_products.map(p =>
-      `<div class="rising-card">
-        <div class="rising-bsr">BSR: ${fmt(p.bsr || p.bsr_category)}</div>
-        <div class="rising-brand">${esc(p.brand || '')}</div>
-        <div class="rising-title">${isValidAsin(p.asin) ? `<a href="https://www.amazon.com/dp/${p.asin}" target="_blank" rel="noopener noreferrer" class="product-link">${esc(p.title || '')}</a>` : esc(p.title || '')}</div>
-        <div class="rising-metrics">
-          <span>${fmtPrice(p.price)}</span>
-          ${p.rating ? `<span>&#9733;${fmt(p.rating,1)}</span>` : ''}
-          ${p.reviews != null ? `<span>${fmt(p.reviews)}r</span>` : ''}
-        </div>
-        ${p.top_ingredients ? `<div class="rising-ingredients">Ingredients: ${esc(Array.isArray(p.top_ingredients) ? p.top_ingredients.join(', ') : p.top_ingredients)}</div>` : ''}
-      </div>`
-    ).join('');
+  const tableEl = el.querySelector('#rising-table-wrap');
+  if (tableEl) {
+    const tc = new TableController({
+      data: data.rising_products.map((p, i) => ({ ...p, _rank: i + 1 })),
+      pageSize: 20,
+      columns: [
+        { key: '_rank', header: '#', sortable: false },
+        { key: 'brand', header: 'Brand', render: (v) => `<strong>${esc(v || '')}</strong>` },
+        { key: 'title', header: 'Title', sortable: false,
+          render: (v, row) => {
+            const t = truncate(v, 'lg');
+            if (isValidAsin(row.asin)) {
+              return `<a href="https://www.amazon.com/dp/${row.asin}" target="_blank" rel="noopener noreferrer" class="product-link">${t}</a>`;
+            }
+            return t;
+          }
+        },
+        { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
+        { key: 'bsr', header: 'BSR', sortable: true,
+          render: (v) => v ? `<strong style="color:var(--color-rising-products)">${fmt(v)}</strong>` : '-'
+        },
+        { key: 'reviews', header: 'Reviews', sortable: true, render: (v) => fmt(v) },
+        { key: 'rating', header: 'Rating', sortable: true,
+          render: (v) => v ? `&#9733; ${fmt(v, 1)}` : '-'
+        },
+        { key: 'top_ingredients', header: 'Key Ingredients', sortable: false,
+          render: (v) => {
+            if (!v) return '';
+            const str = Array.isArray(v) ? v.join(', ') : v;
+            return `<span style="font-size:11px">${esc(str)}</span>`;
+          }
+        },
+      ],
+      container: tableEl,
+    });
+    tc.init();
   }
 }
 
@@ -1962,6 +1994,8 @@ function renderProductDetail(data) {
       <div>
         <div class="pd-label">Customer Says</div>
         <div class="pd-val">${customerSays ? esc(customerSays) : '<span style="color:var(--color-text-muted)">-</span>'}</div>
+      </div>
+      <div>
         <div class="pd-label">Voice +</div>
         <div class="pd-val">${voicePosHtml}</div>
         <div class="pd-label">Voice -</div>
@@ -1970,12 +2004,20 @@ function renderProductDetail(data) {
       <div>
         <div class="pd-label">Featured Ingredients</div>
         <div class="pd-val">${ingsHtml}</div>
-        <div class="pd-label">Full INCI</div>
-        <div class="pd-val">${inciHtml}</div>
         ${metaHtml ? `<div class="pd-label">Info</div><div class="pd-val"><div class="pd-meta-grid">${metaHtml}</div></div>` : ''}
+      </div>
+      <div class="pd-col-full">
+        <div class="pd-label">Full INCI <span style="font-size:9px;opacity:0.6">(click to expand)</span></div>
+        <div class="pd-val">${inciHtml}</div>
       </div>
     </div>`;
   }
+
+  // Toggle Full INCI expand/collapse
+  tableEl.addEventListener('click', (e) => {
+    const inci = e.target.closest('.pd-inci-line');
+    if (inci) { inci.classList.toggle('expanded'); e.stopPropagation(); return; }
+  });
 
   // Delegate click on tbody for expand/collapse
   tableEl.addEventListener('click', (e) => {
@@ -2149,7 +2191,26 @@ function buildSectionsHTML() {
         <div class="section-subtitle">Low reviews + high BSR rank &mdash; new entrants to watch</div>
       </div>
     </div>
-    <div class="card-grid card-grid-2" id="rising-grid"></div>
+    <div data-tc="1" id="rising-table-wrap">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Brand</th>
+              <th>Title</th>
+              <th>Price</th>
+              <th>BSR <span class="sort-icon">&#8597;</span></th>
+              <th>Reviews <span class="sort-icon">&#8597;</span></th>
+              <th>Rating <span class="sort-icon">&#8597;</span></th>
+              <th>Key Ingredients</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pagination"></div>
+    </div>
   </section>
 
   <!-- ==================== SALES & PRICING ==================== -->
@@ -2252,10 +2313,10 @@ function buildSectionsHTML() {
       </div>
       <div>
         <div class="subsection-title">Market Concentration</div>
+        <div id="mc-stats" style="display:grid;gap:6px;margin-bottom:12px"></div>
         <div class="chart-container">
           <canvas id="concentration-chart" height="180"></canvas>
         </div>
-        <div id="mc-stats" style="margin-top:12px;display:grid;gap:6px"></div>
       </div>
     </div>
   </section>
@@ -2288,13 +2349,18 @@ function buildSectionsHTML() {
     <div class="section-header">
       <div>
         <div class="section-title">Ingredient Ranking</div>
-        <div class="section-subtitle">Featured ingredients only (marketed in titles &amp; bullets) · Weighted Score = Bought/Mo(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%)</div>
+        <div class="section-subtitle">Weighted Score = Bought/Mo(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%) · Default: Featured only (toggle filter to see all incl. INCI)</div>
       </div>
     </div>
     <div id="featured-ingredients-card" style="margin-bottom:24px"></div>
     <div class="card-grid card-grid-5" id="ingredient-hero" style="margin-bottom:32px"></div>
     <div class="toolbar">
       <input class="search-input" type="text" id="ing-search" placeholder="Search ingredient...">
+      <select class="search-input" id="feat-filter" style="width:auto;cursor:pointer">
+        <option value="">All (Featured + INCI)</option>
+        <option value="Y" selected>Featured only</option>
+        <option value="N">INCI only</option>
+      </select>
       <select class="search-input" id="cat-filter" style="width:auto;cursor:pointer"><option value="">All categories</option></select>
     </div>
     <div data-tc="1" id="ingredient-table-wrap">
@@ -2304,6 +2370,7 @@ function buildSectionsHTML() {
             <tr>
               <th>Rank <span class="sort-icon">&#8597;</span></th>
               <th>Ingredient <span class="sort-icon">&#8597;</span></th>
+              <th>Featured <span class="sort-icon">&#8597;</span></th>
               <th>Weighted Score <span class="sort-icon sorted">&#8595;</span></th>
               <th># Products <span class="sort-icon">&#8597;</span></th>
               <th>Avg Weight <span class="sort-icon">&#8597;</span></th>
