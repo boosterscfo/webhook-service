@@ -294,7 +294,8 @@ class AmzCacheService:
         cutoff = datetime.now() - timedelta(days=CACHE_TTL_DAYS)
         placeholders = ",".join(["%s"] * len(asins))
         query = (
-            f"SELECT asin, ingredient_name, common_name, category "
+            f"SELECT asin, ingredient_name, common_name, category, "
+            f"COALESCE(source, '') as source "
             f"FROM amz_ingredient_cache "
             f"WHERE asin IN ({placeholders}) AND extracted_at >= %s"
         )
@@ -317,6 +318,7 @@ class AmzCacheService:
                     name=row["ingredient_name"],
                     common_name=row["common_name"] or row["ingredient_name"],
                     category=row["category"],
+                    source=row.get("source", ""),
                 ))
         return result
 
@@ -332,6 +334,7 @@ class AmzCacheService:
                         "ingredient_name": ing.name,
                         "common_name": ing.common_name or ing.name,
                         "category": ing.category,
+                        "source": ing.source or "",
                         "extracted_at": now,
                     })
             else:
@@ -345,8 +348,16 @@ class AmzCacheService:
         if not rows:
             return True
         try:
+            # delete & insert: 프롬프트 변경 시 성분 목록이 달라질 수 있으므로
+            # 기존 행을 삭제 후 새로 삽입 (유령 데이터 방지)
+            asins = list({pi.asin for pi in gemini_results})
+            placeholders = ",".join(["%s"] * len(asins))
             df = pd.DataFrame(rows)
             with MysqlConnector(self._env) as conn:
+                conn.cursor.execute(
+                    f"DELETE FROM amz_ingredient_cache WHERE asin IN ({placeholders})",
+                    asins,
+                )
                 conn.upsert_data(df, "amz_ingredient_cache")
             logger.info("Ingredient cache saved: %d ingredients from %d products",
                        len(rows), len(gemini_results))
