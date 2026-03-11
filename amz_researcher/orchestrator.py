@@ -100,7 +100,8 @@ def _apply_voice_keywords(
             wp.voice_positive = asin_kw[wp.asin]["positive"]
             wp.voice_negative = asin_kw[wp.asin]["negative"]
     # DB 저장
-    db.save_voice_keywords(asin_kw)
+    if db:
+        db.save_voice_keywords(asin_kw)
 
 
 def _extract_executive_summary(report_md: str) -> dict:
