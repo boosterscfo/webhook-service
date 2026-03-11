@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-10T11:27:57.657Z",
+  "lastUpdated": "2026-03-11T02:48:33.708Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
@@ -27,7 +27,8 @@
     "data_collector.py",
     "product_db.py",
     "excel-report-v6",
-    "report_store.py"
+    "report_store.py",
+    "scripts"
   ],
   "primaryFeature": "excel-report-v6",
   "features": {
@@ -145,7 +146,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:23:35.355Z",
-        "lastUpdated": "2026-03-10T11:27:57.657Z"
+        "lastUpdated": "2026-03-11T02:48:33.707Z"
       },
       "lastFile": "/home/yonkim/webhook-service/amz_researcher/router.py"
     },
@@ -184,7 +185,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:24:30.887Z",
-        "lastUpdated": "2026-03-10T10:30:55.261Z"
+        "lastUpdated": "2026-03-11T02:48:14.724Z"
       },
       "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/gemini.py"
     },
@@ -343,7 +344,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-08T11:40:25.390Z",
-        "lastUpdated": "2026-03-10T10:27:56.355Z"
+        "lastUpdated": "2026-03-11T02:47:59.105Z"
       },
       "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/product_db.py"
     },
@@ -371,6 +372,19 @@
         "lastUpdated": "2026-03-10T00:50:39.478Z"
       },
       "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/report_store.py"
+    },
+    "scripts": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-03-11T00:49:34.611Z",
+        "lastUpdated": "2026-03-11T00:51:41.483Z"
+      },
+      "lastFile": "/home/yonkim/webhook-service/scripts/compare_gemini_models.py"
     }
   },
   "pipeline": {
@@ -386,7 +400,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-03-10T11:27:57.657Z"
+    "lastActivity": "2026-03-11T02:48:33.708Z"
   },
   "history": [
     {
@@ -2414,6 +2428,60 @@
     },
     {
       "timestamp": "2026-03-10T11:27:57.657Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T00:45:37.492Z",
+      "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T00:46:24.072Z",
+      "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T00:49:34.611Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T00:51:41.483Z",
+      "feature": "scripts",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T02:47:59.105Z",
+      "feature": "product_db.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T02:48:03.027Z",
+      "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T02:48:14.724Z",
+      "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T02:48:18.779Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T02:48:33.707Z",
       "feature": "amz_researcher",
       "phase": "do",
       "action": "updated"

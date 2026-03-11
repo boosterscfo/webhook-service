@@ -125,6 +125,13 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 
 위 데이터를 바탕으로 시장 분석 리포트를 작성하라.
 
+## 리포트 톤 가이드라인 (필수 준수)
+- 이 리포트의 독자는 아마존 시장을 잘 아는 전문 셀러이다.
+- 경쟁이 치열한 시장(레드오션)을 '피하라'고 조언하지 마라. 경쟁이 많다는 것은 수요가 크다는 의미이며, 그 안에서 가장 잘하는 전략을 제시하라.
+- "과포화 시장을 피하라", "블루오션을 찾아라", "레드오션을 피하라" 류의 조언은 절대 하지 마라.
+- SNS 마케팅, 인플루언서 협업, 리뷰 확보, TikTok/Instagram 프로모션 등 업계 상식 수준의 프로모션 조언은 생략하거나 한 줄로 간단히 멘션만 하라. "~해야 합니다"식 당위적 표현 금지.
+- 데이터에 기반한 구체적 수치와 차별화 인사이트만 제공하라.
+
 반드시 아래 10개 섹션을 포함:
 
 ## Executive Summary
@@ -172,8 +179,8 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
    - 타겟 가격대 명시
 
 9. **리스크 & 주의사항 (Risks)**
-   - 과포화 세그먼트 경고
-   - 피해야 할 포지셔닝
+   - 진입 시 주의할 기존 강자의 해자(moat)와 대응 전략
+   - 마진 리스크: 가격 경쟁이 심한 구간의 수익성 분석
 
 형식: 마크다운. Executive Summary를 가장 먼저 작성하고, 이후 번호 섹션을 순서대로 작성.
 각 섹션에 구체적 수치와 성분명을 반드시 포함.
@@ -181,13 +188,15 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 
 
 class GeminiService:
+    MODEL_FLASH = "gemini-2.5-flash"
+    MODEL_PRO = "gemini-2.5-pro"
+    _BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.model = "gemini-2.5-flash"
-        self.url = (
-            f"https://generativelanguage.googleapis.com/v1beta"
-            f"/models/{self.model}:generateContent"
-        )
+        self.model = self.MODEL_FLASH
+        self.url = f"{self._BASE}/{self.model}:generateContent"
+        self.report_url = f"{self._BASE}/{self.MODEL_PRO}:generateContent"
         self.client = httpx.AsyncClient(timeout=120.0)
 
     async def extract_ingredients(
@@ -311,7 +320,7 @@ class GeminiService:
         for attempt in range(max_retries):
             try:
                 resp = await self.client.post(
-                    self.url,
+                    self.report_url,
                     params={"key": self.api_key},
                     json={
                         "contents": [{"parts": [{"text": prompt}]}],
@@ -320,6 +329,7 @@ class GeminiService:
                             "maxOutputTokens": 16384,
                         },
                     },
+                    timeout=300.0,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -330,6 +340,7 @@ class GeminiService:
                     .get("text", "")
                 )
                 if text:
+                    logger.info("Market report generated with %s", self.MODEL_PRO)
                     return text
                 logger.warning("Market report empty response (attempt %d/%d)", attempt + 1, max_retries)
             except Exception:
