@@ -1,3 +1,4 @@
+import json
 import logging
 
 from lib.mysql_connector import MysqlConnector
@@ -309,3 +310,70 @@ class ProductDBService:
         except Exception:
             logger.exception("Failed to update keywords for node_id=%s", node_id)
             return False
+
+    def save_voice_keywords(self, asin_keywords: dict[str, dict[str, list[str]]]) -> int:
+        """제품별 voice 키워드 DB 저장.
+
+        Args:
+            asin_keywords: {asin: {"positive": [...], "negative": [...]}}
+
+        Returns:
+            업데이트된 행 수.
+        """
+        if not asin_keywords:
+            return 0
+        query = """
+            UPDATE amz_products
+            SET voice_positive = %s, voice_negative = %s
+            WHERE asin = %s
+        """
+        updated = 0
+        try:
+            with MysqlConnector(self._env) as conn:
+                for asin, kws in asin_keywords.items():
+                    pos = json.dumps(kws.get("positive", []), ensure_ascii=False)
+                    neg = json.dumps(kws.get("negative", []), ensure_ascii=False)
+                    conn.cursor.execute(query, (pos, neg, asin))
+                    updated += conn.cursor.rowcount
+                conn.connection.commit()
+            logger.info("Saved voice keywords for %d products", updated)
+        except Exception:
+            logger.exception("Failed to save voice keywords")
+        return updated
+
+    def load_voice_keywords(self, asins: list[str]) -> dict[str, dict[str, list[str]]]:
+        """DB에서 제품별 voice 키워드 로드.
+
+        Returns:
+            {asin: {"positive": [...], "negative": [...]}} — 키워드가 있는 제품만.
+        """
+        if not asins:
+            return {}
+        placeholders = ",".join(["%s"] * len(asins))
+        query = f"""
+            SELECT asin, voice_positive, voice_negative
+            FROM amz_products
+            WHERE asin IN ({placeholders})
+              AND voice_positive IS NOT NULL
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, tuple(asins))
+        except Exception:
+            logger.exception("Failed to load voice keywords")
+            return {}
+        if df.empty:
+            return {}
+        result = {}
+        for _, row in df.iterrows():
+            pos = row["voice_positive"]
+            neg = row["voice_negative"]
+            if isinstance(pos, str):
+                pos = json.loads(pos)
+            if isinstance(neg, str):
+                neg = json.loads(neg)
+            result[row["asin"]] = {
+                "positive": pos or [],
+                "negative": neg or [],
+            }
+        return result

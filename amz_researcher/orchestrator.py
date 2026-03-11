@@ -9,6 +9,8 @@ from amz_researcher.models import (
     ProductDetail,
     ProductIngredients,
     SearchProduct,
+    VoiceKeywordResult,
+    WeightedProduct,
 )
 from amz_researcher.services.browse_ai import BrowseAiService
 from amz_researcher.services.cache import AmzCacheService
@@ -29,6 +31,32 @@ _report_store = ReportStore(
     base_dir=settings.REPORT_DIR,
     ttl_days=settings.REPORT_TTL_DAYS,
 )
+
+
+def _apply_voice_keywords(
+    voice_keywords: VoiceKeywordResult | None,
+    weighted_products: list[WeightedProduct],
+    db: ProductDBService,
+) -> None:
+    """VoiceKeywordResult를 제품별로 역변환하여 WeightedProduct에 주입하고 DB 저장."""
+    if not voice_keywords:
+        return
+    asin_kw: dict[str, dict[str, list[str]]] = {}
+    for vk in voice_keywords.positive_keywords:
+        for asin in vk.asins:
+            asin_kw.setdefault(asin, {"positive": [], "negative": []})
+            asin_kw[asin]["positive"].append(vk.keyword)
+    for vk in voice_keywords.negative_keywords:
+        for asin in vk.asins:
+            asin_kw.setdefault(asin, {"positive": [], "negative": []})
+            asin_kw[asin]["negative"].append(vk.keyword)
+    # WeightedProduct에 주입
+    for wp in weighted_products:
+        if wp.asin in asin_kw:
+            wp.voice_positive = asin_kw[wp.asin]["positive"]
+            wp.voice_negative = asin_kw[wp.asin]["negative"]
+    # DB 저장
+    db.save_voice_keywords(asin_kw)
 
 
 def _extract_executive_summary(report_md: str) -> dict:
@@ -398,6 +426,7 @@ async def run_research(
 
         # Step 5: AI 시장 분석 리포트 (캐시 우선)
         voice_keywords = await gemini.extract_voice_keywords(keyword, weighted_products)
+        _apply_voice_keywords(voice_keywords, weighted_products, ProductDBService("CFO"))
         analysis_data = build_market_analysis(keyword, weighted_products, all_details, voice_keywords=voice_keywords)
 
         market_report = ""
@@ -726,6 +755,7 @@ async def run_analysis(
 
         # Step 4: 시장 분석 리포트
         voice_keywords = await gemini.extract_voice_keywords(category_name, weighted_products)
+        _apply_voice_keywords(voice_keywords, weighted_products, product_db)
         analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords)
 
         market_report = cache.get_market_report_cache(category_name, len(weighted_products)) or ""
@@ -1079,6 +1109,7 @@ async def _run_keyword_analysis_pipeline(
 
         # Step 3: 시장 분석 (BSR 의존 분석 제외)
         voice_keywords = await gemini.extract_voice_keywords(normalized_keyword, weighted_products)
+        _apply_voice_keywords(voice_keywords, weighted_products, product_db)
         analysis_data = build_keyword_market_analysis(normalized_keyword, weighted_products, all_details, voice_keywords=voice_keywords)
 
         market_report = cache.get_market_report_cache(normalized_keyword, len(weighted_products)) or ""

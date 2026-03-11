@@ -187,7 +187,7 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
     ws = wb.create_sheet("Product Detail")
     ws.sheet_properties.tabColor = TAB_COLORS["Product Detail"]
 
-    col_count = 20
+    col_count = 22
     _write_title(
         ws,
         "Product-Level Data with Weight Breakdown",
@@ -208,7 +208,8 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         "Bought/Mo", "Reviews", "Rating", "BSR",
         "Weight", "Unit Price", "Sellers", "Coupon",
         "A+", "Badge", "Discount%", "Variations",
-        "Customer Says", "Ingredients Found", "URL",
+        "Customer Says", "Voice Positive", "Voice Negative",
+        "Ingredients Found", "URL",
     ]
     for c, h in enumerate(headers, 1):
         ws.cell(row=4, column=c, value=h)
@@ -243,10 +244,13 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         ws.cell(row=row, column=17, value=p.variations_count)
         cs_cell = ws.cell(row=row, column=18, value=p.customer_says)
         cs_cell.alignment = WRAP_ALIGN
-        ws.cell(row=row, column=19, value=ingredients_str)
-        # Item 2: Product Detail URL bug fix
+        vp_cell = ws.cell(row=row, column=19, value=", ".join(p.voice_positive))
+        vp_cell.alignment = WRAP_ALIGN
+        vn_cell = ws.cell(row=row, column=20, value=", ".join(p.voice_negative))
+        vn_cell.alignment = WRAP_ALIGN
+        ws.cell(row=row, column=21, value=ingredients_str)
         url = f"https://www.amazon.com/dp/{p.asin}"
-        ws.cell(row=row, column=20, value=url)
+        ws.cell(row=row, column=22, value=url)
 
     end_row = 4 + len(products)
     _style_data_rows(ws, 5, end_row, col_count)
@@ -256,7 +260,7 @@ def _build_product_detail(wb: Workbook, products: list[WeightedProduct]):
         "F": 12, "G": 10, "H": 8, "I": 10,
         "J": 10, "K": 16, "L": 8, "M": 14,
         "N": 5, "O": 18, "P": 10, "Q": 10,
-        "R": 40, "S": 45, "T": 14,
+        "R": 40, "S": 30, "T": 30, "U": 45, "V": 14,
     })
 
 

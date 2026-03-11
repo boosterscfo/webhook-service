@@ -120,6 +120,9 @@ class WeightedProduct(BaseModel):
     initial_price: float | None = None
     manufacturer: str = ""
     variations_count: int = 0
+    # V8 voice keywords
+    voice_positive: list[str] = []
+    voice_negative: list[str] = []
 
 
 class IngredientRanking(BaseModel):

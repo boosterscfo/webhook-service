@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "lastUpdated": "2026-03-11T03:34:23.705Z",
+  "lastUpdated": "2026-03-11T03:45:58.672Z",
   "activeFeatures": [
     "webhook-service",
     "webhooks",
@@ -146,9 +146,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-06T08:23:35.355Z",
-        "lastUpdated": "2026-03-11T03:30:34.105Z"
+        "lastUpdated": "2026-03-11T03:45:58.672Z"
       },
-      "lastFile": "/home/yonkim/webhook-service/amz_researcher/router.py"
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/orchestrator.py"
     },
     "__init__.py": {
       "phase": "do",
@@ -305,9 +305,9 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-08T11:39:20.962Z",
-        "lastUpdated": "2026-03-10T02:25:42.392Z"
+        "lastUpdated": "2026-03-11T03:43:53.691Z"
       },
-      "lastFile": "/home/yonkim/webhook-service/amz_researcher/migrations/v6_keyword_search.py"
+      "lastFile": "/home/yonkim/webhook-service/amz_researcher/migrations/v8_voice_keywords.py"
     },
     "bright_data.py": {
       "phase": "do",
@@ -344,7 +344,7 @@
       "documents": {},
       "timestamps": {
         "started": "2026-03-08T11:40:25.390Z",
-        "lastUpdated": "2026-03-11T02:47:59.105Z"
+        "lastUpdated": "2026-03-11T03:44:46.577Z"
       },
       "lastFile": "/home/yonkim/webhook-service/amz_researcher/services/product_db.py"
     },
@@ -400,7 +400,7 @@
   "session": {
     "startedAt": "2026-02-13T14:13:40.633Z",
     "onboardingCompleted": true,
-    "lastActivity": "2026-03-11T03:34:23.705Z"
+    "lastActivity": "2026-03-11T03:45:58.672Z"
   },
   "history": [
     {
@@ -2603,6 +2603,60 @@
     {
       "timestamp": "2026-03-11T03:34:23.705Z",
       "feature": "gemini.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:43:53.691Z",
+      "feature": "migrations",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:44:09.116Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:44:34.935Z",
+      "feature": "product_db.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:44:46.577Z",
+      "feature": "product_db.py",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:45:06.465Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:45:15.475Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:45:48.123Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:45:52.707Z",
+      "feature": "amz_researcher",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-03-11T03:45:58.672Z",
+      "feature": "amz_researcher",
       "phase": "do",
       "action": "updated"
     }
