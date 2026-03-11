@@ -57,7 +57,7 @@ def _build_help_response() -> dict:
                         "Amazon Best Sellers 카테고리별 Top 100 제품을 수집하고,\n"
                         "Gemini AI로 성분을 추출·분석하여 시장 인사이트 리포트를 생성합니다.\n\n"
                         "*전체 워크플로우:*\n"
-                        "1️⃣ 카테고리 검색 (`/amz {키워드}`) → 2️⃣ 자동 수집 & 분석 → 3️⃣ 리포트 생성"
+                        "1️⃣ 카테고리 검색 → 2️⃣ 새로 수집 / 캐시 선택 → 3️⃣ 분석 & 리포트 생성"
                     ),
                 },
             },
@@ -67,15 +67,15 @@ def _build_help_response() -> dict:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        "*📊 분석 실행*\n\n"
+                        "*📊 카테고리 BSR 분석*\n\n"
                         "`/amz {키워드}`\n"
-                        "키워드와 매칭되는 카테고리를 검색하고, 선택하면 분석을 시작합니다.\n"
-                        "• 성분 추출 (Gemini Flash) → 가중치 랭킹 → 시장 리포트 → Excel 파일 생성\n"
-                        "• 결과는 Slack 메시지 + Excel 첨부로 전달됩니다.\n\n"
+                        "키워드로 카테고리를 검색하고, 선택하면 데이터 옵션이 표시됩니다.\n"
+                        "• *새로 수집 후 분석* — Bright Data로 최신 데이터를 수집 후 분석\n"
+                        "• *캐시 사용 (X일 전)* — 기존 수집 데이터로 즉시 분석\n"
+                        "• 미수집 카테고리는 자동으로 수집이 시작됩니다.\n\n"
                         "_예시:_\n"
-                        "• `/amz serum` — serum 관련 카테고리 검색\n"
-                        "• `/amz sunscreen` — 자외선 차단제 카테고리 검색\n"
-                        "• `/amz hair oil` — 여러 단어 키워드도 가능"
+                        "• `/amz serum` → 카테고리 선택 → 수집 옵션 선택\n"
+                        "• `/amz sunscreen` • `/amz hair oil`"
                     ),
                 },
             },
@@ -87,12 +87,11 @@ def _build_help_response() -> dict:
                     "text": (
                         "*🔍 키워드 검색 분석*\n\n"
                         "`/amz search {키워드}`\n"
-                        "Amazon 검색 결과를 분석합니다. 카테고리 등록 없이 자유롭게 검색 가능.\n"
-                        "7일 내 동일 키워드 재검색 시 캐시를 사용합니다.\n\n"
+                        "Amazon 검색 결과를 직접 분석합니다. 카테고리 등록 없이 자유 검색.\n"
+                        "유사 키워드 캐시가 있으면 기존 데이터 사용 / 새로 수집 선택이 가능합니다.\n\n"
                         "_예시:_\n"
                         "• `/amz search vitamin c serum for face`\n"
-                        "• `/amz search organic hair oil`\n"
-                        "• `/amz search korean skincare set`"
+                        "• `/amz search organic hair oil`"
                     ),
                 },
             },
@@ -102,29 +101,10 @@ def _build_help_response() -> dict:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        "*📋 카테고리 관리*\n\n"
-                        "`/amz list`\n"
-                        "현재 활성화된 카테고리 목록을 표시합니다.\n\n"
-                        "`/amz refresh`\n"
-                        "활성 카테고리의 BSR 데이터를 재수집합니다."
-                    ),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "*🔄 데이터 수집*\n\n"
-                        "`/amz refresh`\n"
-                        "등록된 전체 카테고리의 BSR Top 100 데이터를 Bright Data로 수집합니다.\n"
-                        "수집이 완료되면 webhook으로 자동 DB 적재됩니다.\n\n"
-                        "`/amz refresh {키워드}`\n"
-                        "특정 카테고리만 선택적으로 수집합니다.\n\n"
-                        "_예시:_\n"
-                        "• `/amz refresh` — 전체 카테고리 수집 (수 분 소요)\n"
-                        "• `/amz refresh serum` — serum 카테고리만 수집"
+                        "*📋 관리 명령어*\n\n"
+                        "`/amz list` — 활성 카테고리 목록\n"
+                        "`/amz refresh` — 전체 카테고리 일괄 수집\n"
+                        "`/amz refresh {키워드}` — 특정 카테고리만 수집"
                     ),
                 },
             },
@@ -135,10 +115,8 @@ def _build_help_response() -> dict:
                     "type": "mrkdwn",
                     "text": (
                         "*📄 리포트 재생성*\n\n"
-                        "`/amz report {카테고리명}`\n"
-                        "Gemini 호출 없이 캐시된 분석 데이터로 HTML 리포트만 재생성합니다.\n\n"
-                        "`/amz report-search {키워드}`\n"
-                        "캐시된 키워드 분석 데이터로 리포트만 재생성합니다.\n\n"
+                        "`/amz report {카테고리명}` — 캐시 데이터로 리포트만 재빌드\n"
+                        "`/amz report-search {키워드}` — 키워드 리포트 재빌드\n\n"
                         "_리포트 템플릿 변경 후 빠르게 결과를 확인할 때 유용합니다._"
                     ),
                 },
@@ -149,24 +127,9 @@ def _build_help_response() -> dict:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        "*📈 분석 리포트 구성*\n\n"
-                        "Excel 파일에 포함되는 시트:\n"
-                        "• *V4 Raw* — 수집된 원본 제품 데이터\n"
-                        "• *Ingredient Rankings* — 성분별 가중치 점수 랭킹\n"
-                        "• *Market Insight* — AI 시장 분석 리포트\n\n"
-                        "_Score = Position(20%) + Reviews(25%) + Rating(15%) + BSR(40%)_"
-                    ),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
                         "*💡 팁*\n\n"
-                        "• 데이터는 캐시되어 재분석 시 빠르게 처리됩니다.\n"
-                        "• 최신 데이터가 필요하면 `/amz refresh`로 먼저 수집하세요.\n"
+                        "• 카테고리 선택 시 데이터 나이와 수집 옵션이 표시됩니다.\n"
+                        "• 30일 이상된 데이터는 새로 수집이 권장됩니다.\n"
                         "• 분석 완료까지 보통 1~2분 소요됩니다.\n"
                         "• `/amz` (인자 없음)으로 간단 요약을 볼 수 있습니다."
                     ),
@@ -177,7 +140,7 @@ def _build_help_response() -> dict:
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": "Powered by Bright Data + Gemini Flash | `/amz` 간단 요약 | `/amz help` 상세 가이드",
+                        "text": "Powered by Bright Data + Gemini | `/amz` 간단 요약 | `/amz help` 상세 가이드",
                     },
                 ],
             },
