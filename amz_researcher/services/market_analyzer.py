@@ -16,6 +16,11 @@ from amz_researcher.models import (
 from amz_researcher.services.analyzer import _get_display_name
 
 
+def _featured_ingredients(product: WeightedProduct) -> list:
+    """마케팅 성분(featured/both/legacy)만 반환. INCI 전용 제외."""
+    return [ing for ing in product.ingredients if ing.source != "inci"]
+
+
 def _price_tier(price: float | None) -> str:
     if price is None:
         return "Unknown"
@@ -38,7 +43,7 @@ def analyze_by_price_tier(
     for p in products:
         tier = _price_tier(p.price)
         tier_counts[tier] += 1
-        for ing in p.ingredients:
+        for ing in _featured_ingredients(p):
             tier_ingredients[tier][_get_display_name(ing)] += 1
 
     result = {}
@@ -69,10 +74,10 @@ def analyze_by_bsr(
     top_counter: Counter = Counter()
     bottom_counter: Counter = Counter()
     for p in top_group:
-        for ing in p.ingredients:
+        for ing in _featured_ingredients(p):
             top_counter[_get_display_name(ing)] += 1
     for p in bottom_group:
-        for ing in p.ingredients:
+        for ing in _featured_ingredients(p):
             bottom_counter[_get_display_name(ing)] += 1
 
     winning = [
@@ -121,7 +126,7 @@ def analyze_by_brand(
         bd["ratings"].append(p.rating)
         if p.bsr_category is not None:
             bd["bsr_values"].append(p.bsr_category)
-        for ing in p.ingredients:
+        for ing in _featured_ingredients(p):
             bd["ingredients"][_get_display_name(ing)] += 1
 
     result = []
@@ -156,7 +161,7 @@ def analyze_cooccurrence(
     low_rated_pairs: Counter = Counter()
 
     for p in products:
-        names = sorted(set(_get_display_name(ing) for ing in p.ingredients))
+        names = sorted(set(_get_display_name(ing) for ing in _featured_ingredients(p)))
         for i in range(len(names)):
             for j in range(i + 1, len(names)):
                 pair = (names[i], names[j])
@@ -246,8 +251,9 @@ def detect_rising_products(
             continue
         d = detail_map.get(p.asin)
         brand = d.brand if d and d.brand else "Unknown"
+        featured = _featured_ingredients(p)
         ingredients_top3 = ", ".join(
-            ing.common_name or ing.name for ing in p.ingredients[:3]
+            ing.common_name or ing.name for ing in featured[:3]
         )
         rising.append({
             "asin": p.asin,
@@ -274,7 +280,7 @@ def analyze_rating_ingredients(
     low_count = 0
 
     for p in products:
-        names = [_get_display_name(ing) for ing in p.ingredients]
+        names = [_get_display_name(ing) for ing in _featured_ingredients(p)]
         if p.rating >= 4.5:
             high_count += 1
             for n in names:
@@ -581,6 +587,7 @@ def analyze_sales_volume(products: list[WeightedProduct]) -> dict:
             "title": p.title[:60],
             "brand": p.brand,
             "bought_past_month": p.bought_past_month,
+            "initial_price": p.initial_price,
             "price": p.price,
             "bsr": p.bsr_category,
         }
@@ -787,56 +794,6 @@ def analyze_customer_voice(
         "bsr_top_common_strengths": bsr_top_common_strengths,
     }
 
-
-def analyze_badges(products: list[WeightedProduct]) -> dict:
-    """badge 보유/미보유 제품 성과 비교 분석."""
-    with_badge = [p for p in products if p.badge]
-    without_badge = [p for p in products if not p.badge]
-
-    badge_types: Counter = Counter()
-    for p in with_badge:
-        badge_types[p.badge] += 1
-
-    def _group_metrics(group: list[WeightedProduct]) -> dict:
-        if not group:
-            return {"count": 0, "avg_bsr": None, "avg_price": None, "avg_reviews": None, "avg_rating": None}
-        bsr_vals = [p.bsr_category for p in group if p.bsr_category is not None]
-        prices = [p.price for p in group if p.price is not None]
-        return {
-            "count": len(group),
-            "avg_bsr": round(sum(bsr_vals) / len(bsr_vals)) if bsr_vals else None,
-            "avg_price": round(sum(prices) / len(prices), 2) if prices else None,
-            "avg_reviews": round(sum(p.reviews for p in group) / len(group)),
-            "avg_rating": round(sum(p.rating for p in group) / len(group), 2),
-        }
-
-    threshold = {}
-    if with_badge:
-        reviews_list = [p.reviews for p in with_badge]
-        ratings_list = [p.rating for p in with_badge]
-        threshold = {
-            "min_reviews": min(reviews_list),
-            "median_reviews": sorted(reviews_list)[len(reviews_list) // 2],
-            "min_rating": min(ratings_list),
-            "median_rating": round(
-                sorted(ratings_list)[len(ratings_list) // 2], 1
-            ),
-        }
-
-    # V5 Phase 2: 통계 검증
-    badge_bsr = [float(p.bsr_category) for p in with_badge if p.bsr_category is not None]
-    no_badge_bsr = [float(p.bsr_category) for p in without_badge if p.bsr_category is not None]
-
-    return {
-        "total_products": len(products),
-        "with_badge": _group_metrics(with_badge),
-        "without_badge": _group_metrics(without_badge),
-        "badge_types": [
-            {"badge": b, "count": c} for b, c in badge_types.most_common()
-        ],
-        "acquisition_threshold": threshold,
-        "stat_test_bsr": _stat_compare(badge_bsr, no_badge_bsr),
-    }
 
 
 def analyze_discount_impact(products: list[WeightedProduct]) -> dict:
@@ -1154,11 +1111,10 @@ def build_keyword_market_analysis(
     voice_keywords: VoiceKeywordResult | None = None,
     title_keywords: TitleKeywordResult | None = None,
 ) -> dict:
-    """키워드 검색 전용 시장 분석. BSR 의존 분석 2개 제외.
+    """키워드 검색 전용 시장 분석. BSR 의존 분석 제외.
 
     제외 항목:
     - rising_products: BSR < 10,000 로직 무의미
-    - badges: Mann-Whitney U 검정 무의미
     """
     return {
         "keyword": keyword,
@@ -1207,7 +1163,6 @@ def build_market_analysis(
         "promotions": analyze_promotions(weighted_products),
         # V5 Phase 1 신규
         "customer_voice": analyze_customer_voice(weighted_products, voice_keywords),
-        "badges": analyze_badges(weighted_products),
         "discount_impact": analyze_discount_impact(weighted_products),
         "title_keywords": analyze_title_keywords(weighted_products, title_keywords),
         # V5 Phase 2 신규

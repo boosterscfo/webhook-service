@@ -170,7 +170,7 @@ def build_keyword_html(
     market_report: str = "",
     analysis_data: dict | None = None,
 ) -> bytes:
-    """Keyword search analysis -> 10-section HTML report (no Badge, Rising Products)."""
+    """Keyword search analysis -> HTML report (no Rising Products)."""
     report_data = _serialize_report_data(
         keyword, weighted_products, rankings, categories,
         search_products, details, market_report,
@@ -215,7 +215,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     :root {
       --color-market-insight:    #E91E63;
       --color-consumer-voice:    #FF9800;
-      --color-badge-analysis:    #673AB7;
       --color-sales-pricing:     #009688;
       --color-brand-positioning: #3F51B5;
       --color-marketing-kw:      #795548;
@@ -224,8 +223,6 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
       --color-category-summary:  #2E86AB;
       --color-rising-products:   #00BCD4;
       --color-product-detail:    #4CAF50;
-      --color-raw-search:        #FF6B35;
-      --color-raw-detail:        #9B59B6;
 
       --color-bg-page:    #0F1117;
       --color-bg-card:    #1A1D27;
@@ -499,6 +496,21 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .cell-truncate-xl { max-width: 300px; }
     .inci-expand { cursor: pointer; max-width: 200px; display: inline-block; }
     .inci-expand.expanded { max-width: none; white-space: normal; word-break: break-all; }
+
+    /* ===== PRODUCT DETAIL EXPANDABLE ROW ===== */
+    #product-detail-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
+    .pd-expand-icon { display: inline-block; width: 16px; font-size: 12px; color: var(--color-text-muted); transition: transform 0.2s; }
+    .pd-expand-icon.open { transform: rotate(90deg); }
+    .pd-detail-row { background: var(--color-bg-input); }
+    .pd-detail-row td { padding: 0 !important; }
+    .pd-detail-panel { padding: 12px 20px 14px 36px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; font-size: 12px; }
+    .pd-detail-panel .pd-label { color: var(--color-text-muted); font-size: 11px; margin-bottom: 2px; }
+    .pd-detail-panel .pd-val { margin-bottom: 6px; }
+    .pd-tag-positive { display: inline-block; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; margin: 1px; background: rgba(52, 211, 153, 0.15); color: var(--color-positive); }
+    .pd-tag-negative { display: inline-block; padding: 1px 6px; border-radius: var(--radius-full); font-size: 10px; margin: 1px; background: rgba(248, 113, 113, 0.15); color: var(--color-negative); }
+    .pd-inci-line { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; color: var(--color-text-secondary); }
+    .pd-meta-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+    .pd-meta-item { display: flex; gap: 4px; align-items: center; }
 
     /* ===== BADGES / PILLS ===== */
     .badge {
@@ -1241,101 +1253,6 @@ function renderConsumerVoice(data) {
 }
 
 // ============================================================
-// SECTION: BADGE ANALYSIS
-// ============================================================
-function renderBadgeAnalysis(data) {
-  const el = document.getElementById('badge-analysis');
-  if (!el) return;
-  if (data.report_type === 'keyword') { el.style.display = 'none'; return; }
-  const bd = data.analysis && data.analysis.badges;
-  if (!bd) { el.style.display = 'none'; return; }
-
-  const wb = bd.with_badge || {};
-  const nb = bd.without_badge || {};
-  const threshold = bd.acquisition_threshold || {};
-  const statTest = bd.stat_test_bsr || {};
-  const rawBt = bd.badge_types || [];
-  // Normalize: array of {badge,count} → dict {badge: count}
-  const badgeTypes = Array.isArray(rawBt)
-    ? Object.fromEntries(rawBt.map(b => [b.badge || b.type || '', b.count || 0]))
-    : rawBt;
-
-  const withBadgeEl = el.querySelector('#badge-with');
-  if (withBadgeEl) {
-    withBadgeEl.innerHTML = `
-      <div class="kpi-label">With Badge</div>
-      <div class="kpi-value">${fmt(wb.count)}</div>
-      <div class="kpi-sub">products</div>
-      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div><div class="kpi-label" style="font-size:10px">Avg BSR</div><div style="font-size:18px;font-weight:700;color:#C084FC">${fmt(wb.avg_bsr)}</div></div>
-        <div><div class="kpi-label" style="font-size:10px">Avg Price</div><div style="font-size:18px;font-weight:700;color:#C084FC">${fmtPrice(wb.avg_price)}</div></div>
-        <div><div class="kpi-label" style="font-size:10px">Avg Rating</div><div style="font-size:18px;font-weight:700;color:#C084FC">${fmt(wb.avg_rating,1)}</div></div>
-        <div><div class="kpi-label" style="font-size:10px">Avg Reviews</div><div style="font-size:18px;font-weight:700;color:#C084FC">${fmt(wb.avg_reviews)}</div></div>
-      </div>`;
-  }
-
-  const noBadgeEl = el.querySelector('#badge-without');
-  if (noBadgeEl) {
-    noBadgeEl.innerHTML = `
-      <div class="kpi-label">Without Badge</div>
-      <div class="kpi-value" style="color:var(--color-text-secondary)">${fmt(nb.count)}</div>
-      <div class="kpi-sub">products</div>
-      <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div><div class="kpi-label" style="font-size:10px">Avg BSR</div><div style="font-size:18px;font-weight:700">${fmt(nb.avg_bsr)}</div></div>
-        <div><div class="kpi-label" style="font-size:10px">Avg Price</div><div style="font-size:18px;font-weight:700">${fmtPrice(nb.avg_price)}</div></div>
-        <div><div class="kpi-label" style="font-size:10px">Avg Rating</div><div style="font-size:18px;font-weight:700">${fmt(nb.avg_rating,1)}</div></div>
-        <div><div class="kpi-label" style="font-size:10px">Avg Reviews</div><div style="font-size:18px;font-weight:700">${fmt(nb.avg_reviews)}</div></div>
-      </div>`;
-  }
-
-  const threshEl = el.querySelector('#badge-threshold');
-  if (threshEl && Object.keys(threshold).length) {
-    threshEl.innerHTML = Object.entries(threshold).map(([k, v]) =>
-      `<div class="stat-box"><span class="stat-box-label">${esc(k.replace(/_/g,' '))}</span><span class="stat-box-value">${esc(v)}</span></div>`
-    ).join('');
-  }
-
-  const statEl = el.querySelector('#badge-stat');
-  if (statEl) {
-    const pval = statTest.p_value;
-    const sig = pval != null && pval < 0.05;
-    statEl.innerHTML = `
-      <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:6px">STATISTICAL TEST (Mann-Whitney U)</div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        ${pval != null ? `<span style="font-size:13px;color:var(--color-text-secondary)">p-value: <strong style="color:var(--color-text-primary)">${pval}</strong></span>` : ''}
-        <span class="sig-tag ${sig ? 'yes' : 'no'}">${sig ? '\u2713 Significant (p < 0.05)' : 'Not significant'}</span>
-      </div>
-      ${statTest.note ? `<div style="font-size:12px;color:var(--color-text-muted);margin-top:6px">${esc(statTest.note)}</div>` : ''}`;
-  }
-
-  const ctx = el.querySelector('#badge-donut-chart');
-  if (ctx && Object.keys(badgeTypes).length) {
-    const labels = Object.keys(badgeTypes);
-    const values = labels.map(k => badgeTypes[k]);
-    new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{ data: values, backgroundColor: ['#C084FC','#FBBF24','#818CF8','#34D399','#F87171'], borderWidth: 0 }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { position: 'bottom', labels: { color: '#8B92A5', font: { size: 11 }, padding: 12 } }
-        }
-      }
-    });
-
-    const listEl = el.querySelector('#badge-type-list');
-    if (listEl) {
-      listEl.innerHTML = labels.map(k =>
-        `<div class="stat-box"><span class="stat-box-label">${esc(k)}</span><span class="stat-box-value">${esc(badgeTypes[k])}</span></div>`
-      ).join('');
-    }
-  }
-}
-
-// ============================================================
 // SECTION: SALES & PRICING
 // ============================================================
 function renderSalesPricing(data) {
@@ -1351,16 +1268,23 @@ function renderSalesPricing(data) {
   // Top Sellers table
   const tsEl = el.querySelector('#top-sellers-tbody');
   if (tsEl && sv && sv.top_sellers) {
-    tsEl.innerHTML = sv.top_sellers.map(p =>
-      `<tr>
+    tsEl.innerHTML = sv.top_sellers.map(p => {
+      const hasDisc = p.initial_price && p.price && p.initial_price > p.price;
+      const discPct = hasDisc ? Math.round((1 - p.price / p.initial_price) * 100) : 0;
+      const titleHtml = isValidAsin(p.asin)
+        ? `<a href="https://www.amazon.com/dp/${p.asin}" target="_blank" rel="noopener noreferrer" class="product-link">${truncate(p.title, 'xl')}</a>`
+        : truncate(p.title, 'xl');
+      return `<tr>
         <td class="mono">${esc(p.asin)}</td>
         <td>${esc(p.brand)}</td>
-        <td>${truncate(p.title, 'xl')}</td>
+        <td>${titleHtml}</td>
         <td><strong>${p.bought_past_month != null ? fmt(p.bought_past_month)+'+' : '-'}</strong></td>
+        <td>${hasDisc ? '<span class="price-original">' + fmtPrice(p.initial_price) + '</span>' : fmtPrice(p.initial_price)}</td>
         <td>${fmtPrice(p.price)}</td>
+        <td>${hasDisc ? '<span class="badge badge-negative">-' + discPct + '%</span>' : '-'}</td>
         <td>${fmt(p.bsr_category || p.bsr)}</td>
-      </tr>`
-    ).join('');
+      </tr>`;
+    }).join('');
   }
 
   // Price tier chart
@@ -1418,31 +1342,16 @@ function renderSalesPricing(data) {
       ).join('');
     }
   } else if (ltEl) {
-    if (discSeg && discSeg.overall) {
-      const ov = discSeg.overall;
-      ltEl.querySelector('.subsection-title').textContent = 'Discount Strategy by Segment';
+    // BSR reports: Discount Strategy KPI is rendered above; show segment comparison table here
+    if (discSeg && discSeg.by_segment) {
+      ltEl.querySelector('.subsection-title').textContent = 'Segment Comparison';
       const kpiGrid = ltEl.querySelector('#lt-kpi-grid');
-      if (kpiGrid) {
-        const items = [
-          ['Discount Rate', Math.round(ov.discount_rate) + '%', ov.discounted_count + ' of ' + ov.total_products],
-          ['Avg Discount', ov.avg_discount_pct ? ov.avg_discount_pct.toFixed(1) + '%' : '-', ''],
-        ];
-        // Add per-segment KPI cards
-        const segs = discSeg.by_segment || {};
-        for (const [seg, sd] of Object.entries(segs)) {
-          items.push([seg, sd.discount_rate + '%', sd.discounted + ' of ' + sd.total + ' discounted']);
-        }
-        kpiGrid.innerHTML = items.map(([label, value, sub]) =>
-          `<div class="kpi-card" style="border-top:2px solid var(--color-sales-pricing)">
-            <div class="kpi-label">${esc(label)}</div>
-            <div class="kpi-value">${esc(String(value))}</div>
-            ${sub ? '<div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">' + esc(sub) + '</div>' : ''}
-          </div>`
-        ).join('');
-      }
-      // Segment comparison table
+      if (kpiGrid) kpiGrid.style.display = 'none';
       const adTbody = ltEl.querySelector('#lt-ad-position-tbody');
-      if (adTbody && discSeg.by_segment) {
+      if (adTbody) {
+        // Replace header row for segment table
+        const thead = adTbody.closest('table').querySelector('thead');
+        if (thead) thead.innerHTML = '<tr><th>Segment</th><th>Total</th><th>Discounted</th><th>Avg Disc%</th><th>Avg Bought (Disc)</th><th>Avg Bought (No Disc)</th></tr>';
         adTbody.innerHTML = Object.entries(discSeg.by_segment).map(([seg, sd]) =>
           `<tr>
             <td>${esc(seg)}</td>
@@ -1459,30 +1368,58 @@ function renderSalesPricing(data) {
     }
   }
 
-  // Discount impact chart
+  // Discount Strategy KPI cards (above charts)
+  const dsKpi = el.querySelector('#discount-strategy-kpi');
+  if (dsKpi && discSeg && discSeg.overall) {
+    const ov = discSeg.overall;
+    const segs = discSeg.by_segment || {};
+    const items = [
+      { label: 'Discount Rate', value: Math.round(ov.discount_rate) + '%', sub: ov.discounted_count + ' of ' + ov.total_products },
+      { label: 'Avg Discount', value: ov.avg_discount_pct ? ov.avg_discount_pct.toFixed(1) + '%' : '-', sub: '' },
+    ];
+    for (const [seg, sd] of Object.entries(segs)) {
+      items.push({ label: seg, value: sd.discount_rate + '%', sub: sd.discounted + '/' + sd.total + ' disc · avg ' + (sd.avg_discount_pct || 0) + '%' });
+    }
+    dsKpi.innerHTML = items.map(({ label, value, sub }) =>
+      `<div class="kpi-card" style="border-top:2px solid var(--color-sales-pricing)">
+        <div class="kpi-label">${esc(label)}</div>
+        <div class="kpi-value">${esc(String(value))}</div>
+        ${sub ? '<div style="font-size:11px;color:var(--color-text-muted);margin-top:2px">' + esc(sub) + '</div>' : ''}
+      </div>`
+    ).join('');
+  }
+
+  // Discount impact chart (Avg Bought/Mo only — horizontal bar)
   const discCtx = el.querySelector('#discount-chart');
   if (discCtx && disc && disc.tiers) {
-    // Normalize: dict {"tier_name": {avg_bsr, ...}} or array [{tier, avg_bsr, ...}]
     const rawTiers = disc.tiers;
     const tiers = Array.isArray(rawTiers)
       ? rawTiers
       : Object.entries(rawTiers).map(([k, v]) => ({ tier: k, ...v }));
     const labels = tiers.map(t => t.tier || t.label || '');
+    const boughtData = tiers.map(t => t.avg_bought || 0);
+    const countData = tiers.map(t => t.count || 0);
     new Chart(discCtx, {
       type: 'bar',
       data: {
         labels,
-        datasets: [
-          { label: 'Avg BSR', data: tiers.map(t => t.avg_bsr || 0), backgroundColor: 'rgba(0,150,136,0.7)', borderRadius: 3 },
-          { label: 'Avg Bought/Mo', data: tiers.map(t => t.avg_bought || 0), backgroundColor: 'rgba(100,116,139,0.6)', borderRadius: 3 },
-        ]
+        datasets: [{
+          label: 'Avg Bought/Mo',
+          data: boughtData,
+          backgroundColor: tiers.map((_, i) => i === 0 ? 'rgba(100,116,139,0.5)' : 'rgba(0,150,136,0.7)'),
+          borderRadius: 4,
+        }]
       },
       options: {
+        indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#8B92A5', font: { size: 11 } } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `Avg ${fmt(ctx.parsed.x)} bought/mo (${countData[ctx.dataIndex]} products)` } }
+        },
         scales: {
-          x: { ticks: { color: '#8B92A5' }, grid: { color: '#2A2D3E' } },
-          y: { ticks: { color: '#8B92A5' }, grid: { color: '#2A2D3E' } }
+          x: { ticks: { color: '#8B92A5', callback: (v) => fmt(v) }, grid: { color: '#2A2D3E' } },
+          y: { ticks: { color: '#8B92A5', font: { size: 11 } }, grid: { display: false } }
         }
       }
     });
@@ -1529,8 +1466,25 @@ function renderBrandPositioning(data) {
     const scatterData = bp.positioning.filter(b => b.avg_price && b.avg_bsr && b.avg_bsr < 50000).map(b => ({
       x: b.avg_price, y: b.avg_bsr, label: b.brand,
       r: Math.min(Math.max((b.product_count || 1) * 2, 4), 18),
+      productCount: b.product_count || 1,
       seg: (b.segment || 'mid').toLowerCase(),
     }));
+
+    // Pick notable brands to label: BSR top 3, product count top 3, segment leaders
+    const notableBrands = new Set();
+    const byBsr = [...scatterData].sort((a, b) => a.y - b.y);
+    byBsr.slice(0, 3).forEach(d => notableBrands.add(d.label));
+    const byCount = [...scatterData].sort((a, b) => b.productCount - a.productCount);
+    byCount.slice(0, 3).forEach(d => notableBrands.add(d.label));
+    const segs = ['budget', 'mid', 'premium', 'luxury'];
+    for (const seg of segs) {
+      const segBrands = scatterData.filter(d => d.seg.includes(seg));
+      if (segBrands.length) {
+        segBrands.sort((a, b) => a.y - b.y);
+        notableBrands.add(segBrands[0].label);
+      }
+    }
+
     const datasets = Object.entries(segColors).map(([seg, color]) => ({
       label: seg.charAt(0).toUpperCase() + seg.slice(1),
       data: scatterData.filter(d => d.seg.includes(seg)).map(d => ({ x: d.x, y: d.y, r: d.r })),
@@ -1538,11 +1492,36 @@ function renderBrandPositioning(data) {
       borderColor: color,
       borderWidth: 1,
       pointLabels: scatterData.filter(d => d.seg.includes(seg)).map(d => d.label),
-      pointCounts: scatterData.filter(d => d.seg.includes(seg)).map(d => Math.round(d.r / 2)),
+      pointCounts: scatterData.filter(d => d.seg.includes(seg)).map(d => d.productCount),
     }));
+
+    // Plugin: draw labels only for notable brands
+    const brandLabelPlugin = {
+      id: 'brandLabels',
+      afterDatasetsDraw(chart) {
+        const ctx2 = chart.ctx;
+        ctx2.save();
+        ctx2.font = '10px sans-serif';
+        ctx2.textAlign = 'left';
+        ctx2.textBaseline = 'bottom';
+        chart.data.datasets.forEach((ds, dsIdx) => {
+          const meta = chart.getDatasetMeta(dsIdx);
+          meta.data.forEach((point, idx) => {
+            const lbl = ds.pointLabels && ds.pointLabels[idx];
+            if (lbl && notableBrands.has(lbl)) {
+              ctx2.fillStyle = ds.borderColor || '#CDD5E0';
+              ctx2.fillText(lbl, point.x + point.options.radius + 3, point.y - 2);
+            }
+          });
+        });
+        ctx2.restore();
+      }
+    };
+
     const scatterChart = new Chart(scatterCtx, {
       type: 'bubble',
       data: { datasets },
+      plugins: [brandLabelPlugin],
       options: {
         responsive: true, maintainAspectRatio: false,
         scales: {
@@ -1752,14 +1731,11 @@ function renderIngredientRanking(data) {
         { key: 'product_count', header: '# Products' },
         { key: 'avg_weight', header: 'Avg Weight', render: (v) => fmt(v, 3) },
         { key: 'category', header: 'Category', filterKey: 'category', render: (v) => v ? `<span class="badge badge-mid">${esc(v)}</span>` : '' },
-        { key: 'featured_count', header: 'Source', sortable: true,
-          render: (v, row) => {
-            const fc = row.featured_count || 0;
-            const ic = row.inci_only_count || 0;
-            if (fc > 0 && ic > 0) return `<span class="badge badge-positive">Featured</span> <span class="badge badge-mid">+INCI</span>`;
-            if (fc > 0) return `<span class="badge badge-positive">Featured (${fc})</span>`;
-            if (ic > 0) return `<span class="badge badge-mid">INCI Only (${ic})</span>`;
-            return '<span class="badge">Unknown</span>';
+        { key: 'featured_count', header: 'Featured In', sortable: true,
+          render: (v) => {
+            const fc = v || 0;
+            if (fc > 0) return `<span class="badge badge-positive">${fc} products</span>`;
+            return '<span class="badge">-</span>';
           }
         },
         { key: 'avg_price', header: 'Avg Price', render: (v) => fmtPrice(v) },
@@ -1887,7 +1863,7 @@ function renderRisingProducts(data) {
 }
 
 // ============================================================
-// SECTION: PRODUCT DETAIL
+// SECTION: PRODUCT DETAIL (2-tier: Master Row + Expandable Detail)
 // ============================================================
 function renderProductDetail(data) {
   const el = document.getElementById('product-detail');
@@ -1897,10 +1873,14 @@ function renderProductDetail(data) {
   const searchInput = el.querySelector('#pd-search');
   const tableEl = el.querySelector('#product-detail-table-wrap');
 
+  // --- Tier 1: Master columns (always visible) ---
   const tc = new TableController({
     data: data.products,
     pageSize: 20,
     columns: [
+      { key: '_expand', header: '', sortable: false,
+        render: () => `<span class="pd-expand-icon">&#9654;</span>`
+      },
       { key: 'asin', header: 'ASIN', className: 'mono' },
       { key: 'brand', header: 'Brand' },
       { key: 'title', header: 'Title', sortable: false,
@@ -1922,111 +1902,111 @@ function renderProductDetail(data) {
           return html;
         }
       },
-      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*(this)?\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return truncate(clean, 'lg'); } },
       { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
       { key: 'bsr_category', header: 'BSR', render: (v) => fmt(v) },
       { key: 'composite_weight', header: 'Weight', render: (v) => fmt(v,3) },
-      { key: 'unit_price', header: 'Unit Price', render: (v) => truncate(v, 'sm') },
-      { key: 'coupon', header: 'Coupon', render: (v) => truncate(v, 'sm') },
-      { key: 'badge', header: 'Badge', render: (v) => truncate(v, 'sm') },
-      { key: 'plus_content', header: 'A+', render: (v) => v ? '<span class="badge badge-positive">Yes</span>' : '' },
-      { key: 'variations_count', header: 'Vars', render: (v) => fmt(v) },
-      { key: 'voice_positive', header: 'Voice +', sortable: false, render: (v) => { if (!v) return ''; const s = String(v); return `<span class="cell-truncate" style="color:var(--color-positive)" title="${esc(s)}">${esc(s)}</span>`; } },
-      { key: 'voice_negative', header: 'Voice -', sortable: false, render: (v) => { if (!v) return ''; const s = String(v); return `<span class="cell-truncate" style="color:var(--color-negative)" title="${esc(s)}">${esc(s)}</span>`; } },
-      { key: 'ingredients', header: 'Featured', sortable: false,
-        render: (v, row) => {
-          if (!v || !v.length) return '';
-          const featured = v.filter(i => i.source === 'featured' || i.source === 'both');
-          if (!featured.length) {
-            return v.map(i => esc(i.common_name || i.name)).join(', ');
-          }
-          return featured.map(i =>
-            `<span class="badge badge-positive" style="font-size:10px;margin:1px">${esc(i.common_name || i.name)}</span>`
-          ).join(' ');
-        }
-      },
-      { key: 'ingredients_raw', header: 'Full INCI', sortable: false,
-        render: (v) => {
-          if (!v) return '';
-          const short = v.length > 80 ? v.substring(0, 80) + '...' : v;
-          const attrSafe = (s) => esc(s).replace(/"/g, '&quot;');
-          return `<span class="cell-truncate inci-expand" title="${attrSafe(v)}" onclick="this.textContent = this.dataset.full || this.textContent; this.classList.toggle('expanded')" data-full="${attrSafe(v)}">${esc(short)}</span>`;
-        }
-      },
     ],
     container: tableEl,
     searchInput: searchInput,
   });
   tc.init();
-}
 
-// ============================================================
-// SECTION: RAW SEARCH
-// ============================================================
-function renderRawSearch(data) {
-  const el = document.getElementById('raw-search');
-  if (!el) return;
-  if (!data.search_products || !data.search_products.length) { el.style.display = 'none'; return; }
+  // --- Tier 2: Expandable detail panel ---
+  const tbody = tableEl.querySelector('tbody');
+  const colCount = tc.columns.length;
 
-  const searchInput = el.querySelector('#rs-search');
-  const tableEl = el.querySelector('#raw-search-table-wrap');
+  function buildDetailPanel(row) {
+    // Customer Says
+    let customerSays = row.customer_says || '';
+    if (customerSays) {
+      customerSays = customerSays.replace(/Customers?\s*find\s*(this)?\s*:?\s*/gi, '').trim();
+      if (customerSays) customerSays = customerSays[0].toUpperCase() + customerSays.slice(1);
+    }
+    // Voice +
+    const voicePos = row.voice_positive ? String(row.voice_positive).split(',').map(s => s.trim()).filter(Boolean) : [];
+    const voicePosHtml = voicePos.length
+      ? voicePos.map(k => `<span class="pd-tag-positive">${esc(k)}</span>`).join(' ')
+      : '<span style="color:var(--color-text-muted)">-</span>';
+    // Voice -
+    const voiceNeg = row.voice_negative ? String(row.voice_negative).split(',').map(s => s.trim()).filter(Boolean) : [];
+    const voiceNegHtml = voiceNeg.length
+      ? voiceNeg.map(k => `<span class="pd-tag-negative">${esc(k)}</span>`).join(' ')
+      : '<span style="color:var(--color-text-muted)">-</span>';
+    // Featured Ingredients
+    const ings = row.ingredients || [];
+    const featured = ings.filter(i => i.source === 'featured' || i.source === 'both');
+    const ingDisplay = featured.length ? featured : ings;
+    const ingsHtml = ingDisplay.length
+      ? ingDisplay.map(i => `<span class="pd-tag-positive">${esc(i.common_name || i.name)}</span>`).join(' ')
+      : '<span style="color:var(--color-text-muted)">-</span>';
+    // Full INCI (one line + tooltip)
+    const inci = row.ingredients_raw || '';
+    const inciHtml = inci
+      ? `<div class="pd-inci-line" title="${esc(inci).replace(/"/g, '&quot;')}">${esc(inci)}</div>`
+      : '<span style="color:var(--color-text-muted)">-</span>';
+    // Meta info
+    const meta = [
+      { label: 'Unit Price', val: row.unit_price },
+      { label: 'Coupon', val: row.coupon },
+      { label: 'Badge', val: row.badge },
+      { label: 'A+', val: row.plus_content ? 'Yes' : '' },
+      { label: 'Vars', val: row.variations_count },
+    ].filter(m => m.val);
+    const metaHtml = meta.length
+      ? meta.map(m => `<span class="pd-meta-item"><span class="pd-label">${m.label}:</span> ${esc(String(m.val))}</span>`).join('')
+      : '';
 
-  const tc = new TableController({
-    data: data.search_products,
-    pageSize: 20,
-    columns: [
-      { key: 'position', header: '#' },
-      { key: 'asin', header: 'ASIN', className: 'mono' },
-      { key: 'title', header: 'Title', sortable: false,
-        render: (v, row) => {
-          if (isValidAsin(row.asin)) {
-            const url = `https://www.amazon.com/dp/${row.asin}`;
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="product-link">${truncate(v, 'xl')}</a>`;
-          }
-          return truncate(v, 'xl');
-        }
-      },
-      { key: 'price_raw', header: 'Price' },
-      { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
-      { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
-      { key: 'sponsored', header: 'Sponsored', render: (v) => v ? '<span class="badge badge-negative">Sponsored</span>' : '' },
-      { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
-    ],
-    container: tableEl,
-    searchInput: searchInput,
+    return `<div class="pd-detail-panel">
+      <div>
+        <div class="pd-label">Customer Says</div>
+        <div class="pd-val">${customerSays ? esc(customerSays) : '<span style="color:var(--color-text-muted)">-</span>'}</div>
+        <div class="pd-label">Voice +</div>
+        <div class="pd-val">${voicePosHtml}</div>
+        <div class="pd-label">Voice -</div>
+        <div class="pd-val">${voiceNegHtml}</div>
+      </div>
+      <div>
+        <div class="pd-label">Featured Ingredients</div>
+        <div class="pd-val">${ingsHtml}</div>
+        <div class="pd-label">Full INCI</div>
+        <div class="pd-val">${inciHtml}</div>
+        ${metaHtml ? `<div class="pd-label">Info</div><div class="pd-val"><div class="pd-meta-grid">${metaHtml}</div></div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Delegate click on tbody for expand/collapse
+  tableEl.addEventListener('click', (e) => {
+    const tr = e.target.closest('tbody tr');
+    if (!tr || tr.classList.contains('pd-detail-row')) return;
+    // Prevent expand when clicking links
+    if (e.target.closest('a')) return;
+
+    const icon = tr.querySelector('.pd-expand-icon');
+    const next = tr.nextElementSibling;
+
+    // Toggle off
+    if (next && next.classList.contains('pd-detail-row')) {
+      next.remove();
+      if (icon) icon.classList.remove('open');
+      return;
+    }
+
+    // Build row data from index
+    const allTrs = Array.from(tbody.querySelectorAll('tr:not(.pd-detail-row)'));
+    const rowIdx = allTrs.indexOf(tr);
+    const start = (tc.currentPage - 1) * tc.pageSize;
+    const row = tc.filtered[start + rowIdx];
+    if (!row) return;
+
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'pd-detail-row';
+    detailTr.innerHTML = `<td colspan="${colCount}">${buildDetailPanel(row)}</td>`;
+    tr.after(detailTr);
+    if (icon) icon.classList.add('open');
   });
-  tc.init();
-}
-
-// ============================================================
-// SECTION: RAW DETAIL
-// ============================================================
-function renderRawDetail(data) {
-  const el = document.getElementById('raw-detail');
-  if (!el) return;
-  if (!data.details || !data.details.length) { el.style.display = 'none'; return; }
-
-  const searchInput = el.querySelector('#rd-search');
-  const tableEl = el.querySelector('#raw-detail-table-wrap');
-
-  const tc = new TableController({
-    data: data.details,
-    pageSize: 20,
-    columns: [
-      { key: 'asin', header: 'ASIN', className: 'mono' },
-      { key: 'brand', header: 'Brand' },
-      { key: 'bsr_category', header: 'BSR', render: (v) => fmt(v) },
-      { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
-      { key: 'review_count', header: 'Reviews', render: (v) => fmt(v) },
-      { key: 'manufacturer', header: 'Manufacturer' },
-      { key: 'ingredients_raw', header: 'Ingredients Raw', sortable: false, render: (v) => truncate(v, 'xl') },
-    ],
-    container: tableEl,
-    searchInput: searchInput,
-  });
-  tc.init();
 }
 
 // ============================================================
@@ -2037,7 +2017,7 @@ function buildSidebar(data) {
     { group: 'Story', items: [
       { id: 'market-insight',    label: 'Market Insight',     color: 'var(--color-market-insight)' },
       { id: 'consumer-voice',    label: 'Consumer Voice',     color: 'var(--color-consumer-voice)' },
-      { id: 'badge-analysis',    label: 'Badge Analysis',     color: 'var(--color-badge-analysis)' },
+      { id: 'rising-products',   label: 'Rising Products',    color: 'var(--color-rising-products)' },
     ]},
     { group: 'Analysis', items: [
       { id: 'sales-pricing',     label: 'Sales & Pricing',    color: 'var(--color-sales-pricing)' },
@@ -2045,12 +2025,9 @@ function buildSidebar(data) {
       { id: 'marketing-keywords',label: 'Marketing Keywords', color: 'var(--color-marketing-kw)' },
       { id: 'ingredient-ranking',label: 'Ingredient Ranking', color: 'var(--color-ingredient-rank-light)' },
       { id: 'category-summary',  label: 'Category Summary',   color: 'var(--color-category-summary)' },
-      { id: 'rising-products',   label: 'Rising Products',    color: 'var(--color-rising-products)' },
     ]},
     { group: 'Data', items: [
       { id: 'product-detail',    label: 'Product Detail',     color: 'var(--color-product-detail)' },
-      { id: 'raw-search',        label: 'Raw - Search',       color: 'var(--color-raw-search)' },
-      { id: 'raw-detail',        label: 'Raw - Detail',       color: 'var(--color-raw-detail)' },
     ]},
   ];
 
@@ -2164,32 +2141,15 @@ function buildSectionsHTML() {
     </div>
   </section>
 
-  <!-- ==================== BADGE ANALYSIS ==================== -->
-  <section class="section" id="badge-analysis" style="--section-color:var(--color-badge-analysis)">
+  <!-- ==================== RISING PRODUCTS ==================== -->
+  <section class="section" id="rising-products" style="--section-color:var(--color-rising-products)">
     <div class="section-header">
       <div>
-        <div class="section-title">Badge Analysis</div>
-        <div class="section-subtitle">Amazon's Choice &amp; Best Seller impact on market performance</div>
+        <div class="section-title">Rising Products</div>
+        <div class="section-subtitle">Low reviews + high BSR rank &mdash; new entrants to watch</div>
       </div>
     </div>
-    <div class="two-col-left-wide">
-      <div>
-        <div class="card-grid card-grid-2" style="margin-bottom:20px">
-          <div class="kpi-card" id="badge-with" style="border-top:2px solid var(--color-badge-analysis)"></div>
-          <div class="kpi-card" id="badge-without"></div>
-        </div>
-        <div class="subsection-title">Acquisition Threshold</div>
-        <div id="badge-threshold" style="display:grid;gap:6px;margin-bottom:16px"></div>
-        <div id="badge-stat" style="padding:14px 16px;background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:var(--radius-md)"></div>
-      </div>
-      <div>
-        <div class="subsection-title">Badge Type Distribution</div>
-        <div class="chart-container" style="padding-top:12px">
-          <canvas id="badge-donut-chart" height="200"></canvas>
-        </div>
-        <div id="badge-type-list" style="margin-top:12px;display:grid;gap:6px"></div>
-      </div>
-    </div>
+    <div class="card-grid card-grid-2" id="rising-grid"></div>
   </section>
 
   <!-- ==================== SALES & PRICING ==================== -->
@@ -2200,24 +2160,27 @@ function buildSectionsHTML() {
         <div class="section-subtitle">Revenue patterns, discount mechanics &amp; promotions analysis</div>
       </div>
     </div>
+    <div id="discount-strategy-kpi" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:32px"></div>
+    <div class="two-col" style="margin-bottom:32px">
+      <div>
+        <div class="subsection-title">Sales by Price Tier</div>
+        <div class="chart-container" style="height:220px">
+          <canvas id="price-tier-chart"></canvas>
+        </div>
+      </div>
+      <div>
+        <div class="subsection-title">Discount Impact on Avg Sales</div>
+        <div class="chart-container" style="height:220px">
+          <canvas id="discount-chart"></canvas>
+        </div>
+      </div>
+    </div>
     <div class="subsection-title">Top Sellers by Monthly Volume</div>
     <div class="table-wrapper" style="margin-bottom:32px">
       <table>
-        <thead><tr><th>ASIN</th><th>Brand</th><th>Title</th><th>Bought/Mo</th><th>Price</th><th>BSR</th></tr></thead>
+        <thead><tr><th>ASIN</th><th>Brand</th><th>Title</th><th>Bought/Mo</th><th>Listing</th><th>Price</th><th>Disc%</th><th>BSR</th></tr></thead>
         <tbody id="top-sellers-tbody"></tbody>
       </table>
-    </div>
-    <div class="subsection">
-      <div class="subsection-title">Sales by Price Tier</div>
-      <div class="chart-container" style="height:220px">
-        <canvas id="price-tier-chart"></canvas>
-      </div>
-    </div>
-    <div class="subsection">
-      <div class="subsection-title">Discount Impact on BSR</div>
-      <div class="chart-container" style="height:240px">
-        <canvas id="discount-chart"></canvas>
-      </div>
     </div>
     <div class="two-col" style="margin-top:40px">
       <div>
@@ -2325,7 +2288,7 @@ function buildSectionsHTML() {
     <div class="section-header">
       <div>
         <div class="section-title">Ingredient Ranking</div>
-        <div class="section-subtitle">Weighted Score = Bought/Mo(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%)</div>
+        <div class="section-subtitle">Featured ingredients only (marketed in titles &amp; bullets) · Weighted Score = Bought/Mo(30%) + BSR(25%) + Reviews(20%) + Position(15%) + Rating(10%)</div>
       </div>
     </div>
     <div id="featured-ingredients-card" style="margin-bottom:24px"></div>
@@ -2385,17 +2348,6 @@ function buildSectionsHTML() {
     </div>
   </section>
 
-  <!-- ==================== RISING PRODUCTS ==================== -->
-  <section class="section" id="rising-products" style="--section-color:var(--color-rising-products)">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Rising Products</div>
-        <div class="section-subtitle">Low reviews + high BSR rank &mdash; new entrants to watch</div>
-      </div>
-    </div>
-    <div class="card-grid card-grid-2" id="rising-grid"></div>
-  </section>
-
   <!-- ==================== PRODUCT DETAIL ==================== -->
   <section class="section" id="product-detail" style="--section-color:var(--color-product-detail)">
     <div class="section-header">
@@ -2439,72 +2391,6 @@ function buildSectionsHTML() {
     </div>
   </section>
 
-  <!-- ==================== RAW SEARCH ==================== -->
-  <section class="section" id="raw-search" style="--section-color:var(--color-raw-search)">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Raw - Search</div>
-        <div class="section-subtitle">Original search crawl data</div>
-      </div>
-    </div>
-    <div class="raw-banner">&#9888; Raw data &mdash; unprocessed</div>
-    <div class="toolbar">
-      <input class="search-input" type="text" id="rs-search" placeholder="Search...">
-    </div>
-    <div data-tc="1" id="raw-search-table-wrap">
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>ASIN <span class="sort-icon">&#8597;</span></th>
-              <th>Title</th>
-              <th>Price</th>
-              <th>Reviews <span class="sort-icon">&#8597;</span></th>
-              <th>Rating <span class="sort-icon">&#8597;</span></th>
-              <th>Sponsored</th>
-              <th>Bought/Mo <span class="sort-icon">&#8597;</span></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="pagination"></div>
-    </div>
-  </section>
-
-  <!-- ==================== RAW DETAIL ==================== -->
-  <section class="section" id="raw-detail" style="--section-color:var(--color-raw-detail)">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Raw - Detail</div>
-        <div class="section-subtitle">Parsed product page data</div>
-      </div>
-    </div>
-    <div class="raw-banner">&#9888; Raw data &mdash; unprocessed</div>
-    <div class="toolbar">
-      <input class="search-input" type="text" id="rd-search" placeholder="Search...">
-    </div>
-    <div data-tc="1" id="raw-detail-table-wrap">
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>ASIN <span class="sort-icon">&#8597;</span></th>
-              <th>Brand <span class="sort-icon">&#8597;</span></th>
-              <th>BSR <span class="sort-icon">&#8597;</span></th>
-              <th>Rating <span class="sort-icon">&#8597;</span></th>
-              <th>Reviews <span class="sort-icon">&#8597;</span></th>
-              <th>Manufacturer</th>
-              <th>Ingredients Raw</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="pagination"></div>
-    </div>
-  </section>
   `;
 }
 
@@ -2524,10 +2410,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Render each section (isolated try-catch so one failure doesn't block others)
   const renderers = [
-    renderMarketInsight, renderConsumerVoice, renderBadgeAnalysis,
+    renderMarketInsight, renderConsumerVoice,
     renderSalesPricing, renderBrandPositioning, renderMarketingKeywords,
     renderIngredientRanking, renderCategorySummary, renderRisingProducts,
-    renderProductDetail, renderRawSearch, renderRawDetail,
+    renderProductDetail,
   ];
   for (const fn of renderers) {
     try { fn(D); } catch (e) { console.error('[' + fn.name + ']', e); }

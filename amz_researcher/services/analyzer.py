@@ -68,6 +68,9 @@ def _aggregate_ingredients(
 
     for wp in weighted_products:
         for ing in wp.ingredients:
+            # INCI 전용 성분은 랭킹 제외 (featured/both/legacy만 분석)
+            if ing.source == "inci":
+                continue
             key = _get_display_name(ing)
             if key not in ingredient_data:
                 ingredient_data[key] = {
@@ -83,11 +86,8 @@ def _aggregate_ingredients(
             data["product_count"] += 1
             if wp.price is not None:
                 data["prices"].append(wp.price)
-            # source 집계 (제품 단위 카운트)
             if ing.source in ("featured", "both"):
                 data["featured_count"] += 1
-            elif ing.source == "inci":
-                data["inci_only_count"] += 1
 
     rankings = []
     for name, data in ingredient_data.items():

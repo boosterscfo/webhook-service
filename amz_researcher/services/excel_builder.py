@@ -29,7 +29,6 @@ ASIN_PATTERN = re.compile(r'^[A-Z0-9]{10}$')
 TAB_COLORS = {
     "Market Insight": "E91E63",
     "Consumer Voice": "FF9800",
-    "Badge Analysis": "673AB7",
     "Sales & Pricing": "009688",
     "Brand Positioning": "3F51B5",
     "Marketing Keywords": "795548",
@@ -553,137 +552,6 @@ def _build_consumer_voice(wb: Workbook, customer_voice_data: dict, is_keyword: b
     _set_column_widths(ws, {"A": 20, "B": 10, "C": 16, "D": 18, "E": 12})
 
 
-# Item 4: Badge Analysis with stat test and threshold sections
-def _build_badge_analysis(wb: Workbook, badge_data: dict):
-    """badge 보유/미보유 비교 시트."""
-    ws = wb.create_sheet("Badge Analysis")
-    # Item 1: Use TAB_COLORS instead of hardcoded value
-    ws.sheet_properties.tabColor = TAB_COLORS["Badge Analysis"]
-
-    col_count = 5
-    _write_title(
-        ws,
-        "Badge Analysis — Amazon's Choice / Best Seller Impact",
-        "Badge 보유 여부에 따른 BSR, 가격, 리뷰, 평점 비교",
-        col_count,
-    )
-
-    headers = ["Group", "Count", "Avg BSR", "Avg Price", "Avg Rating"]
-    for c, h in enumerate(headers, 1):
-        ws.cell(row=4, column=c, value=h)
-    _style_header_row(ws, 4, col_count)
-
-    for i, (label, key) in enumerate([("With Badge", "with_badge"), ("Without Badge", "without_badge")]):
-        row = 5 + i
-        metrics = badge_data.get(key, {})
-        ws.cell(row=row, column=1, value=label)
-        ws.cell(row=row, column=2, value=metrics.get("count", 0))
-        if metrics.get("avg_bsr") is not None:
-            ws.cell(row=row, column=3, value=metrics["avg_bsr"]).number_format = "#,##0"
-        if metrics.get("avg_price") is not None:
-            ws.cell(row=row, column=4, value=metrics["avg_price"]).number_format = "$#,##0.00"
-        if metrics.get("avg_rating") is not None:
-            ws.cell(row=row, column=5, value=metrics["avg_rating"])
-
-    # Badge types section
-    row = 8
-    ws.cell(row=row, column=1, value="Badge Type Distribution")
-    ws.cell(row=row, column=1).font = Font(bold=True)
-    row += 1
-    for bt in badge_data.get("badge_types", []):
-        ws.cell(row=row, column=1, value=bt["badge"])
-        ws.cell(row=row, column=2, value=bt["count"])
-        row += 1
-
-    _style_data_rows(ws, 5, row - 1, col_count)
-
-    # Item 4 Section A: Statistical Test: Badge vs No-Badge BSR
-    stat_test = badge_data.get("stat_test_bsr")
-    if stat_test is not None:
-        row += 2  # 2 blank rows
-        ws.cell(row=row, column=1, value="Statistical Test: Badge vs No-Badge BSR")
-        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
-        row += 1
-
-        # Header row
-        ws.cell(row=row, column=1, value="Test")
-        ws.cell(row=row, column=2, value="Value")
-        _style_header_row(ws, row, 2)
-        row += 1
-        stat_data_start = row
-
-        # Method
-        ws.cell(row=row, column=1, value="Method")
-        ws.cell(row=row, column=2, value="Mann-Whitney U Test")
-        row += 1
-
-        # U Statistic
-        ws.cell(row=row, column=1, value="U Statistic")
-        if stat_test.get("u_statistic") is not None:
-            ws.cell(row=row, column=2, value=stat_test["u_statistic"])
-        row += 1
-
-        # p-value
-        note = stat_test.get("note", "")
-        ws.cell(row=row, column=1, value="p-value")
-        if note in ("insufficient_sample", "test_failed"):
-            ws.cell(row=row, column=2, value=note)
-        elif stat_test.get("p_value") is not None:
-            ws.cell(row=row, column=2, value=stat_test["p_value"]).number_format = "0.0000"
-        row += 1
-
-        # Significant
-        ws.cell(row=row, column=1, value="Significant (p < 0.05)")
-        if note in ("insufficient_sample", "test_failed"):
-            ws.cell(row=row, column=2, value="N/A")
-        elif stat_test.get("significant") is not None:
-            ws.cell(row=row, column=2, value="Yes" if stat_test["significant"] else "No")
-        else:
-            ws.cell(row=row, column=2, value="N/A")
-        row += 1
-
-        _style_data_rows(ws, stat_data_start, row - 1, 2)
-
-    # Item 4 Section B: Badge Acquisition Threshold
-    threshold = badge_data.get("acquisition_threshold") or {}
-    if threshold:
-        row += 2  # 2 blank rows
-        ws.cell(row=row, column=1, value="Badge Acquisition Threshold")
-        ws.cell(row=row, column=1).font = Font(bold=True, size=11)
-        row += 1
-
-        ws.cell(row=row, column=1, value="Metric")
-        ws.cell(row=row, column=2, value="Value")
-        _style_header_row(ws, row, 2)
-        row += 1
-        threshold_data_start = row
-
-        ws.cell(row=row, column=1, value="Minimum Reviews")
-        if threshold.get("min_reviews") is not None:
-            ws.cell(row=row, column=2, value=threshold["min_reviews"]).number_format = "#,##0"
-        row += 1
-
-        ws.cell(row=row, column=1, value="Median Reviews")
-        if threshold.get("median_reviews") is not None:
-            ws.cell(row=row, column=2, value=threshold["median_reviews"]).number_format = "#,##0"
-        row += 1
-
-        ws.cell(row=row, column=1, value="Minimum Rating")
-        if threshold.get("min_rating") is not None:
-            ws.cell(row=row, column=2, value=threshold["min_rating"])
-        row += 1
-
-        ws.cell(row=row, column=1, value="Median Rating")
-        if threshold.get("median_rating") is not None:
-            ws.cell(row=row, column=2, value=threshold["median_rating"])
-        row += 1
-
-        _style_data_rows(ws, threshold_data_start, row - 1, 2)
-
-    ws.freeze_panes = "A5"
-    _set_column_widths(ws, {"A": 25, "B": 10, "C": 12, "D": 12, "E": 10})
-
-
 # Item 5: Sales & Pricing sheet
 def _build_sales_pricing(wb: Workbook, analysis_data: dict) -> None:
     sales = analysis_data.get("sales_volume") or {}
@@ -1162,9 +1030,6 @@ def build_excel(
         customer_voice = analysis_data.get("customer_voice")
         if customer_voice:
             _build_consumer_voice(wb, customer_voice)
-        badge_data = analysis_data.get("badges")
-        if badge_data:
-            _build_badge_analysis(wb, badge_data)
         _build_sales_pricing(wb, analysis_data)
 
     # === Analysis tabs ===
@@ -1184,7 +1049,6 @@ def build_excel(
     desired_order = [
         "Market Insight",
         "Consumer Voice",
-        "Badge Analysis",
         "Sales & Pricing",
         "Brand Positioning",
         "Marketing Keywords",
@@ -1217,10 +1081,9 @@ def build_keyword_excel(
     market_report: str = "",
     analysis_data: dict | None = None,
 ) -> bytes:
-    """키워드 검색 전용 9시트 Excel 생성.
+    """키워드 검색 전용 Excel 생성.
 
-    카테고리 리포트(12시트)에서 BSR 의존 3시트 제거:
-    - Badge Analysis (삭제)
+    카테고리 리포트에서 BSR 의존 시트 제거:
     - Brand Positioning (삭제)
     - Rising Products (삭제)
 
@@ -1236,7 +1099,6 @@ def build_keyword_excel(
         customer_voice = analysis_data.get("customer_voice")
         if customer_voice:
             _build_consumer_voice(wb, customer_voice, is_keyword=True)
-        # Badge Analysis 제거
         _build_sales_pricing(wb, analysis_data)
 
     # === Analysis tabs ===

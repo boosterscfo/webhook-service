@@ -130,9 +130,6 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 ### 11. 소비자 리뷰 키워드 분석 (Consumer Voice)
 {customer_voice_json}
 
-### 12. 배지 보유/미보유 성과 비교 (Badge Analysis)
-{badges_json}
-
 ---
 
 위 데이터를 바탕으로 시장 분석 리포트를 작성하라.
@@ -179,14 +176,11 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
    - {section6_guidance}
    - 쿠폰/프로모션 사용 현황과 BSR 영향
 
-7. **소비자 인식 & 배지 효과 (Consumer Voice & Badge Impact)**
+7. **소비자 인식 (Consumer Voice)**
    - 긍정/부정 리뷰 키워드 Top 5와 BSR 상관관계
    - 소비자가 실제로 중시하는 속성(향, 효과, 질감 등)
    - **가격대별 불만 패턴**: Budget/Mid/Premium/Luxury 각 가격대에서 두드러지는 부정 키워드 차이 분석. 낮은 가격대에서만 나타나는 불만 vs 고가에서도 지속되는 불만 구분
    - **BSR Top 10 공통 강점**: BSR 상위 10개 제품이 공유하는 긍정 키워드. 80%+ 공통 키워드는 "시장 필수 요건", 50-80%는 "차별화 요인"으로 해석
-   - Badge(Amazon's Choice/Best Seller) 보유 제품의 성과 차이
-   - Badge 획득 전략 제안
-
 8. **액션 아이템 (Action Items)**
    - 바로 실행할 수 있는 3-5개 구체적 제안
    - 각 제안에 근거 데이터 명시
@@ -327,7 +321,6 @@ class GeminiService:
             section6_guidance=section6_guidance,
             promotions_json=_dump("promotions"),
             customer_voice_json=_dump("customer_voice"),
-            badges_json=_dump("badges"),
         )
 
         max_retries = 2
