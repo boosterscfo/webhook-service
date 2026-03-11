@@ -67,6 +67,8 @@ def _product_to_dict(p: WeightedProduct) -> dict:
         "plus_content": p.plus_content,
         "customer_says": p.customer_says,
         "variations_count": p.variations_count,
+        "voice_positive": ", ".join(p.voice_positive) if p.voice_positive else "",
+        "voice_negative": ", ".join(p.voice_negative) if p.voice_negative else "",
         "ingredients": [
             {"name": i.name, "common_name": i.common_name, "category": i.category}
             for i in p.ingredients
@@ -488,6 +490,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     td { padding: 9px 12px; color: var(--color-text-primary); vertical-align: middle; }
     td.muted { color: var(--color-text-secondary); }
     td.mono { font-family: var(--font-mono); font-size: 12px; }
+    .cell-truncate { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; vertical-align: middle; }
+    .cell-truncate-sm { max-width: 120px; }
+    .cell-truncate-lg { max-width: 220px; }
+    .cell-truncate-xl { max-width: 300px; }
 
     /* ===== BADGES / PILLS ===== */
     .badge {
@@ -741,6 +747,13 @@ function fmtPrice(n) {
   const num = parseFloat(n);
   if (isNaN(num)) return '-';
   return '$' + num.toFixed(2);
+}
+
+function truncate(v, size) {
+  if (v == null || v === '') return '';
+  const s = String(v);
+  const cls = size ? 'cell-truncate cell-truncate-' + size : 'cell-truncate';
+  return `<span class="${cls}" title="${esc(s)}">${esc(s)}</span>`;
 }
 
 function formatRankedIngredients(raw) {
@@ -1003,6 +1016,56 @@ function renderConsumerVoice(data) {
   const cv = data.analysis && data.analysis.customer_voice;
   if (!cv) { el.style.display = 'none'; return; }
 
+  // (C) BSR Top 10 Common Strengths highlight box
+  const strengthsEl = el.querySelector('#cv-bsr-strengths');
+  if (strengthsEl) {
+    const strengths = cv.bsr_top_common_strengths;
+    if (strengths && typeof strengths === 'object' && Object.keys(strengths).length) {
+      const entries = Object.entries(strengths).sort((a, b) => b[1] - a[1]);
+      const badges = entries.map(([kw, pct]) => {
+        const p = Math.round(pct * (pct <= 1 ? 100 : 1));
+        if (p >= 80) {
+          return `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--radius-full);background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);font-size:12px;font-weight:700;color:var(--color-positive)">
+            ${esc(kw)} <span style="background:var(--color-positive);color:#000;border-radius:var(--radius-full);padding:1px 6px;font-size:10px;font-weight:800">${p}%</span>
+          </span>`;
+        }
+        return `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--radius-full);background:rgba(255,255,255,0.05);border:1px solid var(--color-border);font-size:12px;color:var(--color-text-secondary)">
+          ${esc(kw)} <span style="color:var(--color-text-muted);font-size:10px">${p}%</span>
+        </span>`;
+      }).join('');
+      strengthsEl.innerHTML = `
+        <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius-lg);padding:16px 20px;margin-bottom:24px">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--color-positive);margin-bottom:10px">BSR Top 10 공통 강점</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">${badges}</div>
+        </div>`;
+    } else {
+      strengthsEl.style.display = 'none';
+    }
+  }
+
+  // (C) Voice Negative by Price Tier
+  const priceTierEl = el.querySelector('#cv-price-tier-negatives');
+  if (priceTierEl) {
+    const tierData = cv.voice_negative_by_price_tier;
+    if (tierData && typeof tierData === 'object' && Object.keys(tierData).length) {
+      const tiers = Object.entries(tierData);
+      const rows = tiers.map(([tier, kws]) => {
+        const kwArr = Array.isArray(kws) ? kws : Object.keys(kws);
+        const kwText = kwArr.slice(0, 5).map(k => `<span style="padding:2px 7px;border-radius:var(--radius-full);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);font-size:11px;color:var(--color-negative)">${esc(typeof k === 'string' ? k : k.keyword || '')}</span>`).join(' ');
+        return `<tr><td style="color:var(--color-text-secondary);white-space:nowrap">${esc(tier)}</td><td style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px">${kwText}</td></tr>`;
+      }).join('');
+      priceTierEl.innerHTML = `
+        <div class="subsection" style="margin-top:24px">
+          <div class="subsection-title">가격대별 불만 패턴</div>
+          <div class="table-wrapper" style="margin-top:10px">
+            <table><thead><tr><th>가격대</th><th>주요 불만 키워드</th></tr></thead><tbody>${rows}</tbody></table>
+          </div>
+        </div>`;
+    } else {
+      priceTierEl.style.display = 'none';
+    }
+  }
+
   const posKws = normalizeKws(cv.positive_keywords);
   const negKws = normalizeKws(cv.negative_keywords);
   const maxPos = posKws.length ? Math.max(...posKws.map(k => k.count || 0)) : 1;
@@ -1017,6 +1080,7 @@ function renderConsumerVoice(data) {
         <div class="kw-bar-label">${esc(k.keyword || k.word || k.term || '')}</div>
         <div class="kw-bar-track"><div class="kw-bar-fill" style="width:${Math.round((k.count||0)/maxPos*100)}%;background:var(--color-positive)"></div></div>
         <div class="kw-bar-count">${k.count||0}</div>
+        ${k.avg_bsr ? `<div class="kw-bar-bsr">BSR ${fmt(k.avg_bsr)}</div>` : '<div class="kw-bar-bsr"></div>'}
       </div>`
     ).join('');
   }
@@ -1027,6 +1091,7 @@ function renderConsumerVoice(data) {
         <div class="kw-bar-label">${esc(k.keyword || k.word || k.term || '')}</div>
         <div class="kw-bar-track"><div class="kw-bar-fill" style="width:${Math.round((k.count||0)/maxNeg*100)}%;background:var(--color-negative)"></div></div>
         <div class="kw-bar-count">${k.count||0}</div>
+        ${k.avg_bsr ? `<div class="kw-bar-bsr">BSR ${fmt(k.avg_bsr)}</div>` : '<div class="kw-bar-bsr"></div>'}
       </div>`
     ).join('');
   }
@@ -1184,7 +1249,7 @@ function renderSalesPricing(data) {
       `<tr>
         <td class="mono">${esc(p.asin)}</td>
         <td>${esc(p.brand)}</td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.title)}</td>
+        <td>${truncate(p.title, 'xl')}</td>
         <td><strong>${p.bought_past_month != null ? fmt(p.bought_past_month)+'+' : '-'}</strong></td>
         <td>${fmtPrice(p.price)}</td>
         <td>${fmt(p.bsr_category || p.bsr)}</td>
@@ -1486,7 +1551,7 @@ function renderMarketingKeywords(data) {
       return `<tr>
         <td><span class="badge ${badges[tierKey]}">${esc(t.tier)}</span></td>
         <td>${fmt(t.product_count || t.count)}</td>
-        <td class="muted">${esc(Array.isArray(t.top_ingredients) ? t.top_ingredients.map(i => i.name || i).join(', ') : (t.top_ingredients || ''))}</td>
+        <td>${formatRankedIngredients(t.top_ingredients)}</td>
       </tr>`;
     }).join('');
   }
@@ -1529,7 +1594,7 @@ function renderIngredientRanking(data) {
     const searchInput = el.querySelector('#ing-search');
     const tc = new TableController({
       data: data.rankings,
-      pageSize: 100,
+      pageSize: 20,
       columns: [
         { key: 'rank', header: 'Rank', sortable: true },
         { key: 'ingredient', header: 'Ingredient', render: (v) => `<strong>${esc(v)}</strong>` },
@@ -1538,7 +1603,7 @@ function renderIngredientRanking(data) {
         { key: 'avg_weight', header: 'Avg Weight', render: (v) => fmt(v, 3) },
         { key: 'category', header: 'Category', filterKey: 'category', render: (v) => v ? `<span class="badge badge-mid">${esc(v)}</span>` : '' },
         { key: 'avg_price', header: 'Avg Price', render: (v) => fmtPrice(v) },
-        { key: 'key_insight', header: 'Key Insight', className: 'muted', sortable: false },
+        { key: 'key_insight', header: 'Key Insight', className: 'muted', sortable: false, render: (v) => truncate(v, 'lg') },
       ],
       container: tableEl,
       searchInput: searchInput,
@@ -1654,24 +1719,26 @@ function renderProductDetail(data) {
 
   const tc = new TableController({
     data: data.products,
-    pageSize: 25,
+    pageSize: 20,
     columns: [
       { key: 'asin', header: 'ASIN', className: 'mono' },
       { key: 'brand', header: 'Brand' },
-      { key: 'title', header: 'Title', render: (v) => `<span style="max-width:220px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(v)}">${esc(v)}</span>`, sortable: false },
+      { key: 'title', header: 'Title', render: (v) => truncate(v, 'lg'), sortable: false },
       { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
-      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*(this)?\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return `<span style="max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(clean)}">${esc(clean)}</span>`; } },
+      { key: 'customer_says', header: 'Customer Says', sortable: false, render: (v) => { if (!v) return ''; let clean = v.replace(/Customers?\s*find\s*(this)?\s*:?\s*/gi, '').trim(); if (clean) clean = clean[0].toUpperCase() + clean.slice(1); return truncate(clean, 'lg'); } },
       { key: 'sns_price', header: 'SNS Price', render: (v) => fmtPrice(v) },
       { key: 'bought_past_month', header: 'Bought/Mo', render: (v) => v != null ? fmt(v) : '-' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
       { key: 'bsr_category', header: 'BSR', render: (v) => fmt(v) },
       { key: 'composite_weight', header: 'Weight', render: (v) => fmt(v,3) },
-      { key: 'unit_price', header: 'Unit Price' },
-      { key: 'coupon', header: 'Coupon' },
-      { key: 'badge', header: 'Badge' },
+      { key: 'unit_price', header: 'Unit Price', render: (v) => truncate(v, 'sm') },
+      { key: 'coupon', header: 'Coupon', render: (v) => truncate(v, 'sm') },
+      { key: 'badge', header: 'Badge', render: (v) => truncate(v, 'sm') },
       { key: 'plus_content', header: 'A+', render: (v) => v ? '<span class="badge badge-positive">Yes</span>' : '' },
       { key: 'variations_count', header: 'Vars', render: (v) => fmt(v) },
+      { key: 'voice_positive', header: 'Voice +', sortable: false, render: (v) => { if (!v) return ''; const s = String(v); return `<span class="cell-truncate" style="color:var(--color-positive)" title="${esc(s)}">${esc(s)}</span>`; } },
+      { key: 'voice_negative', header: 'Voice -', sortable: false, render: (v) => { if (!v) return ''; const s = String(v); return `<span class="cell-truncate" style="color:var(--color-negative)" title="${esc(s)}">${esc(s)}</span>`; } },
     ],
     container: tableEl,
     searchInput: searchInput,
@@ -1692,11 +1759,11 @@ function renderRawSearch(data) {
 
   const tc = new TableController({
     data: data.search_products,
-    pageSize: 25,
+    pageSize: 20,
     columns: [
       { key: 'position', header: '#' },
       { key: 'asin', header: 'ASIN', className: 'mono' },
-      { key: 'title', header: 'Title', sortable: false, render: (v) => `<span style="max-width:320px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help" title="${esc(v)}">${esc(v)}</span>` },
+      { key: 'title', header: 'Title', sortable: false, render: (v) => truncate(v, 'xl') },
       { key: 'price_raw', header: 'Price' },
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
@@ -1722,7 +1789,7 @@ function renderRawDetail(data) {
 
   const tc = new TableController({
     data: data.details,
-    pageSize: 25,
+    pageSize: 20,
     columns: [
       { key: 'asin', header: 'ASIN', className: 'mono' },
       { key: 'brand', header: 'Brand' },
@@ -1730,7 +1797,7 @@ function renderRawDetail(data) {
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
       { key: 'review_count', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'manufacturer', header: 'Manufacturer' },
-      { key: 'ingredients_raw', header: 'Ingredients Raw', sortable: false, render: (v) => v ? `<span style="max-width:300px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(v)}">${esc(v)}</span>` : '' },
+      { key: 'ingredients_raw', header: 'Ingredients Raw', sortable: false, render: (v) => truncate(v, 'xl') },
     ],
     container: tableEl,
     searchInput: searchInput,
@@ -1853,6 +1920,7 @@ function buildSectionsHTML() {
         <div class="section-subtitle">Keyword frequency from Amazon AI review summaries</div>
       </div>
     </div>
+    <div id="cv-bsr-strengths"></div>
     <div class="two-col">
       <div>
         <div class="subsection-title">Positive Keywords</div>
@@ -1863,6 +1931,7 @@ function buildSectionsHTML() {
         <div id="cv-negative-bars"></div>
       </div>
     </div>
+    <div id="cv-price-tier-negatives"></div>
     <div class="subsection" id="cv-bsr-subsection">
       <div class="subsection-title">BSR Correlation &mdash; Top Half vs Bottom Half</div>
       <div class="chart-container" style="height:280px">
@@ -2113,6 +2182,8 @@ function buildSectionsHTML() {
               <th>Badge</th>
               <th>A+</th>
               <th>Vars <span class="sort-icon">&#8597;</span></th>
+              <th>Voice +</th>
+              <th>Voice -</th>
             </tr>
           </thead>
           <tbody></tbody>
