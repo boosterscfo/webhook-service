@@ -95,6 +95,9 @@ PROMPT_TEMPLATE = """아래는 아마존에서 수집한 제품 목록이다.
 MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장 분석 데이터이다.
 총 {total_products}개 제품을 분석한 결과이다.
 
+## 카테고리 위치
+{category_context}
+
 ## 분석 데이터
 
 ### 1. 가격대별 성분 전략
@@ -140,6 +143,16 @@ MARKET_REPORT_PROMPT = """아래는 아마존 "{keyword}" 카테고리의 시장
 - "과포화 시장을 피하라", "블루오션을 찾아라", "레드오션을 피하라" 류의 조언은 절대 하지 마라.
 - SNS 마케팅, 인플루언서 협업, 리뷰 확보, TikTok/Instagram 프로모션 등 업계 상식 수준의 프로모션 조언은 생략하거나 한 줄로 간단히 멘션만 하라. "~해야 합니다"식 당위적 표현 금지.
 - 데이터에 기반한 구체적 수치와 차별화 인사이트만 제공하라.
+
+## 시장 규모 표현 기준 (필수 준수)
+- 위 "카테고리 위치"의 경로(breadcrumb)를 참고하여 분석 범위를 정확히 인지하라. 최하위(leaf) 카테고리라면 가장 좁은 시장이고, 하위 카테고리가 있다면 여러 세그먼트를 포괄하는 넓은 시장이다. 동일 판매량이라도 leaf 카테고리 Top 100과 상위 카테고리 Top 100은 의미가 다르다.
+- 시장 규모를 표현할 때 반드시 아래 기준을 따르고, 정성적 표현과 정량 수치를 병기하라:
+  - 월 ~10만개 이하: "소규모 니치 시장 (Top 100 합산 월 ~N만개)"
+  - 월 10~50만개: "중규모 시장 (Top 100 합산 월 ~N만개)"
+  - 월 50~100만개: "대규모 시장 (Top 100 합산 월 ~N만개)"
+  - 월 100만개 이상: "초대형 시장 (Top 100 합산 월 ~N만개)"
+- 경계값(±10%) 근처에 걸리면 보수적으로(낮은 쪽으로) 표현하라. 과장보다 보수적 표현이 의사결정에 안전하다.
+- "거대 시장", "폭발적" 등 데이터 근거 없는 과장 표현은 금지한다.
 
 반드시 아래 10개 섹션을 포함:
 
@@ -305,9 +318,26 @@ class GeminiService:
             section9_json = _dump("discount_analysis")
             section6_guidance = "세그먼트별 할인율 현황, 할인/비할인 제품의 판매량 비교, 가격 전략 인사이트"
 
+        # 카테고리 트리 컨텍스트 생성
+        _tree = analysis_data.get("category_tree")
+        if _tree:
+            breadcrumb_str = " > ".join(_tree["breadcrumb"])
+            if _tree["is_leaf"]:
+                category_context = f"경로: {breadcrumb_str}\n이 카테고리는 최하위(leaf) 카테고리로, 더 세분화되지 않는 가장 좁은 시장이다."
+            else:
+                children_str = ", ".join(_tree["children"])
+                category_context = (
+                    f"경로: {breadcrumb_str}\n"
+                    f"하위 카테고리: {children_str}\n"
+                    f"이 카테고리는 위 하위 카테고리들을 포괄하는 상위 시장이다. Top 100 제품이 여러 세그먼트에 걸쳐 있음을 감안하라."
+                )
+        else:
+            category_context = "키워드 검색 기반 분석 (특정 카테고리 계층 없음)"
+
         prompt = MARKET_REPORT_PROMPT.format(
             keyword=analysis_data["keyword"],
             total_products=analysis_data["total_products"],
+            category_context=category_context,
             price_tier_json=_dump("price_tier_analysis"),
             bsr_json=_dump("bsr_analysis"),
             brand_json=_dump("brand_analysis"),

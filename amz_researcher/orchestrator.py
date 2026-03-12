@@ -820,7 +820,8 @@ async def run_analysis(
             voice_keywords = await gemini.extract_voice_keywords(category_name, weighted_products)
             _apply_voice_keywords(voice_keywords, weighted_products, product_db)
         title_keywords = await gemini.extract_title_keywords(category_name, weighted_products)
-        analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords, title_keywords=title_keywords)
+        _tree_ctx = product_db.get_category_tree_context(category_node_id)
+        analysis_data = build_market_analysis(category_name, weighted_products, all_details, voice_keywords=voice_keywords, title_keywords=title_keywords, category_tree=_tree_ctx)
 
         market_report = cache.get_market_report_cache(category_name, len(weighted_products)) or ""
         if market_report:

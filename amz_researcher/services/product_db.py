@@ -75,6 +75,60 @@ class ProductDBService:
             return None
         return df.iloc[0]["url"] if not df.empty else None
 
+    def get_category_depth(self, node_id: str) -> int | None:
+        """특정 카테고리의 depth 반환."""
+        query = "SELECT depth FROM amz_categories WHERE node_id = %s"
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (node_id,))
+        except Exception:
+            logger.exception("Failed to get category depth for %s", node_id)
+            return None
+        if df.empty:
+            return None
+        val = df.iloc[0]["depth"]
+        return int(val) if val is not None else None
+
+    def get_category_tree_context(self, node_id: str) -> dict | None:
+        """카테고리의 breadcrumb 경로와 하위 카테고리를 반환."""
+        query = "SELECT node_id, name, parent_node_id, depth FROM amz_categories"
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query)
+        except Exception:
+            logger.exception("Failed to get category tree for %s", node_id)
+            return None
+        if df.empty:
+            return None
+
+        # node_id → row lookup
+        nodes = {str(r["node_id"]): r for _, r in df.iterrows()}
+        current = nodes.get(str(node_id))
+        if current is None:
+            return None
+
+        # breadcrumb: 현재 → root 역추적
+        breadcrumb = []
+        cursor = current
+        while cursor is not None:
+            breadcrumb.append(cursor["name"])
+            parent_id = cursor.get("parent_node_id")
+            cursor = nodes.get(str(parent_id)) if parent_id else None
+        breadcrumb.reverse()
+
+        # children: 직계 하위 카테고리
+        children = [
+            r["name"] for _, r in df.iterrows()
+            if str(r.get("parent_node_id")) == str(node_id)
+        ]
+
+        return {
+            "depth": int(current["depth"]) if current["depth"] is not None else 0,
+            "breadcrumb": breadcrumb,
+            "children": sorted(children),
+            "is_leaf": len(children) == 0,
+        }
+
     def get_all_active_category_urls(self) -> list[str]:
         """활성 카테고리의 URL 목록 반환 (수집 job용)."""
         query = "SELECT url FROM amz_categories WHERE is_active = TRUE"

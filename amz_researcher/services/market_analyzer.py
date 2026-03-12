@@ -1159,11 +1159,13 @@ def build_market_analysis(
     details: list[ProductDetail],
     voice_keywords: VoiceKeywordResult | None = None,
     title_keywords: TitleKeywordResult | None = None,
+    category_tree: dict | None = None,
 ) -> dict:
     """전체 시장 분석 데이터 생성."""
     return {
         "keyword": keyword,
         "total_products": len(weighted_products),
+        "category_tree": category_tree,
         # 기존 V4 분석 (7개)
         "price_tier_analysis": analyze_by_price_tier(weighted_products),
         "bsr_analysis": analyze_by_bsr(weighted_products),
