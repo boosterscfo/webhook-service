@@ -21,9 +21,9 @@ def _featured_ingredients(product: WeightedProduct) -> list:
     return [ing for ing in product.ingredients if ing.source != "inci"]
 
 
-def _price_tier(price: float | None) -> str:
+def _price_tier(price: float | None) -> str | None:
     if price is None:
-        return "Unknown"
+        return None
     if price < 10:
         return "Budget (<$10)"
     if price < 25:
@@ -42,6 +42,8 @@ def analyze_by_price_tier(
 
     for p in products:
         tier = _price_tier(p.price)
+        if tier is None:
+            continue
         tier_counts[tier] += 1
         for ing in _featured_ingredients(p):
             tier_ingredients[tier][_get_display_name(ing)] += 1
@@ -260,9 +262,13 @@ def detect_rising_products(
             "title": p.title[:80],
             "brand": brand,
             "price": p.price,
+            "initial_price": p.initial_price,
             "reviews": p.reviews,
             "rating": p.rating,
             "bsr": p.bsr_category,
+            "coupon": p.coupon,
+            "badge": p.badge,
+            "plus_content": p.plus_content,
             "top_ingredients": ingredients_top3,
         })
 
@@ -374,6 +380,8 @@ def analyze_sns_pricing(products: list[WeightedProduct]) -> dict:
     price_tier_sns: dict[str, dict] = defaultdict(lambda: {"total": 0, "with_sns": 0})
     for p in products:
         tier = _price_tier(p.price)
+        if tier is None:
+            continue
         price_tier_sns[tier]["total"] += 1
         if p.sns_price is not None:
             price_tier_sns[tier]["with_sns"] += 1
@@ -408,6 +416,8 @@ def analyze_discount_by_segment(products: list[WeightedProduct]) -> dict:
 
     for p in products:
         tier = _price_tier(p.price)
+        if tier is None:
+            continue
         segments[tier].append(p)
 
     overall_discounted = [
@@ -598,6 +608,8 @@ def analyze_sales_volume(products: list[WeightedProduct]) -> dict:
     tier_sales: dict[str, list[int]] = defaultdict(list)
     for p in with_sales:
         tier = _price_tier(p.price)
+        if tier is None:
+            continue
         tier_sales[tier].append(p.bought_past_month)
 
     tier_summary = {
@@ -716,7 +728,10 @@ def analyze_customer_voice(
     # --- (A) voice_negative_by_price_tier ---
     tier_products: dict[str, list[WeightedProduct]] = defaultdict(list)
     for p in with_cs:
-        tier_products[_price_tier(p.price)].append(p)
+        tier = _price_tier(p.price)
+        if tier is None:
+            continue
+        tier_products[tier].append(p)
 
     voice_negative_by_price_tier: dict[str, dict] = {}
     for tier, tier_prods in tier_products.items():
