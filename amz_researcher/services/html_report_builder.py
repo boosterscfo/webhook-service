@@ -503,10 +503,17 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .inci-expand { cursor: pointer; max-width: 200px; display: inline-block; }
     .inci-expand.expanded { max-width: none; white-space: normal; word-break: break-all; }
 
-    /* ===== PRODUCT DETAIL EXPANDABLE ROW ===== */
+    /* ===== EXPANDABLE ROW (shared) ===== */
     #product-detail-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
-    .pd-expand-icon { display: inline-block; width: 16px; font-size: 12px; color: var(--color-text-muted); transition: transform 0.2s; }
+    #rising-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
+    .pd-expand-icon { display: inline-block; width: 18px; font-size: 14px; color: var(--color-positive); transition: transform 0.25s ease, color 0.15s; }
     .pd-expand-icon.open { transform: rotate(90deg); }
+    #product-detail-table-wrap tbody tr:not(.pd-detail-row):hover .pd-expand-icon,
+    #rising-table-wrap tbody tr:not(.pd-detail-row):hover .pd-expand-icon { color: #6ee7b7; transform: scale(1.15); }
+    #product-detail-table-wrap tbody tr:not(.pd-detail-row):hover .pd-expand-icon.open,
+    #rising-table-wrap tbody tr:not(.pd-detail-row):hover .pd-expand-icon.open { transform: rotate(90deg) scale(1.15); }
+    #product-detail-table-wrap tbody tr:not(.pd-detail-row):hover,
+    #rising-table-wrap tbody tr:not(.pd-detail-row):hover { border-left: 3px solid var(--color-positive); }
     .pd-detail-row { background: var(--color-bg-input); }
     .pd-detail-row td { padding: 0 !important; }
     .pd-detail-panel { padding: 16px 20px 16px 36px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 28px; font-size: 12px; }
@@ -537,6 +544,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .badge-premium  { background: rgba(168,85,247,0.2); color: #C084FC; }
     .badge-luxury   { background: rgba(234,179,8,0.2); color: #FBBF24; }
     .badge-kbeauty  { background: rgba(233,30,99,0.15); color: #F06292; }
+    .badge-amz-choice { background: #232f3e; color: #f9a825; font-size: 10px; padding: 2px 8px; letter-spacing: 0.3px; }
+    .badge-best-seller { background: rgba(234,179,8,0.2); color: #FBBF24; font-size: 10px; }
 
     /* ===== CHARTS ===== */
     .chart-container {
@@ -1861,7 +1870,9 @@ function renderRisingProducts(data) {
       data: data.rising_products.map((p, i) => ({ ...p, _rank: i + 1 })),
       pageSize: 20,
       columns: [
-        { key: '_rank', header: '#', sortable: false },
+        { key: '_expand', header: '', sortable: false,
+          render: () => `<span class="pd-expand-icon">&#9654;</span>`
+        },
         { key: 'brand', header: 'Brand', render: (v) => `<strong>${esc(v || '')}</strong>` },
         { key: 'title', header: 'Title', sortable: false,
           render: (v, row) => {
@@ -1872,7 +1883,16 @@ function renderRisingProducts(data) {
             return t;
           }
         },
-        { key: 'price', header: 'Price', render: (v) => fmtPrice(v) },
+        { key: 'price', header: 'Price', render: (v, row) => {
+            let html = fmtPrice(v);
+            if (row.initial_price && row.initial_price > v) {
+              const disc = Math.round((1 - v / row.initial_price) * 100);
+              html += ` <span class="price-original">${fmtPrice(row.initial_price)}</span>`;
+              html += ` <span class="badge badge-negative">-${disc}%</span>`;
+            }
+            return html;
+          }
+        },
         { key: 'bsr', header: 'BSR', sortable: true,
           render: (v) => v ? `<strong style="color:var(--color-rising-products)">${fmt(v)}</strong>` : '-'
         },
@@ -1891,6 +1911,106 @@ function renderRisingProducts(data) {
       container: tableEl,
     });
     tc.init();
+
+    // --- Rising Products: Expandable detail (reuse Product Detail data) ---
+    const risingTbody = tableEl.querySelector('tbody');
+    const risingColCount = tc.columns.length;
+    const productMap = {};
+    if (data.products) data.products.forEach(p => { productMap[p.asin] = p; });
+
+    function buildRisingDetailPanel(rp) {
+      const full = productMap[rp.asin];
+      // Featured Ingredients
+      const ings = full ? (full.ingredients || []) : [];
+      const featured = ings.filter(i => i.source === 'featured' || i.source === 'both');
+      const ingDisplay = featured.length ? featured : ings;
+      const ingsHtml = ingDisplay.length
+        ? ingDisplay.map(i => `<span class="pd-tag-positive">${esc(i.common_name || i.name)}</span>`).join(' ')
+        : '<span style="color:var(--color-text-muted)">-</span>';
+      // Full INCI
+      const inci = full ? (full.ingredients_raw || '') : '';
+      const inciHtml = inci
+        ? `<div class="pd-inci-line" title="${esc(inci).replace(/"/g, '&quot;')}">${esc(inci)}</div>`
+        : '<span style="color:var(--color-text-muted)">-</span>';
+      // Customer Says
+      let customerSays = full ? (full.customer_says || '') : '';
+      if (customerSays) {
+        customerSays = customerSays.replace(/Customers?\\s*find\\s*(this)?\\s*:?\\s*/gi, '').trim();
+        if (customerSays) customerSays = customerSays[0].toUpperCase() + customerSays.slice(1);
+      }
+      // Listing badges
+      const listingTags = [];
+      if (rp.badge) {
+        const b = rp.badge.toLowerCase();
+        if (b.includes('choice')) listingTags.push(`<span class="badge badge-amz-choice">Amazon's Choice</span>`);
+        else if (b.includes('best')) listingTags.push(`<span class="badge badge-best-seller">${esc(rp.badge)}</span>`);
+        else listingTags.push(`<span class="badge badge-primary">${esc(rp.badge)}</span>`);
+      }
+      if (rp.coupon) listingTags.push(`<span class="badge badge-positive">Coupon</span>`);
+      if (rp.plus_content) listingTags.push(`<span class="badge" style="background:rgba(139,92,246,0.15);color:#a78bfa">A+</span>`);
+      const listingHtml = listingTags.length ? listingTags.join(' ') : '<span style="color:var(--color-text-muted)">-</span>';
+      // Meta
+      const meta = [];
+      if (full && full.unit_price) meta.push({ label: 'Unit Price', val: full.unit_price });
+      if (full && full.variations_count) meta.push({ label: 'Vars', val: full.variations_count });
+      const metaHtml = meta.length
+        ? meta.map(m => `<span class="pd-meta-item"><span class="pd-label">${m.label}:</span> ${esc(String(m.val))}</span>`).join('')
+        : '';
+
+      return `<div class="pd-detail-panel">
+        <div>
+          <div class="pd-label">Customer Says</div>
+          <div class="pd-val">${customerSays ? esc(customerSays) : '<span style="color:var(--color-text-muted)">-</span>'}</div>
+        </div>
+        <div>
+          <div class="pd-label">Featured Ingredients</div>
+          <div class="pd-val">${ingsHtml}</div>
+        </div>
+        <div>
+          <div class="pd-label">Listing</div>
+          <div class="pd-val">${listingHtml}</div>
+          ${metaHtml ? `<div class="pd-label">Info</div><div class="pd-val"><div class="pd-meta-grid">${metaHtml}</div></div>` : ''}
+        </div>
+        <div class="pd-col-full">
+          <div class="pd-label">Full INCI <span style="font-size:9px;opacity:0.6">(click to expand)</span></div>
+          <div class="pd-val">${inciHtml}</div>
+        </div>
+      </div>`;
+    }
+
+    // Toggle Full INCI expand/collapse in rising
+    tableEl.addEventListener('click', (e) => {
+      const inci = e.target.closest('.pd-inci-line');
+      if (inci) { inci.classList.toggle('expanded'); e.stopPropagation(); return; }
+    });
+
+    // Delegate click on tbody for expand/collapse
+    tableEl.addEventListener('click', (e) => {
+      const tr = e.target.closest('tbody tr');
+      if (!tr || tr.classList.contains('pd-detail-row')) return;
+      if (e.target.closest('a')) return;
+
+      const icon = tr.querySelector('.pd-expand-icon');
+      const next = tr.nextElementSibling;
+
+      if (next && next.classList.contains('pd-detail-row')) {
+        next.remove();
+        if (icon) icon.classList.remove('open');
+        return;
+      }
+
+      const allTrs = Array.from(risingTbody.querySelectorAll('tr:not(.pd-detail-row)'));
+      const rowIdx = allTrs.indexOf(tr);
+      const start = (tc.currentPage - 1) * tc.pageSize;
+      const row = tc.filtered[start + rowIdx];
+      if (!row) return;
+
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'pd-detail-row';
+      detailTr.innerHTML = `<td colspan="${risingColCount}">${buildRisingDetailPanel(row)}</td>`;
+      tr.after(detailTr);
+      if (icon) icon.classList.add('open');
+    });
   }
 }
 
@@ -1938,7 +2058,6 @@ function renderProductDetail(data) {
       { key: 'reviews', header: 'Reviews', render: (v) => fmt(v) },
       { key: 'rating', header: 'Rating', render: (v) => fmt(v,1) },
       { key: 'bsr_category', header: 'BSR', render: (v) => fmt(v) },
-      { key: 'composite_weight', header: 'Weight', render: (v) => fmt(v,3) },
     ],
     container: tableEl,
     searchInput: searchInput,
@@ -1978,12 +2097,21 @@ function renderProductDetail(data) {
     const inciHtml = inci
       ? `<div class="pd-inci-line" title="${esc(inci).replace(/"/g, '&quot;')}">${esc(inci)}</div>`
       : '<span style="color:var(--color-text-muted)">-</span>';
+    // Listing badges
+    const pdListingTags = [];
+    if (row.badge) {
+      const b = row.badge.toLowerCase();
+      if (b.includes('choice')) pdListingTags.push(`<span class="badge badge-amz-choice">Amazon's Choice</span>`);
+      else if (b.includes('best')) pdListingTags.push(`<span class="badge badge-best-seller">${esc(row.badge)}</span>`);
+      else pdListingTags.push(`<span class="badge badge-primary">${esc(row.badge)}</span>`);
+    }
+    if (row.coupon) pdListingTags.push(`<span class="badge badge-positive">Coupon</span>`);
+    if (row.plus_content) pdListingTags.push(`<span class="badge" style="background:rgba(139,92,246,0.15);color:#a78bfa">A+</span>`);
+    const pdListingHtml = pdListingTags.length ? pdListingTags.join(' ') : '<span style="color:var(--color-text-muted)">-</span>';
     // Meta info
     const meta = [
+      { label: 'Weight', val: row.composite_weight ? fmt(row.composite_weight, 3) : '' },
       { label: 'Unit Price', val: row.unit_price },
-      { label: 'Coupon', val: row.coupon },
-      { label: 'Badge', val: row.badge },
-      { label: 'A+', val: row.plus_content ? 'Yes' : '' },
       { label: 'Vars', val: row.variations_count },
     ].filter(m => m.val);
     const metaHtml = meta.length
@@ -2004,6 +2132,8 @@ function renderProductDetail(data) {
       <div>
         <div class="pd-label">Featured Ingredients</div>
         <div class="pd-val">${ingsHtml}</div>
+        <div class="pd-label">Listing</div>
+        <div class="pd-val">${pdListingHtml}</div>
         ${metaHtml ? `<div class="pd-label">Info</div><div class="pd-val"><div class="pd-meta-grid">${metaHtml}</div></div>` : ''}
       </div>
       <div class="pd-col-full">
