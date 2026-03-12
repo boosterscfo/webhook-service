@@ -1938,6 +1938,15 @@ function renderRisingProducts(data) {
         customerSays = customerSays.replace(/Customers?\\s*find\\s*(this)?\\s*:?\\s*/gi, '').trim();
         if (customerSays) customerSays = customerSays[0].toUpperCase() + customerSays.slice(1);
       }
+      // Voice +/-
+      const voicePos = full && full.voice_positive ? String(full.voice_positive).split(',').map(s => s.trim()).filter(Boolean) : [];
+      const voicePosHtml = voicePos.length
+        ? voicePos.map(k => `<span class="pd-tag-positive">${esc(k)}</span>`).join(' ')
+        : '<span style="color:var(--color-text-muted)">-</span>';
+      const voiceNeg = full && full.voice_negative ? String(full.voice_negative).split(',').map(s => s.trim()).filter(Boolean) : [];
+      const voiceNegHtml = voiceNeg.length
+        ? voiceNeg.map(k => `<span class="pd-tag-negative">${esc(k)}</span>`).join(' ')
+        : '<span style="color:var(--color-text-muted)">-</span>';
       // Listing badges
       const listingTags = [];
       if (rp.badge) {
@@ -1963,10 +1972,14 @@ function renderRisingProducts(data) {
           <div class="pd-val">${customerSays ? esc(customerSays) : '<span style="color:var(--color-text-muted)">-</span>'}</div>
         </div>
         <div>
-          <div class="pd-label">Featured Ingredients</div>
-          <div class="pd-val">${ingsHtml}</div>
+          <div class="pd-label">Voice +</div>
+          <div class="pd-val">${voicePosHtml}</div>
+          <div class="pd-label">Voice -</div>
+          <div class="pd-val">${voiceNegHtml}</div>
         </div>
         <div>
+          <div class="pd-label">Featured Ingredients</div>
+          <div class="pd-val">${ingsHtml}</div>
           <div class="pd-label">Listing</div>
           <div class="pd-val">${listingHtml}</div>
           ${metaHtml ? `<div class="pd-label">Info</div><div class="pd-val"><div class="pd-meta-grid">${metaHtml}</div></div>` : ''}
