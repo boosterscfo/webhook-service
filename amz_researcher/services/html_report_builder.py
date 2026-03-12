@@ -507,6 +507,10 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     #product-detail-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
     #rising-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
     .pd-expand-icon { display: inline-block; width: 18px; font-size: 14px; color: var(--color-positive); transition: transform 0.25s ease, color 0.15s; }
+    #product-detail-table-wrap th:first-child,
+    #product-detail-table-wrap td:first-child,
+    #rising-table-wrap th:first-child,
+    #rising-table-wrap td:first-child { width: 28px; padding: 9px 4px 9px 10px; }
     .pd-expand-icon.open { transform: rotate(90deg); }
     #product-detail-table-wrap tbody tr:not(.pd-detail-row):hover .pd-expand-icon,
     #rising-table-wrap tbody tr:not(.pd-detail-row):hover .pd-expand-icon { color: #6ee7b7; transform: scale(1.15); }
@@ -2339,10 +2343,10 @@ function buildSectionsHTML() {
         <table>
           <thead>
             <tr>
-              <th>#</th>
+              <th></th>
               <th>Brand</th>
               <th>Title</th>
-              <th>Price</th>
+              <th>Price <span class="sort-icon">&#8597;</span></th>
               <th>BSR <span class="sort-icon">&#8597;</span></th>
               <th>Reviews <span class="sort-icon">&#8597;</span></th>
               <th>Rating <span class="sort-icon">&#8597;</span></th>
@@ -2571,27 +2575,18 @@ function buildSectionsHTML() {
     </div>
     <div data-tc="1" id="product-detail-table-wrap">
       <div class="table-wrapper">
-        <table style="min-width:1400px">
+        <table>
           <thead>
             <tr>
+              <th></th>
               <th>ASIN <span class="sort-icon">&#8597;</span></th>
               <th>Brand <span class="sort-icon">&#8597;</span></th>
               <th>Title</th>
               <th>Price <span class="sort-icon">&#8597;</span></th>
-              <th>Customer Says</th>
-              <th>SNS Price <span class="sort-icon">&#8597;</span></th>
               <th>Bought/Mo <span class="sort-icon">&#8597;</span></th>
               <th>Reviews <span class="sort-icon">&#8597;</span></th>
               <th>Rating <span class="sort-icon">&#8597;</span></th>
               <th>BSR <span class="sort-icon">&#8597;</span></th>
-              <th>Weight <span class="sort-icon">&#8597;</span></th>
-              <th>Unit Price</th>
-              <th>Coupon</th>
-              <th>Badge</th>
-              <th>A+</th>
-              <th>Vars <span class="sort-icon">&#8597;</span></th>
-              <th>Voice +</th>
-              <th>Voice -</th>
             </tr>
           </thead>
           <tbody></tbody>
