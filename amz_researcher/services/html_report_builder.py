@@ -504,8 +504,8 @@ _HTML_TEMPLATE = r"""<!DOCTYPE html>
     .inci-expand.expanded { max-width: none; white-space: normal; word-break: break-all; }
 
     /* ===== EXPANDABLE ROW (shared) ===== */
-    #product-detail-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
-    #rising-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; }
+    #product-detail-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; border-left: 3px solid transparent; }
+    #rising-table-wrap tbody tr:not(.pd-detail-row) { cursor: pointer; border-left: 3px solid transparent; }
     .pd-expand-icon { display: inline-block; width: 18px; font-size: 14px; color: var(--color-positive); transition: transform 0.25s ease, color 0.15s; }
     #product-detail-table-wrap th:first-child,
     #product-detail-table-wrap td:first-child,
@@ -1486,7 +1486,7 @@ function renderBrandPositioning(data) {
   const scatterCtx = el.querySelector('#brand-scatter-chart');
   if (scatterCtx && bp.positioning) {
     const segColors = { budget: '#94A3B8', mid: '#60A5FA', premium: '#C084FC', luxury: '#FBBF24' };
-    const scatterData = bp.positioning.filter(b => b.avg_price && b.avg_bsr && b.avg_bsr < 50000).map(b => ({
+    const scatterData = bp.positioning.filter(b => b.avg_price && b.avg_bsr && b.avg_bsr < 5000).map(b => ({
       x: b.avg_price, y: b.avg_bsr, label: b.brand,
       r: Math.min(Math.max((b.product_count || 1) * 2, 4), 18),
       productCount: b.product_count || 1,
