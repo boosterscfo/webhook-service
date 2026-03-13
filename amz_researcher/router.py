@@ -776,17 +776,40 @@ async def _send_why_result(
         f"_🧵 성분 상세 분석은 thread 참조_"
     )
 
-    # Thread: 성분 상세
+    # Thread: 성분 상세 (Slack table block)
     enriched = result.get("enriched", [])
-    table_lines = [
-        "| 성분 | Ratio | 제품수 | 카테고리 |",
-        "|------|-------|--------|---------|",
+
+    # table block 생성 (attachments에 넣어야 함)
+    table_rows = [
+        # header row
+        [
+            {"type": "raw_text", "text": "성분"},
+            {"type": "raw_text", "text": "Ratio"},
+            {"type": "raw_text", "text": "제품수"},
+            {"type": "raw_text", "text": "카테고리"},
+        ],
     ]
     for e in enriched:
         cats = ", ".join(e["categories"])
-        table_lines.append(
-            f"| {e['ingredient']} | {e['ratio']}x | {e['product_count']} | {cats} |"
-        )
+        table_rows.append([
+            {"type": "raw_text", "text": e["ingredient"]},
+            {"type": "raw_text", "text": f"{e['ratio']}x"},
+            {"type": "raw_text", "text": str(e["product_count"])},
+            {"type": "raw_text", "text": cats},
+        ])
+
+    table_attachments = [{
+        "blocks": [{
+            "type": "table",
+            "column_settings": [
+                {"is_wrapped": True},
+                {"align": "right"},
+                {"align": "right"},
+                {"is_wrapped": True},
+            ],
+            "rows": table_rows,
+        }],
+    }]
 
     safe_list = result.get("safe", [])
     safe_str = ", ".join(
@@ -797,8 +820,7 @@ async def _send_why_result(
 
     thread_text = (
         f"═══ \"{keyword}\" 성분 상관관계 상세 ═══\n\n"
-        + "\n".join(table_lines)
-        + "\n\n═══ 상세 해석 ═══\n\n"
+        + f"═══ 상세 해석 ═══\n\n"
         + f"> {detail_text}\n\n"
         + f"═══ 안전 성분 (\"{keyword}\" 무관) ═══\n\n"
         + f"{safe_str}\n\n"
@@ -809,6 +831,7 @@ async def _send_why_result(
         channel_id=channel_id,
         main_text=main_text,
         thread_text=thread_text,
+        thread_attachments=table_attachments,
     )
 
 

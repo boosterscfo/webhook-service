@@ -131,6 +131,7 @@ class SlackSender:
         thread_text: str,
         main_blocks: list[dict] | None = None,
         thread_blocks: list[dict] | None = None,
+        thread_attachments: list[dict] | None = None,
     ) -> None:
         """본문 메시지 전송 후, 같은 thread에 상세 메시지 전송."""
         if not channel_id or not self.bot_token:
@@ -171,6 +172,8 @@ class SlackSender:
             }
             if thread_blocks:
                 thread_body["blocks"] = thread_blocks
+            if thread_attachments:
+                thread_body["attachments"] = thread_attachments
             resp = await self.client.post(
                 "https://slack.com/api/chat.postMessage",
                 headers=headers,
