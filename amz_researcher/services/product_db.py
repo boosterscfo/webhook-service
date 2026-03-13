@@ -433,6 +433,70 @@ class ProductDBService:
             }
         return result
 
+    # ── Voice-Ingredient Correlation ──────────────────
+
+    def get_all_products_with_voice(self) -> list[dict]:
+        """ingredients + voice_negative 모두 보유한 전체 제품 조회."""
+        query = """
+            SELECT asin, ingredients, voice_negative, bs_category
+            FROM amz_products
+            WHERE ingredients IS NOT NULL AND ingredients != ''
+              AND voice_negative IS NOT NULL
+              AND voice_negative != CAST('null' AS JSON)
+              AND JSON_LENGTH(voice_negative) > 0
+        """
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query)
+        except Exception:
+            logger.exception("Failed to get products with voice")
+            return []
+        if df.empty:
+            return []
+
+        result = []
+        for _, row in df.iterrows():
+            neg = row["voice_negative"]
+            if isinstance(neg, str):
+                neg = json.loads(neg)
+            result.append({
+                "asin": row["asin"],
+                "ingredients": row["ingredients"],
+                "voice_negative": neg or [],
+                "bs_category": row["bs_category"] or "Unknown",
+            })
+        return result
+
+    def get_voice_keyword_stats(self) -> list[dict]:
+        """Voice - 키워드 빈도 통계 (discovery 모드용). 상위 15개."""
+        products = self.get_all_products_with_voice()
+        keyword_count: dict[str, int] = {}
+        for p in products:
+            for kw in p.get("voice_negative", []):
+                kw_lower = kw.lower().strip()
+                if kw_lower:
+                    keyword_count[kw_lower] = keyword_count.get(kw_lower, 0) + 1
+
+        stats = [{"keyword": k, "count": v} for k, v in keyword_count.items()]
+        stats.sort(key=lambda x: x["count"], reverse=True)
+        return stats[:15]
+
+    def find_similar_voice_keywords(self, keyword: str) -> list[str]:
+        """contains 기반 유사 Voice - 키워드 검색. Top 5."""
+        stats = self.get_voice_keyword_stats()
+        keyword_lower = keyword.lower()
+        similar = [
+            s["keyword"] for s in stats
+            if keyword_lower in s["keyword"] or s["keyword"] in keyword_lower
+        ]
+        if not similar:
+            words = keyword_lower.split()
+            similar = [
+                s["keyword"] for s in stats
+                if any(w in s["keyword"] for w in words)
+            ]
+        return similar[:5]
+
     # ── 리포트 요청 로그 ──────────────────────────────
 
     def log_request_start(

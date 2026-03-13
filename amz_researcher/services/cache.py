@@ -11,6 +11,7 @@ from lib.mysql_connector import MysqlConnector
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_DAYS = 30
+CORRELATION_CACHE_TTL_HOURS = 24
 
 # ── Failed ASIN retry policy ─────────────────
 MAX_RETRY_COUNT = 3          # 일시적 실패 최대 재시도 횟수
@@ -500,3 +501,39 @@ class AmzCacheService:
             logger.info("Market report cache saved: keyword=%s", keyword)
         except Exception:
             logger.exception("Failed to save market report cache")
+
+    # ── Voice-Ingredient Correlation Cache ─────────
+
+    def get_correlation_cache(self, keyword: str) -> dict | None:
+        """24h TTL 기준 correlation 분석 결과 캐시 조회."""
+        cutoff = datetime.now() - timedelta(hours=CORRELATION_CACHE_TTL_HOURS)
+        query = (
+            "SELECT result_json, generated_at FROM amz_correlation_cache "
+            "WHERE keyword = %s AND generated_at >= %s"
+        )
+        try:
+            with MysqlConnector(self._env) as conn:
+                df = conn.read_query_table(query, (keyword.lower(), cutoff))
+            if df.empty:
+                return None
+            return json.loads(df.iloc[0]["result_json"])
+        except Exception:
+            logger.exception("Failed to read correlation cache")
+            return None
+
+    def save_correlation_cache(self, keyword: str, result: dict) -> None:
+        """Correlation 분석 결과를 캐시에 저장 (upsert)."""
+        if not result:
+            return
+        rows = [{
+            "keyword": keyword.lower(),
+            "result_json": json.dumps(result, ensure_ascii=False),
+            "generated_at": datetime.now(),
+        }]
+        try:
+            df = pd.DataFrame(rows)
+            with MysqlConnector(self._env) as conn:
+                conn.upsert_data(df, "amz_correlation_cache")
+            logger.info("Correlation cache saved: keyword=%s", keyword)
+        except Exception:
+            logger.exception("Failed to save correlation cache")

@@ -17,6 +17,8 @@ from amz_researcher.orchestrator import (
 from amz_researcher.services.bright_data import BrightDataService
 from amz_researcher.services.data_collector import DataCollector
 from amz_researcher.services.gemini import GeminiService
+from amz_researcher.services.cache import AmzCacheService
+from amz_researcher.services.ingredient_analyzer import analyze_voice_ingredient_correlation
 from amz_researcher.services.product_db import ProductDBService
 from amz_researcher.services.report_store import ReportStore
 from amz_researcher.services.slack_sender import SlackSender
@@ -202,6 +204,7 @@ async def slack_amz(
                 "*Amazon BSR Analyzer*\n\n"
                 "`/amz {키워드}` — 카테고리 분석 (예: `/amz serum`)\n"
                 "`/amz search {키워드}` — 키워드 검색 분석 (예: `/amz search vitamin c serum`)\n"
+                "`/amz why` — Voice(-) 성분 상관관계 분석\n"
                 "`/amz report {카테고리}` — 리포트만 재생성 (캐시 사용)\n"
                 "`/amz report-search {키워드}` — 키워드 리포트만 재생성\n"
                 "`/amz list` — 카테고리 목록\n"
@@ -226,6 +229,20 @@ async def slack_amz(
             "response_type": "ephemeral",
             "text": f"📋 등록된 카테고리 ({len(categories)}개):\n" + "\n".join(lines),
         }
+
+    # /amz why — Voice(-) 성분 상관관계 분석
+    if subcommand == "why":
+        keyword = " ".join(parts[1:]).strip() if len(parts) > 1 else ""
+        if not keyword:
+            background_tasks.add_task(
+                _handle_why_discovery, response_url, channel_id,
+            )
+            return {"response_type": "ephemeral", "text": "🔬 Voice(-) 키워드 목록 로딩 중..."}
+        else:
+            background_tasks.add_task(
+                _handle_why_analysis, keyword, response_url, channel_id,
+            )
+            return {"response_type": "ephemeral", "text": f"🔬 *{keyword}* 성분 상관관계 분석 중..."}
 
     # /amz report {category} — 캐시 기반 리포트만 재생성 (Gemini 호출 없음)
     if subcommand == "report":
@@ -413,6 +430,14 @@ async def slack_amz_interact(
     value = json.loads(action["value"])
     user_id = (data.get("user") or {}).get("id", "")
 
+    # Voice-Ingredient 상관관계 분석
+    if action_id.startswith("amz_why_"):
+        kw = value["keyword"]
+        resp_url = value["response_url"]
+        ch_id = value["channel_id"]
+        background_tasks.add_task(_handle_why_analysis, kw, resp_url, ch_id)
+        return {"response_type": "ephemeral", "text": f"🔬 *{kw}* 분석 시작..."}
+
     # 키워드 검색: 기존 데이터로 리포트 생성
     if action_id.startswith("amz_keyword_existing_"):
         kw = value["keyword"]
@@ -570,6 +595,221 @@ async def _send_category_options(
         logger.exception("Failed to send category options for %s", name)
     finally:
         await slack.close()
+
+
+# ── Voice-Ingredient Correlation Handlers ─────────────
+
+
+async def _handle_why_discovery(response_url: str, channel_id: str) -> None:
+    """Voice - 키워드 빈도 Top 15를 Block Kit 버튼으로 표시."""
+    db = ProductDBService("CFO")
+    stats = db.get_voice_keyword_stats()
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+
+    try:
+        if not stats:
+            await slack.send_message(
+                response_url,
+                "Voice(-) 데이터가 없습니다. `/amz {카테고리}`로 리포트를 먼저 실행하세요.",
+                ephemeral=True, channel_id=channel_id,
+            )
+            return
+
+        buttons = [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": f"{s['keyword']} ({s['count']})"},
+                "action_id": f"amz_why_{s['keyword'].replace(' ', '_')}",
+                "value": json.dumps({
+                    "keyword": s["keyword"],
+                    "response_url": response_url,
+                    "channel_id": channel_id,
+                }),
+            }
+            for s in stats
+        ]
+
+        # Block Kit 버튼은 actions 블록당 최대 5개
+        action_blocks = []
+        for i in range(0, len(buttons), 5):
+            action_blocks.append({"type": "actions", "elements": buttons[i:i + 5]})
+
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "Voice(-) 키워드 분석"},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "분석할 키워드를 선택하세요.\n또는 `/amz why {keyword}` 로 직접 검색",
+                },
+            },
+            *action_blocks,
+        ]
+
+        await slack.send_message(
+            response_url, "Voice(-) 키워드 목록",
+            ephemeral=True, channel_id=channel_id, blocks=blocks,
+        )
+    except Exception:
+        logger.exception("Why discovery failed")
+    finally:
+        await slack.close()
+
+
+async def _handle_why_analysis(
+    keyword: str, response_url: str, channel_id: str,
+) -> None:
+    """키워드별 성분 상관관계 분석 -> ODM 브리프 가이드 반환."""
+    db = ProductDBService("CFO")
+    cache = AmzCacheService()
+    slack = SlackSender(settings.AMZ_BOT_TOKEN)
+
+    try:
+        # 1. 캐시 확인
+        cached = cache.get_correlation_cache(keyword)
+        if cached:
+            logger.info("Correlation cache hit: %s", keyword)
+            await _send_why_result(slack, channel_id, cached)
+            return
+
+        # 2. 데이터 조회 + 분석
+        products = db.get_all_products_with_voice()
+        if not products:
+            await slack.send_message(
+                response_url,
+                "분석 가능한 제품이 없습니다. 리포트를 먼저 실행하세요.",
+                ephemeral=True, channel_id=channel_id,
+            )
+            return
+
+        result = analyze_voice_ingredient_correlation(products, keyword)
+
+        # 3. 결과 없음 -> 유사 키워드 제안
+        if not result.get("enriched"):
+            similar = db.find_similar_voice_keywords(keyword)
+            if similar:
+                buttons = [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": kw},
+                        "action_id": f"amz_why_{kw.replace(' ', '_')}",
+                        "value": json.dumps({
+                            "keyword": kw,
+                            "response_url": response_url,
+                            "channel_id": channel_id,
+                        }),
+                    }
+                    for kw in similar
+                ]
+                error_msg = result.get("error", f"'{keyword}' 결과 없음")
+                blocks = [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": f"⚠️ {error_msg}"}},
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "유사 키워드:"}},
+                    {"type": "actions", "elements": buttons},
+                ]
+                await slack.send_message(
+                    response_url, error_msg,
+                    ephemeral=True, channel_id=channel_id, blocks=blocks,
+                )
+            else:
+                await slack.send_message(
+                    response_url,
+                    f"⚠️ '{keyword}' 관련 데이터가 부족합니다.",
+                    ephemeral=True, channel_id=channel_id,
+                )
+            return
+
+        # 4. Gemini ODM 브리프 생성
+        gemini = GeminiService(settings.AMZ_GEMINI_API_KEY)
+        try:
+            brief = await gemini.generate_odm_brief(
+                keyword=keyword,
+                enriched=result["enriched"],
+                safe=result["safe"],
+                stats={
+                    "total_products": result["total_products"],
+                    "with_count": result["with_count"],
+                    "categories_analyzed": result["categories_analyzed"],
+                },
+            )
+        finally:
+            await gemini.close()
+
+        # 5. 캐시 저장
+        full_result = {**result, "brief": brief}
+        cache.save_correlation_cache(keyword, full_result)
+
+        # 6. 메시지 전송
+        await _send_why_result(slack, channel_id, full_result)
+
+    except Exception:
+        logger.exception("Why analysis failed for '%s'", keyword)
+        await slack.send_message(
+            response_url,
+            f"⚠️ '{keyword}' 분석 중 오류가 발생했습니다.",
+            ephemeral=True, channel_id=channel_id,
+        )
+    finally:
+        await slack.close()
+
+
+async def _send_why_result(
+    slack: SlackSender, channel_id: str, result: dict,
+) -> None:
+    """분석 결과를 본문(브리프 가이드) + thread(성분 상세)로 전송."""
+    keyword = result["keyword"]
+    brief = result.get("brief", {})
+
+    # 본문: ODM 브리프 가이드
+    main_text = (
+        f"🔬 *\"{keyword}\" — ODM 브리프 가이드*\n"
+        f"{result.get('categories_analyzed', 0)}개 카테고리, "
+        f"{result.get('total_products', 0)}개 제품 분석 "
+        f"({result.get('with_count', 0)}개에서 \"{keyword}\" 발견)\n\n"
+        f"💡 *핵심*: {brief.get('cause', '-')}\n"
+        f"📋 *브리프 제안*: \"{brief.get('brief', '-')}\"\n"
+        f"⚠️ *피할 패턴*: {brief.get('avoid', '-')}\n"
+        f"✅ *안전 조합*: {brief.get('safe_combo', '-')}\n\n"
+        f"_🧵 성분 상세 분석은 thread 참조_"
+    )
+
+    # Thread: 성분 상세
+    enriched = result.get("enriched", [])
+    table_lines = [
+        "| 성분 | Ratio | 제품수 | 카테고리 |",
+        "|------|-------|--------|---------|",
+    ]
+    for e in enriched:
+        cats = ", ".join(e["categories"])
+        table_lines.append(
+            f"| {e['ingredient']} | {e['ratio']}x | {e['product_count']} | {cats} |"
+        )
+
+    safe_list = result.get("safe", [])
+    safe_str = ", ".join(
+        f"{s['ingredient']} ({s['frequency_pct']}%)" for s in safe_list
+    )
+
+    detail_text = brief.get("detail", "")
+
+    thread_text = (
+        f"═══ \"{keyword}\" 성분 상관관계 상세 ═══\n\n"
+        + "\n".join(table_lines)
+        + "\n\n═══ 상세 해석 ═══\n\n"
+        + f"> {detail_text}\n\n"
+        + f"═══ 안전 성분 (\"{keyword}\" 무관) ═══\n\n"
+        + f"{safe_str}\n\n"
+        + "_⚠️ 상관관계 ≠ 인과관계. 제형 결정 시 참고용._"
+    )
+
+    await slack.send_with_thread(
+        channel_id=channel_id,
+        main_text=main_text,
+        thread_text=thread_text,
+    )
 
 
 @router.post("/research")

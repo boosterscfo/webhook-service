@@ -611,5 +611,94 @@ class GeminiService:
             logger.exception("Category keyword generation failed for '%s'", category_name)
             return ""
 
+    async def generate_odm_brief(
+        self,
+        keyword: str,
+        enriched: list[dict],
+        safe: list[dict],
+        stats: dict,
+    ) -> dict:
+        """Enrichment 결과를 PM용 ODM 브리프 가이드로 변환."""
+        enriched_lines = "\n".join(
+            f"- {e['ingredient']} (ratio: {e['ratio']}x, "
+            f"카테고리: {', '.join(e['categories'])})"
+            for e in enriched
+        )
+        safe_lines = "\n".join(
+            f"- {s['ingredient']} (출현율: {s['frequency_pct']}%)"
+            for s in safe
+        )
+
+        prompt = (
+            f"너는 화장품 제형 전문가이다. 아래 데이터를 기반으로\n"
+            f"제품 기획자(PM)가 ODM에 전달할 브리프 가이드를 작성하라.\n\n"
+            f"PM은 성분 전문가가 아니다. 개별 성분명(INCI) 대신\n"
+            f"기능적 분류(고분자 보습제, 경량 유화제, 점증제 등)로\n"
+            f"묶어서 설명하라.\n\n"
+            f'## 입력 데이터\n'
+            f'키워드: "{keyword}"\n'
+            f"분석 대상: {stats['total_products']}개 제품, "
+            f"{stats['with_count']}개에서 \"{keyword}\" 발견\n\n"
+            f"의심 성분 (enrichment ratio 높은 순):\n{enriched_lines}\n\n"
+            f"안전 성분 (해당 키워드와 무관):\n{safe_lines}\n\n"
+            f"## 출력 형식 (JSON)\n"
+            f'{{\n'
+            f'  "cause": "[이 키워드의 주 원인 패턴 - 기능 분류로, 1줄]",\n'
+            f'  "brief": "[ODM에 전달할 제형 방향 - 복붙 가능한 톤, 1줄]",\n'
+            f'  "avoid": "[회피해야 할 성분 조합 - 기능 분류로, 1줄]",\n'
+            f'  "safe_combo": "[사용해도 안전한 성분 베이스 - 기능 분류로, 1줄]",\n'
+            f'  "detail": "[상세 해석 - 왜 이 패턴이 문제인지, 어떤 대안이 있는지, 2-3문단]"\n'
+            f"}}\n\n"
+            f"## 규칙\n"
+            f"- 확실하지 않으면 언급하지 마라\n"
+            f"- 추측이나 일반론 금지, 위 데이터에 근거한 해석만\n"
+            f"- 성분의 기능 분류가 불분명하면 \"미분류\"로 표기\n"
+            f"- cause/brief/avoid/safe_combo는 각각 반드시 1줄로"
+        )
+
+        for attempt in range(2):
+            try:
+                resp = await self.client.post(
+                    self.url,
+                    params={"key": self.api_key},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.2,
+                            "maxOutputTokens": 4096,
+                            "responseMimeType": "application/json",
+                            "thinkingConfig": {"thinkingBudget": 0},
+                        },
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                if not text:
+                    logger.warning("Empty ODM brief response (attempt %d)", attempt + 1)
+                    continue
+                result = json.loads(text)
+                logger.info("ODM brief generated for '%s'", keyword)
+                return result
+            except Exception:
+                if attempt == 0:
+                    logger.warning("ODM brief generation failed, retrying")
+                    continue
+                logger.exception("ODM brief generation failed after retries")
+
+        # Fallback
+        return {
+            "cause": "자동 해석을 생성하지 못했습니다",
+            "brief": "상세 성분 데이터를 참고하여 ODM과 직접 논의하세요",
+            "avoid": "thread의 성분 상세 테이블을 참고하세요",
+            "safe_combo": ", ".join(s["ingredient"] for s in safe[:5]),
+            "detail": "",
+        }
+
     async def close(self):
         await self.client.aclose()

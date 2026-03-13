@@ -124,5 +124,64 @@ class SlackSender:
         except Exception:
             logger.exception("Failed to send DM to %s", user_id)
 
+    async def send_with_thread(
+        self,
+        channel_id: str,
+        main_text: str,
+        thread_text: str,
+        main_blocks: list[dict] | None = None,
+        thread_blocks: list[dict] | None = None,
+    ) -> None:
+        """본문 메시지 전송 후, 같은 thread에 상세 메시지 전송."""
+        if not channel_id or not self.bot_token:
+            logger.warning("No channel_id or bot_token for thread message")
+            return
+
+        headers = {
+            "Authorization": f"Bearer {self.bot_token}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            # 1. 본문 전송
+            main_body: dict = {"channel": channel_id, "text": main_text}
+            if main_blocks:
+                main_body["blocks"] = main_blocks
+            resp = await self.client.post(
+                "https://slack.com/api/chat.postMessage",
+                headers=headers,
+                json=main_body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("ok"):
+                logger.error("Main message failed: %s", data.get("error"))
+                return
+
+            thread_ts = data.get("ts")
+            if not thread_ts:
+                logger.error("No ts in main message response")
+                return
+
+            # 2. Thread에 상세 전송
+            thread_body: dict = {
+                "channel": channel_id,
+                "text": thread_text,
+                "thread_ts": thread_ts,
+            }
+            if thread_blocks:
+                thread_body["blocks"] = thread_blocks
+            resp = await self.client.post(
+                "https://slack.com/api/chat.postMessage",
+                headers=headers,
+                json=thread_body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("ok"):
+                logger.error("Thread message failed: %s", data.get("error"))
+        except Exception:
+            logger.exception("Failed to send message with thread")
+
     async def close(self):
         await self.client.aclose()
